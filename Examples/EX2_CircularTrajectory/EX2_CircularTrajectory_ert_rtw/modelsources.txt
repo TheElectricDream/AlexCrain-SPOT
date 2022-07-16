@@ -1,2 +1,0 @@
-  EX2_CircularTrajectory.cpp
-

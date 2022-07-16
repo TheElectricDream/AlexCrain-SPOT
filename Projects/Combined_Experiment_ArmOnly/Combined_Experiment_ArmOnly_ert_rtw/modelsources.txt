@@ -1,2 +1,0 @@
-  Combined_Experiment_ArmOnly.cpp
-
