@@ -12,7 +12,7 @@ using namespace std;
 double whoAmI()
 {
   double platformID = 0;
-  std::ifstream whoAmI_textFile("/home/pi/ExperimentSoftware/WhoAmI.txt");
+  std::ifstream whoAmI_textFile("/home/blue-spot/ExperimentSoftware/WhoAmI.txt");
   whoAmI_textFile >> platformID;
   return platformID;
 
