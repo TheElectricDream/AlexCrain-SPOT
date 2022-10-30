@@ -153,6 +153,13 @@ Phase3_SubPhase4_End           = Phase2_End + Phase3_SubPhase1_Duration + ...
                           
 %% Load in any required data:
 
+% Define the mode of operation for the manipulator
+% 0 -> Torque Mode
+% 1 -> Speed Mode
+% 2 -> Position Mode
+
+ManipulatorMode = 0;
+
 % Define the model properties for the joint friction:
 % Based on https://ieeexplore.ieee.org/document/1511048
 
