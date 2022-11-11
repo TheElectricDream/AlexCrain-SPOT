@@ -1,8 +1,0 @@
-linuxUDP.c.o: \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/target/supportpackages/raspberrypi/src/linuxUDP.c \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT_3.08_beta2_Parker_2/Template_Files/Parker_Velocity_Control_ert_rtw/rtwtypes.h \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/shared/spc/src_ml/extern/include/DAHostLib_rtw.h
-
-/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT_3.08_beta2_Parker_2/Template_Files/Parker_Velocity_Control_ert_rtw/rtwtypes.h:
-
-/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/shared/spc/src_ml/extern/include/DAHostLib_rtw.h:

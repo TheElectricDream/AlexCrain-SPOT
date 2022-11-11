@@ -1,8 +1,0 @@
-port_handler_linux.cpp.o: \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/src/port_handler_linux.cpp \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/port_handler_linux.h \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/port_handler.h
-
-/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/port_handler_linux.h:
-
-/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/port_handler.h:

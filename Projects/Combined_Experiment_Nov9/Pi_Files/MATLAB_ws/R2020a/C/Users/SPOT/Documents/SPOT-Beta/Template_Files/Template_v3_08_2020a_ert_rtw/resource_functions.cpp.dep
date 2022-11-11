@@ -1,8 +1,0 @@
-resource_functions.cpp.o: \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Resources/IdentifyPlatform/src/resource_functions.cpp \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Resources/IdentifyPlatform/include/resource_headers.h \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtwtypes.h
-
-/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Resources/IdentifyPlatform/include/resource_headers.h:
-
-/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtwtypes.h:

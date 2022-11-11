@@ -1,5 +1,0 @@
-MW_raspi_init.c.o: \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/raspi/server/MW_raspi_init.c \
- /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/raspi/server/MW_raspi_init.h
-
-/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/raspi/server/MW_raspi_init.h:
