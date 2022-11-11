@@ -1,0 +1,8 @@
+MW_gpio.c.o: \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/linux/src/MW_gpio.c \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/linux/include/MW_gpio.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT_3.08_beta2_Parker_2/Template_Files/Parker_Velocity_Control_ert_rtw/rtwtypes.h
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/linux/include/MW_gpio.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT_3.08_beta2_Parker_2/Template_Files/Parker_Velocity_Control_ert_rtw/rtwtypes.h:

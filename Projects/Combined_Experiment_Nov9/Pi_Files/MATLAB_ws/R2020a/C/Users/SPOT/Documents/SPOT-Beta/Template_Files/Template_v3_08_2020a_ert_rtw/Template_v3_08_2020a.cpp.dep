@@ -1,0 +1,107 @@
+Template_v3_08_2020a.cpp.o: \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/Template_v3_08_2020a.cpp \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/Template_v3_08_2020a.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtwtypes.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/rtw_continuous.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtwtypes.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/rtw_solver.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/rtw_continuous.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/rtw/c/src/rt_logging.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/builtin_typeid_types.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/multiword_types.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/rtw/c/src/rt_mxclassid.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/rtw_matlogging.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/sl_types_def.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/linux/include/MW_gpio.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/dynamixel_functions.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/dynamixel_sdk.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/group_bulk_read.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/port_handler.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/packet_handler.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/group_bulk_write.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/group_sync_read.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/group_sync_write.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/raspi/server/MW_pigs.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/shared/spc/src_ml/extern/include/DAHostLib_Network.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/shared/spc/src_ml/extern/include/DAHostLib_rtw.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/target/shared/svd/include/MW_I2C.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/target/shared/svd/include/MW_SVD.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Resources/IdentifyPlatform/include/resource_headers.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/Template_v3_08_2020a_types.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/builtin_typeid_types.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/multiword_types.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/target/shared/svd/include/MW_SVD.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rt_nonfinite.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rt_defines.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtGetInf.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/Template_v3_08_2020a_private.h
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/Template_v3_08_2020a.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtwtypes.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/rtw_continuous.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtwtypes.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/rtw_solver.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/rtw_continuous.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/rtw/c/src/rt_logging.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/builtin_typeid_types.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/multiword_types.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/rtw/c/src/rt_mxclassid.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/rtw_matlogging.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/simulink/include/sl_types_def.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/linux/include/MW_gpio.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/dynamixel_functions.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/dynamixel_sdk.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/group_bulk_read.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/port_handler.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/packet_handler.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/group_bulk_write.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/group_sync_read.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Dynamixel_Actuators/include/group_sync_write.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/raspi/server/MW_pigs.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/shared/spc/src_ml/extern/include/DAHostLib_Network.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/shared/spc/src_ml/extern/include/DAHostLib_rtw.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/target/shared/svd/include/MW_I2C.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/target/shared/svd/include/MW_SVD.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Custom_Library/Resources/IdentifyPlatform/include/resource_headers.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/Template_v3_08_2020a_types.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/builtin_typeid_types.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/multiword_types.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/target/shared/svd/include/MW_SVD.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rt_nonfinite.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rt_defines.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtGetInf.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/Template_v3_08_2020a_private.h:

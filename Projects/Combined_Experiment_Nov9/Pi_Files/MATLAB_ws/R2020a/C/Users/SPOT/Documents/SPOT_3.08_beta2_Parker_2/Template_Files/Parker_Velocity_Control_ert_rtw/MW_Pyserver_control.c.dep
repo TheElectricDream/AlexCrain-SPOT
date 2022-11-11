@@ -1,0 +1,8 @@
+MW_Pyserver_control.c.o: \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/raspi/src/periphs/MW_Pyserver_control.c \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/raspi/include/MW_Pyserver_control.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT_3.08_beta2_Parker_2/Template_Files/Parker_Velocity_Control_ert_rtw/rtwtypes.h
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/ProgramData/MATLAB/SupportPackages/R2020a/toolbox/realtime/targets/raspi/include/MW_Pyserver_control.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT_3.08_beta2_Parker_2/Template_Files/Parker_Velocity_Control_ert_rtw/rtwtypes.h:

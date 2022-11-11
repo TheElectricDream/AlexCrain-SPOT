@@ -1,0 +1,11 @@
+linuxinitialize.cpp.o: \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/target/codertarget/rtos/src/linuxinitialize.cpp \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/target/codertarget/rtos/inc/linuxinitialize.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtwtypes.h \
+ /home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/MW_custom_RTOS_header.h
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Program_Files/MATLAB/R2020a/toolbox/target/codertarget/rtos/inc/linuxinitialize.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/rtwtypes.h:
+
+/home/pi/ExperimentSoftware//MATLAB_ws/R2020a/C/Users/SPOT/Documents/SPOT-Beta/Template_Files/Template_v3_08_2020a_ert_rtw/MW_custom_RTOS_header.h:
