@@ -153,6 +153,38 @@ Phase3_SubPhase4_End           = Phase2_End + Phase3_SubPhase1_Duration + ...
                           
 %% Load in any required data:
 
+% Import the weights and biases
+b0 = importdata("biases_layer_0.csv"); % dims = [1, 400]
+b1 = importdata("biases_layer_1.csv"); % dims = [1, 300]
+b_out = importdata("biases_output.csv"); % dims = [1, 3]
+
+w0 = importdata("weights_layer_0.csv"); % dims = [15, 400]
+w1 = importdata("weights_layer_1.csv"); % dims = [400, 300]
+w_out = importdata("weights_output.csv"); % dims = [300, 3]
+
+% Define state boundaries
+lower_state_bound = [ 0.0, 0.0, 0.0,...
+    -0.1, -0.1, -15*pi/180, ...
+    -3.5, -2.4, 0, -2.0, ...
+    -2.0, 0.0, -0.1, -0.1, -15*pi/180];
+upper_state_bound = [ 3.5, 2.4, 2*pi,...
+    0.1, 0.1, 15*pi/180, ...
+    3.5, 2.4, 2*pi, 2.0,...
+    2.0, 2*pi, 0.1, 0.1, 15*pi/180];
+
+% Calculate state values
+relevant_state_mean = (lower_state_bound + upper_state_bound)/2;
+relevant_half_range = (upper_state_bound - lower_state_bound)/2;
+
+% Define constants
+HOLD_POINT_RADIUS        = 0.9; 
+CAMERA_PROCESSING_TIME   = 0.7;
+PHASESPACE_TIMESTEP      = 0.5;
+CHASER_ABSOLUTE_POSITION = true;
+MAX_VELOCITY             = 0.1;
+MAX_BODY_ANGULAR_VELOCITY= 15*180/pi;
+
+
 % Define the model properties for the joint friction:
 % Based on https://ieeexplore.ieee.org/document/1511048
 

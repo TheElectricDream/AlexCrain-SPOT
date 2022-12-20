@@ -119,10 +119,10 @@ Phase3_SubPhase4_Duration      = 360;        % [s]
 
 % Determine the total experiment time from the durations:
 
-tsim                           = Phase0_Duration + Phase1_Duration + ...
-                                 Phase2_Duration + Phase3_Duration + ...
-                                 Phase4_Duration + Phase5_Duration;        
-
+% tsim                           = Phase0_Duration + Phase1_Duration + ...
+%                                  Phase2_Duration + Phase3_Duration + ...
+%                                  Phase4_Duration + Phase5_Duration;        
+tsim = 85.1;
 % Determine the start time of each phase based on the duration:
 
 Phase0_End                     = Phase0_Duration;
@@ -179,8 +179,10 @@ Gamma6_wr = 0.02;
 
 % Define the mass properties for the RED, BLACK, and BLUE platforms:
 
-model_param(1)                 = 13.0720;     % RED Mass
-model_param(2)                 = 0.2405;      % RED Inertia;
+%model_param(1)                 = 13.0720;     % RED Mass
+%model_param(2)                 = 0.2405;      % RED Inertia;
+model_param(1)                 = 11.211000; % RED Mass
+model_param(2)                 = 0.202150;
 model_param(3)                 = 12.0390;     % BLACK Mass
 model_param(4)                 = 0.225692;    % BLACK Inertia
 model_param(5)                 = 11.2670;     % BLUE Mass
@@ -227,14 +229,14 @@ F_thrusters_BLUE          = [F_Blue_X_nominal; F_Blue_X_nominal;...
                             F_Blue_Y_nominal; F_Blue_Y_nominal; F_Blue_X_nominal; ...
                             F_Blue_X_nominal; F_Blue_Y_nominal; F_Blue_Y_nominal];
 
-thruster_dist2CG_RED          = [49.92;-78.08;70.46;-63.54;81.08;-50.42;57.44;-75.96];
+thruster_dist2CG_RED          = [69.38;-56.62;50.01;-81.49;61.12;-68.38;78.99;-52.01];
 thruster_dist2CG_BLACK        = [83.42;-52.58;55.94;-60.05;54.08;-53.92;77.06;-55.94];
 thruster_dist2CG_BLUE         = [73.54;-64.46;81.39;-60.11;64.46;-65.94;54.61;-74.39];
 
 %%  Set the drop, initial, and home positions for each platform:
 
 drop_states_ARM           = [ pi/2, pi/2, 0];                      % [rad; rad; rad]
-drop_states_RED           = [ xLength/2+0.5, yLength/2, pi];       % [m; m; rad]
+drop_states_RED           = [ 2.66788891601563, 1.24508666992188, -2.35415625572205];       % [m; m; rad]
 drop_states_BLACK         = [ xLength/2, yLength/2, 0];            % [m; m; rad]
 drop_states_BLUE          = [ xLength/2-0.5; yLength/2; 0];        % [m; m; rad]
 
