@@ -18,8 +18,9 @@ OWL::Rigids rigids;
 
 /* initialize_phasespace() initializes the options for the phasespace cameras
    and starts streaming data. */
-double initialize_phasespace(double PS_SampleRate)
+double initialize_phasespace()
 {
+    std::cout << "Initializing PS" << "\n";
     /* The address is the IP address for the phasespace computer. */
     string address = "192.168.0.109";
     std::string phaseSpaceOptions;
@@ -36,7 +37,7 @@ double initialize_phasespace(double PS_SampleRate)
        the samplerate of the function reading the data. If the frequency is 
        too high, the buffer will fill up and there will be a growing time delay
        in the data. */
-    phaseSpaceOptions = "profile=all120 frequency=" + std::to_string(PS_SampleRate);
+    phaseSpaceOptions = "profile=all120 frequency=960";
     
     /* The ID's indicate the location of each LED relative to the center of
        mass for the platform. */
@@ -61,7 +62,13 @@ double initialize_phasespace(double PS_SampleRate)
     if (owl.open(address) <= 0 || owl.initialize(myoptions) <= 0)
 	{
 		return 0; 
+        std::cout << "Port already open, not initializing" << "\n";
 	}
+    else
+    {
+        std::cout << "Opening port again??" << "\n";
+    }
+    
     /* Create the rigid tracker for the RED satellite. The "rigid tracker"
        refers to the syntax used by phasespace, and it used when you want to 
        track a rigid body. */
@@ -106,6 +113,27 @@ double initialize_phasespace(double PS_SampleRate)
     /* Start streaming phasespace data. Sending (1) streams data using TCP/IP,
        sending (2) streams data using UDP, and sending (3) streams data using
        UDP but broadcasts to all IP addresses. */
+    owl.streaming(3);
+   
+}
+
+/* initialize_phasespace() initializes the options for the phasespace cameras
+   and starts streaming data. */
+double initialize_phasespace_client(double PS_SampleRate)
+{
+    std::cout << "Initializing PS" << "\n";
+    /* The address is the IP address for the phasespace computer. */
+    string address = "192.168.0.109";
+ 
+    owl.open(address);
+    
+    std::string phaseSpaceOptions = "profile=all120 frequency=" + std::to_string(PS_SampleRate);
+    
+    owl.initialize(phaseSpaceOptions);
+    
+    /* Start streaming phasespace data. Sending (1) streams data using TCP/IP,
+       sending (2) streams data using UDP, and sending (3) streams data using
+       UDP but broadcasts to all IP addresses. */
     owl.streaming(2);
    
 }
@@ -131,6 +159,7 @@ void stream_phasespace(double* XPOS_red, double* YPOS_red,
         {
             if (!event)
             {
+                std::cout << "No datas" << "\n";
                 // Do not do anything! There is no good data.
             }
             else if (event->type_id() == OWL::Type::FRAME)
@@ -200,7 +229,8 @@ void stream_phasespace(double* XPOS_red, double* YPOS_red,
                 }
             }
         }
-
+        
+        
 }
 
 /* terminate_phasespace() stops all cameras from running and closes all

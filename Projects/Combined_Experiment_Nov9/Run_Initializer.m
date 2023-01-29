@@ -5,7 +5,7 @@
 clear;
 clc;
 close all force;
-addpath(genpath('../Custom_Library'))
+addpath(genpath('../../Custom_Library'))
 
 warning('off','all')
 
@@ -30,7 +30,7 @@ Kp_yr                          = 2;
 Kd_yr                          = 8;
 
 Kp_tr                          = 0.1;
-Kd_tr                          = 0.4;
+Kd_tr                          = 1.0;
 
 % Initialize the PID gains for the BLACK platform:
 
@@ -41,7 +41,7 @@ Kp_yb                          = 2;
 Kd_yb                          = 8;
 
 Kp_tb                          = 0.1;
-Kd_tb                          = 0.4;
+Kd_tb                          = 1.0;
 
 % Initialize the PID gains for the BLUE platform:
 
@@ -52,7 +52,7 @@ Kp_yblue                       = 2;
 Kd_yblue                       = 8;
 
 Kp_tblue                       = 0.1;
-Kd_tblue                       = 0.4;
+Kd_tblue                       = 1;
 
 % Initialize the PID gains for the ARM:
 
@@ -80,7 +80,7 @@ Kp = [0.08 0 0
       0    0    0.002];
 Kv = [0.05 0 0
       0    0.05 0
-      0    0    0.005];
+      0    0    0.005];     
 
 % Set the noise variance level for the RED and BLACK platforms:
 
@@ -177,9 +177,9 @@ relevant_state_mean = (lower_state_bound + upper_state_bound)/2;
 relevant_half_range = (upper_state_bound - lower_state_bound)/2;
 
 % Define constants
-HOLD_POINT_RADIUS        = 0.9; 
-CAMERA_PROCESSING_TIME   = 0.7;
-PHASESPACE_TIMESTEP      = 0.5;
+HOLD_POINT_RADIUS        = 0.95; 
+CAMERA_PROCESSING_TIME   = 0.48;
+PHASESPACE_TIMESTEP      = 1/((1/baseRate)*.8);
 CHASER_ABSOLUTE_POSITION = true;
 MAX_VELOCITY             = 0.1;
 MAX_BODY_ANGULAR_VELOCITY= 15*180/pi;
@@ -231,7 +231,7 @@ model_param(17)                = 0.111;       % ARM m3
 model_param(18)                = 0.003704;    % ARM I1
 model_param(19)                = 0.003506;    % ARM I2
 model_param(20)                = 0.000106;    % ARM I3
-
+ 
 % Initialize the thruster positions for the RED, BLACK, and BLUE platforms,
 % as well as the expected maximum forces. The expected forces will only 
 % affect the simulations.
@@ -267,16 +267,16 @@ thruster_dist2CG_BLUE         = [73.54;-64.46;81.39;-60.11;64.46;-65.94;54.61;-7
 
 drop_states_ARM           = [ pi/2, pi/2, 0];                      % [rad; rad; rad]
 drop_states_RED           = [ xLength/2+0.5, yLength/2, pi];       % [m; m; rad]
-drop_states_BLACK         = [ xLength/2, yLength/2, 0];            % [m; m; rad]
-drop_states_BLUE          = [ xLength/2-0.5; yLength/2; 0];        % [m; m; rad]
+drop_states_BLACK         = [ xLength/2, yLength/2, pi];            % [m; m; rad]
+drop_states_BLUE          = [ xLength/2, yLength/2, pi];            % [m; m; rad]
 
 init_states_RED           = [ xLength/2+0.9; yLength/2; pi];       % [m; m; rad]
-init_states_BLACK         = [ xLength/2; yLength/2; 0];            % [m; m; rad]
-init_states_BLUE          = [ xLength/2-0.9; yLength/2; 0];        % [m; m; rad]
+init_states_BLACK         = [ xLength/2; yLength/2; pi];            % [m; m; rad]
+init_states_BLUE          = [ xLength/2; yLength/2; pi];            % [m; m; rad]
 
 home_states_RED           = [ xLength/2+0.9; yLength/2; pi];       % [m; m; rad]
 home_states_BLACK         = [ xLength/2; yLength/2; 0];            % [m; m; rad]
-home_states_BLUE          = [ xLength/2-0.9; yLength/2; 0];        % [m; m; rad]
+home_states_BLUE          = [ xLength/2; yLength/2; 0];            % [m; m; rad]
                                               
 %% Start the graphical user interface:
 

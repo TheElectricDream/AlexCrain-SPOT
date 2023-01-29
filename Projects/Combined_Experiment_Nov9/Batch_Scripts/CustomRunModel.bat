@@ -1,0 +1,1 @@
+plink.exe -ssh pi@192.168.0.101 -pw raspberry command "nohup sudo ./ExperimentSoftware/FloatPlatform.elf >/dev/null 2>&1 &"

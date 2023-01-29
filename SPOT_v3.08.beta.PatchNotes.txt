@@ -3,4 +3,5 @@
 - Added resource files that are copied when float and clean shutdown are run to present file deletion.
 - Added custom model run and model stop code to force the right diagrams to run.
 - Added friction parameters for the robot arm.
+- Switched back to the precompiled way of getting phasespace data.
 - Removed CAD files and placed them in the archive to reduce the size of the SPOT folder.
