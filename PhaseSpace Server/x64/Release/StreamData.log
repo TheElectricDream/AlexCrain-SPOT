@@ -1,0 +1,37 @@
+﻿  StreamData.cc
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(117,17): warning C4251: 'OWL::MarkerInfo::name': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::MarkerInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(118,17): warning C4251: 'OWL::MarkerInfo::options': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::MarkerInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(126,17): warning C4251: 'OWL::TrackerInfo::type': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::TrackerInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(127,17): warning C4251: 'OWL::TrackerInfo::name': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::TrackerInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(128,17): warning C4251: 'OWL::TrackerInfo::options': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::TrackerInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(129,27): warning C4251: 'OWL::TrackerInfo::marker_ids': class 'std::vector<uint32_t,std::allocator<uint32_t>>' needs to have dll-interface to be used by clients of struct 'OWL::TrackerInfo'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(129): message : see declaration of 'std::vector<uint32_t,std::allocator<uint32_t>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(142,17): warning C4251: 'OWL::FilterInfo::name': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::FilterInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(143,17): warning C4251: 'OWL::FilterInfo::options': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::FilterInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(153,17): warning C4251: 'OWL::DeviceInfo::type': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::DeviceInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(154,17): warning C4251: 'OWL::DeviceInfo::name': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::DeviceInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(155,17): warning C4251: 'OWL::DeviceInfo::options': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::DeviceInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\owl.hpp(156,17): warning C4251: 'OWL::DeviceInfo::status': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::DeviceInfo'
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\StreamData.cc(242,17): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\StreamData.cc(273,87): warning C4244: '=': conversion from '_Rep' to 'double', possible loss of data
+          with
+          [
+              _Rep=__int64
+          ]
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\StreamData.cc(60,8): warning C4101: 'platformID': unreferenced local variable
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\StreamData.cc(62,8): warning C4101: 'host_name': unreferenced local variable
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\StreamData.cc(64,11): warning C4101: 'start': unreferenced local variable
+C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\StreamData.cc(61,19): warning C4101: 'hp': unreferenced local variable
+LINK : warning LNK4075: ignoring '/INCREMENTAL' due to '/OPT:ICF' specification
+  StreamData.vcxproj -> C:\Users\SPOT\Downloads\SPOT_2.12\SPOT 2.0 Software (v2.12)\PhaseSpace Server\x64\Release\StreamData.exe
