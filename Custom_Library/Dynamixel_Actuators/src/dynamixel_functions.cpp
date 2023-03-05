@@ -64,7 +64,7 @@ void initialize_dynamixel_position_control(double P_GAIN, double I_GAIN, double 
     int dxl_comm_result   = COMM_TX_FAIL;
         
     // Open COM port for serial communication with the actuators
-    portHandler->openPort();
+   portHandler->openPort();
    
     // Set port baudrate
 	portHandler->setBaudRate(BAUDRATE);
@@ -108,7 +108,7 @@ void initialize_dynamixel_position_control(double P_GAIN, double I_GAIN, double 
 
 }
 
-void initialize_dynamixel_speed_control(double P_GAIN, double I_GAIN, double VELOCITY_LIMIT, double ACCELERATION_TIME)
+void initialize_dynamixel_speed_control(double P_GAIN, double I_GAIN, double VELOCITY_LIMIT)
 {
 
     // Define the transmission failure code
@@ -126,15 +126,15 @@ void initialize_dynamixel_speed_control(double P_GAIN, double I_GAIN, double VEL
     // Set up the motors for velocity control
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, 1, ADDR_MX_OPERATING_MODE, 1, &dxl_error); // Velocity mode
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, 1, ADDR_MX_DRIVE_MODE, 4, &dxl_error); // Acceleration_profile yields the time required to reach goal velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 1, ADDR_MX_PROFILE_ACCELERATION, nearbyint(ACCELERATION_TIME), &dxl_error); // Acceleration time in [ms] required to reach goal velocity
+    //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 1, ADDR_MX_PROFILE_ACCELERATION, nearbyint(ACCELERATION_TIME), &dxl_error); // Acceleration time in [ms] required to reach goal velocity
     dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, 1, ADDR_MX_VELOCITY_P_GAIN, P_GAIN, &dxl_error);
     dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, 1, ADDR_MX_VELOCITY_I_GAIN, I_GAIN, &dxl_error);
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 1, ADDR_MX_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, 1, ADDR_MX_TORQUE_ENABLE, 1, &dxl_error);
+    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 1, ADDR_MX_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);    
+    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, 1, ADDR_MX_TORQUE_ENABLE, 1, &dxl_error);    
         
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, 2, ADDR_MX_OPERATING_MODE, 1, &dxl_error);
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, 2, ADDR_MX_DRIVE_MODE, 4, &dxl_error); // Acceleration_profile yields the time required to reach goal velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 2, ADDR_MX_PROFILE_ACCELERATION, nearbyint(ACCELERATION_TIME), &dxl_error); // Acceleration time in [ms] required to reach goal velocity
+    //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 2, ADDR_MX_PROFILE_ACCELERATION, nearbyint(ACCELERATION_TIME), &dxl_error); // Acceleration time in [ms] required to reach goal velocity
     dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, 2, ADDR_MX_VELOCITY_P_GAIN, P_GAIN, &dxl_error);
     dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, 2, ADDR_MX_VELOCITY_I_GAIN, I_GAIN, &dxl_error);
     dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 2, ADDR_MX_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);
@@ -142,7 +142,7 @@ void initialize_dynamixel_speed_control(double P_GAIN, double I_GAIN, double VEL
 
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, 3, ADDR_MX_OPERATING_MODE, 1, &dxl_error);
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, 3, ADDR_MX_DRIVE_MODE, 4, &dxl_error); // Acceleration_profile yields the time required to reach goal velocity
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 3, ADDR_MX_PROFILE_ACCELERATION, nearbyint(ACCELERATION_TIME), &dxl_error); // Acceleration time in [ms] required to reach goal velocity
+    //dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 3, ADDR_MX_PROFILE_ACCELERATION, nearbyint(ACCELERATION_TIME), &dxl_error); // Acceleration time in [ms] required to reach goal velocity
     dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, 3, ADDR_MX_VELOCITY_P_GAIN, P_GAIN, &dxl_error);
     dxl_comm_result = packetHandler->write2ByteTxRx(portHandler, 3, ADDR_MX_VELOCITY_I_GAIN, I_GAIN, &dxl_error);
     dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, 3, ADDR_MX_VELOCITY_LIMIT, VELOCITY_LIMIT, &dxl_error);
@@ -376,12 +376,18 @@ void command_dynamixel_position(double JOINT1_POS_RAD, double JOINT2_POS_RAD, do
     
 }
 
-void read_dynamixel_position(double* JOINT1_POS_RAD, double* JOINT2_POS_RAD, double* JOINT3_POS_RAD, double* JOINT1_SPEED_RAD, double* JOINT2_SPEED_RAD, double* JOINT3_SPEED_RAD)
+void read_dynamixel_position(double* JOINT1_POS_RAD, double* JOINT2_POS_RAD, 
+                            double* JOINT3_POS_RAD, double* JOINT1_SPEED_RAD, double* JOINT2_SPEED_RAD,
+                            double* JOINT3_SPEED_RAD, double JOINT1_POS_PREV, double JOINT2_POS_PREV, 
+                            double JOINT3_POS_PREV)
 {
     
     // Define the transmission failure code
     int dxl_comm_result   = COMM_TX_FAIL;
     bool dxl_addparam_result = false;
+    bool dxl_getdata_result = false; 
+    bool dx2_getdata_result = false; 
+    bool dx3_getdata_result = false; 
 
 	// Syncread present position and velocity
 	dxl_comm_result = groupSyncRead.txRxPacket();
@@ -398,22 +404,44 @@ void read_dynamixel_position(double* JOINT1_POS_RAD, double* JOINT2_POS_RAD, dou
     dxl_addparam_result = groupSyncRead.addParam(2);
     dxl_addparam_result = groupSyncRead.addParam(3);
 
-	// Get present position values
-    dxl1_present_position = groupSyncRead.getData(1, ADDR_MX_PRESENT_POSITION, 4);
-    dxl2_present_position = groupSyncRead.getData(2, ADDR_MX_PRESENT_POSITION, 4);
-    dxl3_present_position = groupSyncRead.getData(3, ADDR_MX_PRESENT_POSITION, 4);
-    double joint1_wrapped = std::fmod(0.001534363 * dxl1_present_position, 6.283185307179586); // Converting bits to rads, making 0 rad be when the arm joint is extended, and wrapping to [-pi,pi)
-    if (joint1_wrapped < 0)
-        joint1_wrapped += 6.283185307179586;
-    *JOINT1_POS_RAD = joint1_wrapped - 3.14159;
-    double joint2_wrapped = std::fmod(0.001534363 * dxl2_present_position, 6.283185307179586); // Converting bits to rads, making 0 rad be when the arm joint is extended, and wrapping to [-pi,pi)
-    if (joint2_wrapped < 0)
-        joint2_wrapped += 6.283185307179586;
-    *JOINT2_POS_RAD = joint2_wrapped - 3.14159;
-    double joint3_wrapped = std::fmod(0.001534363 * dxl3_present_position, 6.283185307179586); // Converting bits to rads, making 0 rad be when the arm joint is extended, and wrapping to [-pi,pi)
-    if (joint3_wrapped < 0)
-        joint3_wrapped += 6.283185307179586;
-    *JOINT3_POS_RAD = joint3_wrapped - 3.14159;
+    // Check if groupsyncread data of Dynamixel#1 is available
+    dxl_getdata_result = groupSyncRead.isAvailable(1, ADDR_MX_PRESENT_POSITION, 4);
+    if (dxl_getdata_result == false)
+    {
+        *JOINT1_POS_RAD = JOINT1_POS_PREV;
+    } else {
+        dxl1_present_position = groupSyncRead.getData(1, ADDR_MX_PRESENT_POSITION, 4);
+        double joint1_wrapped = std::fmod(0.001534363 * dxl1_present_position, 6.283185307179586); // Converting bits to rads, making 0 rad be when the arm joint is extended, and wrapping to [-pi,pi)
+        if (joint1_wrapped < 0)
+            joint1_wrapped += 6.283185307179586;
+        *JOINT1_POS_RAD = joint1_wrapped - 3.14159;
+    }
+
+    // Check if groupsyncread data of Dynamixel#2 is available
+    dx2_getdata_result = groupSyncRead.isAvailable(2, ADDR_MX_PRESENT_POSITION, 4);
+    if (dx2_getdata_result == false)
+    {
+        *JOINT2_POS_RAD = JOINT2_POS_PREV;
+    } else {
+        dxl2_present_position = groupSyncRead.getData(2, ADDR_MX_PRESENT_POSITION, 4);
+        double joint2_wrapped = std::fmod(0.001534363 * dxl2_present_position, 6.283185307179586); // Converting bits to rads, making 0 rad be when the arm joint is extended, and wrapping to [-pi,pi)
+        if (joint2_wrapped < 0)
+            joint2_wrapped += 6.283185307179586;
+        *JOINT2_POS_RAD = joint2_wrapped - 3.14159;
+    }
+
+    // Check if groupsyncread data of Dynamixel#3 is available
+    dx3_getdata_result = groupSyncRead.isAvailable(3, ADDR_MX_PRESENT_POSITION, 4);
+    if (dx3_getdata_result == false)
+    {
+        *JOINT3_POS_RAD = JOINT3_POS_PREV;
+    } else {
+        dxl3_present_position = groupSyncRead.getData(3, ADDR_MX_PRESENT_POSITION, 4);
+        double joint3_wrapped = std::fmod(0.001534363 * dxl3_present_position, 6.283185307179586); // Converting bits to rads, making 0 rad be when the arm joint is extended, and wrapping to [-pi,pi)
+        if (joint3_wrapped < 0)
+            joint3_wrapped += 6.283185307179586;
+        *JOINT3_POS_RAD = joint3_wrapped - 3.14159;
+    }
 
     // Get present velocity values
     dxl1_present_speed = groupSyncRead.getData(1, ADDR_MX_PRESENT_SPEED, 4);
@@ -444,7 +472,7 @@ void read_dynamixel_load(double* JOINT1_LOAD, double* JOINT2_LOAD, double* JOINT
     groupBulkRead.clearParam();
 }
 
-void command_dynamixel_speed(double JOINT1_SPD_RAD, double JOINT2_SPD_RAD, double JOINT3_SPD_RAD)
+void command_dynamixel_speed(double JOINT1_SPD_RAD, double JOINT2_SPD_RAD, double JOINT3_SPD_RAD, double ACCELERATION_TIME)
 {
     // Define the transmission failure code
     int dxl_comm_result   = COMM_TX_FAIL;
@@ -452,6 +480,7 @@ void command_dynamixel_speed(double JOINT1_SPD_RAD, double JOINT2_SPD_RAD, doubl
     uint8_t param_goal_speed_1[4];
     uint8_t param_goal_speed_2[4];
     uint8_t param_goal_speed_3[4];
+    uint8_t acceleration_time_bits[4];
 	
 	// Initialize the dxl_error variable
     uint8_t dxl_error = 0;
@@ -498,11 +527,19 @@ void command_dynamixel_speed(double JOINT1_SPD_RAD, double JOINT2_SPD_RAD, doubl
     param_goal_speed_3[1] = DXL_HIBYTE(DXL_LOWORD(JOINT3_SPD_BITS));
     param_goal_speed_3[2] = DXL_LOBYTE(DXL_HIWORD(JOINT3_SPD_BITS));
     param_goal_speed_3[3] = DXL_HIBYTE(DXL_HIWORD(JOINT3_SPD_BITS));
+
+    acceleration_time_bits[0] = DXL_LOBYTE(DXL_LOWORD(nearbyint(ACCELERATION_TIME)));
+    acceleration_time_bits[1] = DXL_HIBYTE(DXL_LOWORD(nearbyint(ACCELERATION_TIME)));
+    acceleration_time_bits[2] = DXL_LOBYTE(DXL_HIWORD(nearbyint(ACCELERATION_TIME)));
+    acceleration_time_bits[3] = DXL_HIBYTE(DXL_HIWORD(nearbyint(ACCELERATION_TIME)));
     		    
     // Send the goal velocity command
     dxl_addparam_result = groupBulkWrite.addParam(1, ADDR_MX_GOAL_SPEED, 4, param_goal_speed_1);
+    dxl_addparam_result = groupBulkWrite.addParam(1, ADDR_MX_PROFILE_ACCELERATION, 4, acceleration_time_bits); // Acceleration time in [ms] required to reach goal velocity
     dxl_addparam_result = groupBulkWrite.addParam(2, ADDR_MX_GOAL_SPEED, 4, param_goal_speed_2);
+    dxl_addparam_result = groupBulkWrite.addParam(2, ADDR_MX_PROFILE_ACCELERATION, 4, acceleration_time_bits); // Acceleration time in [ms] required to reach goal velocity
     dxl_addparam_result = groupBulkWrite.addParam(3, ADDR_MX_GOAL_SPEED, 4, param_goal_speed_3);
+    dxl_addparam_result = groupBulkWrite.addParam(3, ADDR_MX_PROFILE_ACCELERATION, 4, acceleration_time_bits); // Acceleration time in [ms] required to reach goal velocity
     
 	// Clean up
     dxl_comm_result = groupBulkWrite.txPacket();
@@ -582,16 +619,9 @@ void command_dynamixel_special(int JOINT1_BITS, int JOINT2_BITS, double JOINT3_P
     
 }
 
-void command_dynamixel_current(int JOINT1_TAU, int JOINT2_TAU, int JOINT3_TAU )
+void command_dynamixel_current(int JOINT1_BITS, int JOINT2_BITS, int JOINT3_BITS )
 {
-    // Convert torque to amps using performance curve
-    int JOINT1_BITS;
-    int JOINT2_BITS;
-    int JOINT3_BITS;
-    
-    JOINT1_BITS = nearbyint(JOINT1_TAU/0.0030912);
-    JOINT2_BITS = nearbyint(JOINT2_TAU/0.0030912);
-    JOINT3_BITS = nearbyint(JOINT3_TAU/0.0030912);
+
     
     // Define the transmission failure code
     int dxl_comm_result   = COMM_TX_FAIL;

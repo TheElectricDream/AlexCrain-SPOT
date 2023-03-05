@@ -1,1 +1,1 @@
-plink.exe -ssh pi@192.168.0.101 -pw raspberry command "nohup sudo ./ExperimentSoftware/FloatPlatform.elf >/dev/null 2>&1 &"
+plink.exe -ssh pi@192.168.0.100 -pw raspberry command "nohup sudo ./ExperimentSoftware/Combined_Experiment_Jan23_2020a_TorqueControl.elf >/dev/null 2>&1 &"

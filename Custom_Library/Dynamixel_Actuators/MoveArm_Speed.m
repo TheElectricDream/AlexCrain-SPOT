@@ -46,7 +46,7 @@ classdef MoveArm_Speed < matlab.System ...
             end
         end
         
-        function stepImpl(~, u1, u2, u3)  
+        function stepImpl(~, u1, u2, u3, accel_time)  
             if isempty(coder.target)
                 % Place simulation output code here 
             else
@@ -54,7 +54,7 @@ classdef MoveArm_Speed < matlab.System ...
                 %coder.ceval('sink_output',u);
                  coder.cinclude('dynamixel_sdk.h');
                  coder.cinclude('dynamixel_functions.h');
-                 coder.ceval('command_dynamixel_speed',u1, u2, u3);
+                 coder.ceval('command_dynamixel_speed',u1, u2, u3, accel_time);
             end
         end
         
@@ -65,7 +65,7 @@ classdef MoveArm_Speed < matlab.System ...
                 % Call C-function implementing device termination
                  coder.cinclude('dynamixel_sdk.h');
                  coder.cinclude('dynamixel_functions.h');
-                 coder.ceval('command_dynamixel_speed',0, 0, 0); % send 0 speed at termination
+                 coder.ceval('command_dynamixel_speed',0, 0, 0, 500); % send 0 speed at termination over 500 ms
             end
         end
     end
@@ -73,7 +73,7 @@ classdef MoveArm_Speed < matlab.System ...
     methods (Access=protected)
         %% Define input properties
         function num = getNumInputsImpl(~)
-            num = 3;
+            num = 4;
         end
         
         function num = getNumOutputsImpl(~)
@@ -92,12 +92,13 @@ classdef MoveArm_Speed < matlab.System ...
             flag = true;
         end
         
-        function validateInputsImpl(~, u1, u2, u3)
+        function validateInputsImpl(~, u1, u2, u3, accel_time)
             if isempty(coder.target)
                 % Run input validation only in Simulation
                 validateattributes(u1,{'double'},{'scalar'},'','u1');
                 validateattributes(u2,{'double'},{'scalar'},'','u2');
                 validateattributes(u3,{'double'},{'scalar'},'','u3');
+                validateattributes(accel_time,{'double'},{'scalar'},'','accel_time');
             end
         end
         
@@ -122,7 +123,7 @@ classdef MoveArm_Speed < matlab.System ...
                 'Dynamixel Actuator - Speed Control','Text',...
                 ['This simulink block sends the input to the Dynamixel actuator. '...
                 'The input must be the desired joint speed in radians/s.'...
-                ' The order of inputs is joint #1, #2, #3.' newline]);
+                ' The order of inputs is joint #1, #2, #3. Accel_time is the time spent moving to the commanded angular velocities in [ms].' newline]);
         end
         
     end

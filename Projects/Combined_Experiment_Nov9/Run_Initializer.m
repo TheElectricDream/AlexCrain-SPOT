@@ -56,14 +56,14 @@ Kd_tblue                       = 1;
 
 % Initialize the PID gains for the ARM:
 
-Kp_sharm                       = 0.15;
-Kd_sharm                       = 0.05;
+Kp_sharm                       = 200;
+Kd_sharm                       = 50;
 
-Kp_elarm                       = 0.08;
-Kd_elarm                       = 0.05;
+Kp_elarm                       = 200;
+Kd_elarm                       = 20;
 
-Kp_wrarm                       = 0.007;
-Kd_wrarm                       = 0.005;
+Kp_wrarm                       = 200;
+Kd_wrarm                       = 10;
 
 % Set torque limits on joints
 
@@ -77,10 +77,10 @@ Tz_lim_wrarm                   = .1; % Wrist Joint [Nm]
 
 Kp = [0.08 0 0
       0    0.08 0
-      0    0    0.002];
+      0    0    0.002].*5000;
 Kv = [0.05 0 0
       0    0.05 0
-      0    0    0.005];     
+      0    0    0.005].*5000;     
 
 % Set the noise variance level for the RED and BLACK platforms:
 
