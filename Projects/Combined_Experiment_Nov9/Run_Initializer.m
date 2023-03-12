@@ -23,14 +23,14 @@ yLength                        = 2.41935;   % [m]
 
 % Initialize the PID gains for the RED platform:
 
-Kp_xr                          = 2;
-Kd_xr                          = 8;
+Kp_xr                          = 4;
+Kd_xr                          = 20;
 
-Kp_yr                          = 2;
-Kd_yr                          = 8;
+Kp_yr                          = 4;
+Kd_yr                          = 20;
 
-Kp_tr                          = 0.1;
-Kd_tr                          = 1.0;
+Kp_tr                          = 1;
+Kd_tr                          = 4;
 
 % Initialize the PID gains for the BLACK platform:
 
@@ -77,10 +77,10 @@ Tz_lim_wrarm                   = .1; % Wrist Joint [Nm]
 
 Kp = [0.08 0 0
       0    0.08 0
-      0    0    0.002].*5000;
+      0    0    0.002];
 Kv = [0.05 0 0
       0    0.05 0
-      0    0    0.005].*5000;     
+      0    0    0.005];     
 
 % Set the noise variance level for the RED and BLACK platforms:
 
@@ -102,7 +102,7 @@ baseRate                       = 0.05;      % 20 Hz
 
 Phase0_Duration                = 10;        % [s]
 Phase1_Duration                = 5;         % [s]
-Phase2_Duration                = 20;        % [s]
+Phase2_Duration                = 30;        % [s]
 Phase3_Duration                = 515;        % [s]
 Phase4_Duration                = 120;        % [s]
 Phase5_Duration                = 20;         % [s]
@@ -277,6 +277,7 @@ init_states_BLUE          = [ xLength/2; yLength/2; pi];            % [m; m; rad
 home_states_RED           = [ xLength/2+0.9; yLength/2; pi];       % [m; m; rad]
 home_states_BLACK         = [ xLength/2; yLength/2; 0];            % [m; m; rad]
 home_states_BLUE          = [ xLength/2; yLength/2; 0];            % [m; m; rad]
+
                                               
 %% Start the graphical user interface:
 
