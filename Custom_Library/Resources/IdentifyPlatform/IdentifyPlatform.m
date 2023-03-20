@@ -48,14 +48,14 @@ classdef IdentifyPlatform < realtime.internal.SourceSampleTime ...
             end
         end
         
-        function y = stepImpl(obj)   %#ok<MANU>
-            y = double(0);
+        function Platform_ID = stepImpl(obj)   %#ok<MANU>
+            Platform_ID = double(0);
             if isempty(coder.target)
                 % Place simulation output code here
             else
                 % Call C-function implementing device output
                  coder.cinclude('resource_headers.h');
-                 y = coder.ceval('whoAmI');
+                 Platform_ID = coder.ceval('whoAmI');
             end
         end
         
