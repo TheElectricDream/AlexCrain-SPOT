@@ -23,14 +23,14 @@ yLength                        = 2.41935;   % [m]
 
 % Initialize the PID gains for the RED platform:
 
-Kp_xr                          = 4;
-Kd_xr                          = 20;
+Kp_xr                          = 2;
+Kd_xr                          = 8;
 
-Kp_yr                          = 4;
-Kd_yr                          = 20;
+Kp_yr                          = 2;
+Kd_yr                          = 8;
 
-Kp_tr                          = 1;
-Kd_tr                          = 4;
+Kp_tr                          = 0.1;
+Kd_tr                          = 1.0;
 
 % Initialize the PID gains for the BLACK platform:
 
@@ -103,19 +103,26 @@ baseRate                       = 0.05;      % 20 Hz
 Phase0_Duration                = 10;        % [s]
 Phase1_Duration                = 5;         % [s]
 Phase2_Duration                = 30;        % [s]
-Phase3_Duration                = 515;        % [s]
-Phase4_Duration                = 120;        % [s]
-Phase5_Duration                = 20;         % [s]
+Phase3_Duration                = 515;       % [s]
+Phase4_Duration                = 120;       % [s]
+Phase5_Duration                = 20;        % [s]
 
 % Set the duration of the sub-phases. Sub-phases occur during the
 % experiment phase (Phase3_Duration) and must be manually inserted into the
 % diagram. The total duration of the sub-phases must equal the length of
 % the Phase3_Duration.
 
-Phase3_SubPhase1_Duration      = 120;        % [s]
-Phase3_SubPhase2_Duration      = 10;          % [s]
-Phase3_SubPhase3_Duration      = 30;        % [s]
+Phase3_SubPhase1_Duration      = 60;         % [s]
+Phase3_SubPhase2_Duration      = 105;         % [s]
+Phase3_SubPhase3_Duration      = 30;         % [s]
 Phase3_SubPhase4_Duration      = 360;        % [s]
+
+SubPhase_Sum                   = Phase3_SubPhase1_Duration + ...
+                                 Phase3_SubPhase2_Duration + ...
+                                 Phase3_SubPhase3_Duration + ...
+                                 Phase3_SubPhase4_Duration;
+                             
+Phase3_Duration                = SubPhase_Sum;                      
 
 % Determine the total experiment time from the durations:
 
@@ -211,7 +218,7 @@ Gamma6_wr = 0.02;
 
 % Define the mass properties for the RED, BLACK, and BLUE platforms:
 
-model_param(1)                 = 13.0720;     % RED Mass
+model_param(1)                 = 13.386;     % RED Mass
 model_param(2)                 = 0.2405;      % RED Inertia;
 model_param(3)                 = 12.0390;     % BLACK Mass
 model_param(4)                 = 0.225692;    % BLACK Inertia
