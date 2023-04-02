@@ -6,10 +6,10 @@ clear;
 clc;
 close('all')
 
-% Black with panels and an air tank * USER ENTERED DATA *
-Ab = 5463/1000; % [kg] Left-middle-edge
-Bb = 3624/1000; % [kg] Right-back corner
-Cb = 2180/1000; % [kg] Right-front corner
+% Blue with panels and an air tank * USER ENTERED DATA *
+Ab = 4859/1000; % [kg] Left-middle-edge
+Bb = 3024/1000; % [kg] Right-back corner
+Cb = 2843/1000; % [kg] Right-front corner
 
 Mblue = Ab+Bb+Cb;
 
@@ -41,7 +41,7 @@ text(-0.1, -0.16, 'LED #20')
 text(0.15, -0.16, 'LED #18')
 
 
-% Place Black's LEDs * USER ENTERED OFFSETS
+% Place Blue's LEDs * USER ENTERED OFFSETS
 LED16x =  0.15-Xblue-0.0115;
 LED16y =  0.15-Yblue-0.012;
 
@@ -417,6 +417,10 @@ fprintf('tracker_id_BLACK_13_pos_string = "pos=%f,%f,0";\n',[LED13x*1000,LED13y*
 fprintf('tracker_id_BLACK_11_pos_string = "pos=%f,%f,0";\n',[LED11x*1000,LED11y*1000]);
 fprintf('tracker_id_BLACK_9_pos_string = "pos=%f,%f,0";\n',[LED9x*1000,LED9y*1000]);
 fprintf('tracker_id_BLACK_15_pos_string = "pos=%f,%f,0";\n',[LED15x*1000,LED15y*1000]);
+fprintf('tracker_id_BLUE_16_pos_string = "pos=%f,%f,0";\n',[LED16x*1000,LED16y*1000]);
+fprintf('tracker_id_BLUE_18_pos_string = "pos=%f,%f,0";\n',[LED18x*1000,LED18y*1000]);
+fprintf('tracker_id_BLUE_20_pos_string = "pos=%f,%f,0";\n',[LED20x*1000,LED20y*1000]);
+fprintf('tracker_id_BLUE_22_pos_string = "pos=%f,%f,0";\n',[LED22x*1000,LED22y*1000]);
 
 fprintf('\n\nCOPY THE FOLLOWING TO Run_Initializer.m\n');
 fprintf('model_param(1)                 = %f; %% RED Mass\n', Mr)

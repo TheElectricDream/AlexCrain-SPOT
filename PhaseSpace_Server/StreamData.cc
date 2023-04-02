@@ -183,20 +183,22 @@ int main(int argc, const char **argv)
 
   // Tracker locations updated on 2018-07-04, based on CG estimated from weight with full tanks.
 
-  tracker_id_RED_5_pos_string = "pos=146.960175,124.9189470,0";
-  tracker_id_RED_3_pos_string = "pos=144.960175,-154.081053,0";
-  tracker_id_RED_1_pos_string = "pos=-133.039825,-153.581053,0";
-  tracker_id_RED_7_pos_string = "pos=-131.539825,124.418947,0";
+  tracker_id_RED_5_pos_string = "pos=125.509767,143.875167,0";
+  tracker_id_RED_3_pos_string = "pos=125.509767,-135.624833,0";
+  tracker_id_RED_1_pos_string = "pos=-154.990233,-135.624833,0";
+  tracker_id_RED_7_pos_string = "pos=-153.490233,144.375167,0";
 
-  tracker_id_BLACK_13_pos_string = "pos=125.944730,153.415965,0";
-  tracker_id_BLACK_11_pos_string = "pos=124.944730,-125.084035,0";
-  tracker_id_BLACK_9_pos_string = "pos=-153.555270,-124.584035,0";
-  tracker_id_BLACK_15_pos_string = "pos=-151.805270,154.415965,0";
+  tracker_id_BLACK_13_pos_string = "pos=130.251807,141.800150,0";
+  tracker_id_BLACK_11_pos_string = "pos=130.751807,-135.699850,0";
+  tracker_id_BLACK_9_pos_string = "pos=-146.748193,-135.199850,0";
+  tracker_id_BLACK_15_pos_string = "pos=-146.748193,143.300150,0";
 
-  tracker_id_BLUE_16_pos_string = "pos=149.893592,142.539807,0";
-  tracker_id_BLUE_18_pos_string = "pos=-127.106408,144.039807,0";
-  tracker_id_BLUE_20_pos_string = "pos=-127.106408,-134.460193,0";
-  tracker_id_BLUE_22_pos_string = "pos=150.393592,-134.960193,0";
+  tracker_id_BLUE_16_pos_string = "pos=140.000177,152.096588,0";
+  tracker_id_BLUE_18_pos_string = "pos=-136.999823,153.596588,0";
+  tracker_id_BLUE_20_pos_string = "pos=-136.999823,-124.903412,0";
+  tracker_id_BLUE_22_pos_string = "pos=140.500177,-125.403412,0";
+
+
 
   const std::string myoptions = phaseSpaceOptions;
 

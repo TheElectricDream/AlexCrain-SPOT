@@ -23,8 +23,8 @@ C:\Users\SPOT\Documents\GitHub\AlexCrain-SPOT\PhaseSpace_Server\owl.hpp(155,17):
 C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
 C:\Users\SPOT\Documents\GitHub\AlexCrain-SPOT\PhaseSpace_Server\owl.hpp(156,17): warning C4251: 'OWL::DeviceInfo::status': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' needs to have dll-interface to be used by clients of struct 'OWL::DeviceInfo'
 C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.32.31326\include\xstring(4919): message : see declaration of 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>'
-C:\Users\SPOT\Documents\GitHub\AlexCrain-SPOT\PhaseSpace_Server\StreamData.cc(242,17): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\SPOT\Documents\GitHub\AlexCrain-SPOT\PhaseSpace_Server\StreamData.cc(273,87): warning C4244: '=': conversion from '_Rep' to 'double', possible loss of data
+C:\Users\SPOT\Documents\GitHub\AlexCrain-SPOT\PhaseSpace_Server\StreamData.cc(244,17): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\SPOT\Documents\GitHub\AlexCrain-SPOT\PhaseSpace_Server\StreamData.cc(275,87): warning C4244: '=': conversion from '_Rep' to 'double', possible loss of data
           with
           [
               _Rep=__int64
