@@ -73,7 +73,6 @@ classdef ReadArm_Position_Rates < realtime.internal.SourceSampleTime ...
             if isempty(coder.target)
                 % Place simulation termination code here
             else
-                % Call C-function implementing device termination
             end
         end
     end

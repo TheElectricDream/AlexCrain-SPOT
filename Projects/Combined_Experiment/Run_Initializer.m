@@ -279,7 +279,7 @@ drop_states_BLUE          = [ xLength/2, yLength/2, pi];            % [m; m; rad
 
 init_states_RED           = [ xLength/2+0.9; yLength/2; pi];       % [m; m; rad]
 init_states_BLACK         = [ xLength/2; yLength/2; pi];            % [m; m; rad]
-init_states_BLUE          = [ xLength/2; yLength/2; pi];            % [m; m; rad]
+init_states_BLUE          = [ xLength/2; yLength/2; pi];           % [m; m; rad]
 
 home_states_RED           = [ xLength/2+0.9; yLength/2; pi];       % [m; m; rad]
 home_states_BLACK         = [ xLength/2; yLength/2; 0];            % [m; m; rad]
