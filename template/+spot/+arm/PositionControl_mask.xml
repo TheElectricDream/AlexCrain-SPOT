@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mask SelfModifiable="on">
+  <Type>spot.arm.PositionControl</Type>
+  <SourceCheckSum>43358FC99D13A51A141D3898583968AD</SourceCheckSum>
+  <Display IconOpaque="transparent" RunInitForIconRedraw="off">disp(&apos;Dynamixel Position&apos;);
+port_label(&apos;input&apos;,1,&apos;Goal&apos;);
+port_label(&apos;input&apos;,2,&apos;Measured&apos;);
+port_label(&apos;output&apos;,1,&apos;Torque&apos;);
+</Display>
+  <Description>The MX-64(2.0)&apos;s position control law (profile, PID, feedforward), in its own units, run in the diagram: its output is the joint torque [N m] the servo&apos;s PWM would give, for the servos in current control. Inputs: goal angles [rad] (ARM_Path) and ARM_Measured_States. The gains are retuned for the diagram&apos;s 20 Hz; the servo&apos;s own were 400/0/200 at 1 ms. See help spot.arm.PositionControl.</Description>
+  <MaskParameter Name="Motor" Type="edit" Tunable="off">
+    <Prompt>Motor:</Prompt>
+    <Value>armMotor</Value>
+  </MaskParameter>
+  <MaskParameter Name="StepTime" Type="edit" Tunable="off">
+    <Prompt>[s] how often the controller runs (the diagram&apos;s baseRate):</Prompt>
+    <Value>baseRate</Value>
+  </MaskParameter>
+  <MaskParameter Name="ServoPeriod" Type="edit" Tunable="off">
+    <Prompt>[s] the servo&apos;s control period, which its gains are per:</Prompt>
+    <Value>1e-3</Value>
+  </MaskParameter>
+  <MaskParameter Name="PositionP" Type="edit" Tunable="off">
+    <Prompt>Position P Gain [shoulder elbow wrist] (SPOT&apos;s servos had 400):</Prompt>
+    <Value>[ 25, 56, 21 ]</Value>
+  </MaskParameter>
+  <MaskParameter Name="PositionI" Type="edit" Tunable="off">
+    <Prompt>Position I Gain (SPOT&apos;s servos had 0):</Prompt>
+    <Value>10</Value>
+  </MaskParameter>
+  <MaskParameter Name="PositionD" Type="edit" Tunable="off">
+    <Prompt>Position D Gain (SPOT&apos;s servos had 200):</Prompt>
+    <Value>[ 1545, 230, 236 ]</Value>
+  </MaskParameter>
+  <MaskParameter Name="Feedforward1" Type="edit" Tunable="off">
+    <Prompt>Feedforward 1st Gain:</Prompt>
+    <Value>0</Value>
+  </MaskParameter>
+  <MaskParameter Name="Feedforward2" Type="edit" Tunable="off">
+    <Prompt>Feedforward 2nd Gain:</Prompt>
+    <Value>0</Value>
+  </MaskParameter>
+  <MaskParameter Name="ProfileVelocity" Type="edit" Tunable="off">
+    <Prompt>[0.229 rev/min], 0 = no profile:</Prompt>
+    <Value>20</Value>
+  </MaskParameter>
+  <MaskParameter Name="ProfileAcceleration" Type="edit" Tunable="off">
+    <Prompt>[214.577 rev/min^2], 0 = none:</Prompt>
+    <Value>0</Value>
+  </MaskParameter>
+  <MaskParameter Name="MinPosition" Type="edit" Tunable="off">
+    <Prompt>Min Position Limit [pulses]:</Prompt>
+    <Value>1024</Value>
+  </MaskParameter>
+  <MaskParameter Name="MaxPosition" Type="edit" Tunable="off">
+    <Prompt>Max Position Limit [pulses]:</Prompt>
+    <Value>3072</Value>
+  </MaskParameter>
+  <MaskParameter Name="PWMLimit" Type="edit" Tunable="off">
+    <Prompt>PWM Limit:</Prompt>
+    <Value>885</Value>
+  </MaskParameter>
+  <MaskParameter Name="BackEMF" Type="checkbox" Evaluate="off" Tunable="off">
+    <Prompt>include the motor&apos;s back-EMF in the PWM&apos;s torque</Prompt>
+    <Value>off</Value>
+  </MaskParameter>
+  <MaskParameter Name="PWM" Type="edit" Tunable="off" NeverSave="on" ReadOnly="on" Enabled="off">
+    <Prompt>the last step&apos;s PWM, as the servo would set it:</Prompt>
+    <Value>zeros( 3, 1 )</Value>
+  </MaskParameter>
+  <MaskParameter Name="SimulateUsing" Type="popup" Evaluate="off" Tunable="off">
+    <Prompt>SystemBlock:MATLABSystem:SimulateUsing</Prompt>
+    <Value>Code generation</Value>
+    <TypeOptions>
+      <Option>SystemBlock:MATLABSystem:SimulateUsingCodeGeneration</Option>
+      <Option>SystemBlock:MATLABSystem:SimulateUsingInterpretedExecution</Option>
+    </TypeOptions>
+  </MaskParameter>
+  <DialogControl Type="Group" Name="DescGroupVar">
+    <Prompt>Dynamixel Position Control</Prompt>
+    <DialogControl Type="Text" Name="DescTextVar">
+      <Prompt>%&lt;MaskDescription&gt;</Prompt>
+    </DialogControl>
+    <DialogControl Type="Hyperlink" Name="SourceCodeLink">
+      <Prompt>Source code</Prompt>
+      <Callback>edit(&apos;spot.arm.PositionControl&apos;);</Callback>
+    </DialogControl>
+  </DialogControl>
+  <DialogControl Type="Group" Name="SectionGroup0_Section1">
+    <Prompt>Simulink:studio:ToolBarParametersMenu</Prompt>
+    <ControlOptions AlignPrompts="on"/>
+    <DialogControl Type="Edit" Name="Motor">
+      <Prompt>Motor:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="StepTime">
+      <Prompt>[s] how often the controller runs (the diagram&apos;s baseRate):</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="ServoPeriod">
+      <Prompt>[s] the servo&apos;s control period, which its gains are per:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="PositionP">
+      <Prompt>Position P Gain [shoulder elbow wrist] (SPOT&apos;s servos had 400):</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="PositionI">
+      <Prompt>Position I Gain (SPOT&apos;s servos had 0):</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="PositionD">
+      <Prompt>Position D Gain (SPOT&apos;s servos had 200):</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="Feedforward1">
+      <Prompt>Feedforward 1st Gain:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="Feedforward2">
+      <Prompt>Feedforward 2nd Gain:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="ProfileVelocity">
+      <Prompt>[0.229 rev/min], 0 = no profile:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="ProfileAcceleration">
+      <Prompt>[214.577 rev/min^2], 0 = none:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="MinPosition">
+      <Prompt>Min Position Limit [pulses]:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="MaxPosition">
+      <Prompt>Max Position Limit [pulses]:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="PWMLimit">
+      <Prompt>PWM Limit:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="CheckBox" Name="BackEMF">
+      <Prompt>include the motor&apos;s back-EMF in the PWM&apos;s torque</Prompt>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="PWM">
+      <Prompt>the last step&apos;s PWM, as the servo would set it:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+  </DialogControl>
+  <DialogControl Type="Panel" Name="SectionGroup0_Section2">
+    <ControlOptions AlignPrompts="on"/>
+    <DialogControl Type="Popup" Name="SimulateUsing">
+      <Prompt>Simulate using:</Prompt>
+      <Tooltip>SystemBlock:MATLABSystem:SimulateUsingDescription</Tooltip>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+  </DialogControl>
+</Mask>

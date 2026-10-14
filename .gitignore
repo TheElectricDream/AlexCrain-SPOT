@@ -1,0 +1,27 @@
+# What is NOT published: the repository holds New_SPOT_Project.m, template/ and an empty projects/
+
+# Retired code, old diagrams, the CAD and old data (kept locally)
+archive/
+# Users' projects, made by New_SPOT_Project (the folder itself is kept)
+projects/*
+!projects/.gitkeep
+# The documentation: tutorial sources, wiki and their tools
+template/documentation/
+# The developers' working log
+template/STATUS.md
+
+# SPOT Console: session token, ports and simulation results (per computer)
+.spot_cache/
+# StreamData built by the lab console (Compile) or build_linux.sh
+template/+spot/+console/output/
+__pycache__/
+# Simulink's build and cache files (regenerated)
+slprj/
+*.slxc
+*_ert_rtw/
+*.elf
+*.autosave
+# Runs and figures (the console creates the folder)
+Saved Data/
+# The big CAD folder
+designs/

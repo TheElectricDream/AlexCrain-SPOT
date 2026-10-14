@@ -1,0 +1,257 @@
+{
+  "version": 1,
+  "diagram": "Template_v5_0_0_2026a_Jetson_PSClock.slx",
+  "platforms": {
+    "RED": true,
+    "BLACK": true,
+    "BLUE": true,
+    "ARM": true
+  },
+  "sampleRate": 20,
+  "dataRate": 10,
+  "realTime": false,
+  "pwmFrequency": 5,
+  "labConsoleAddress": "192.168.1.116",
+  "timing": {
+    "phase0": 10,
+    "phase1": 5,
+    "phase2": 40,
+    "subPhases": [
+      10,
+      10,
+      30,
+      120
+    ],
+    "phase4": 30,
+    "phase5": 20,
+    "on": {
+      "phase2": true,
+      "subPhases": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "phase4": true
+    }
+  },
+  "solver": {
+    "type": "Fixed-step",
+    "fixedStepName": "ode4",
+    "variableStepName": "VariableStepAuto",
+    "maxStep": "auto",
+    "minStep": "auto",
+    "initialStep": "auto",
+    "relTol": "1e-6",
+    "absTol": "1e-6"
+  },
+  "initial": {
+    "RED": {
+      "initial": [
+        2.914,
+        0.412,
+        93.9
+      ],
+      "home": [
+        2.963,
+        1.604,
+        156.9
+      ]
+    },
+    "BLACK": {
+      "initial": [
+        1.33,
+        1.95,
+        120
+      ],
+      "home": [
+        1.33,
+        1.95,
+        120
+      ]
+    },
+    "BLUE": {
+      "initial": [
+        0.599,
+        0.821,
+        -120
+      ],
+      "home": [
+        1.33,
+        0.47,
+        240
+      ]
+    },
+    "ARM": {
+      "initial": [
+        60,
+        90,
+        0
+      ]
+    }
+  },
+  "mass": {
+    "override": false,
+    "RED": {
+      "scales": [
+        6.17,
+        3.12,
+        4.46
+      ],
+      "bifilar": {
+        "T": 3,
+        "L": 2.56,
+        "D": 0.28
+      },
+      "mass": 13.75,
+      "inertia": 0.23543476058293455
+    },
+    "BLACK": {
+      "scales": [
+        6.14,
+        3.07,
+        4.01
+      ],
+      "bifilar": {
+        "T": 3.11,
+        "L": 2.56,
+        "D": 0.28
+      },
+      "mass": 13.22,
+      "inertia": 0.24326386911004549
+    },
+    "BLUE": {
+      "scales": [
+        5.65,
+        3.08,
+        4.04
+      ],
+      "bifilar": {
+        "T": 3.02,
+        "L": 2.56,
+        "D": 0.28
+      },
+      "mass": 12.77,
+      "inertia": 0.22157979686198798
+    },
+    "arm": {
+      "Phi": 1.2337865258868412,
+      "b0": 0.25020671782385068,
+      "a1": 0.196822,
+      "b1": 0.107678,
+      "a2": 0.198152,
+      "b2": 0.106348,
+      "a3": 0.062097,
+      "b3": 0.025153,
+      "mPROX": 0.345,
+      "mDIST": 0.335,
+      "mEE": 0.111,
+      "IPROX": 0.003704,
+      "IDIST": 0.003506,
+      "IEE": 0.000106,
+      "mount": {
+        "face": "+y",
+        "side": "left"
+      }
+    }
+  },
+  "calibration": {
+    "tableSlope": true,
+    "thrusters": true,
+    "arm": true
+  },
+  "thrusterForce": {
+    "RED": 0.2825,
+    "BLACK": 0.2825,
+    "BLUE": 0.2825
+  },
+  "control": {
+    "RED": {
+      "lqr": {
+        "Q": [
+          1,
+          1,
+          0.5,
+          10,
+          10,
+          1
+        ],
+        "R": [
+          6,
+          6,
+          6
+        ]
+      }
+    },
+    "BLACK": {
+      "lqr": {
+        "Q": [
+          1,
+          1,
+          0.05,
+          10,
+          10,
+          1
+        ],
+        "R": [
+          6,
+          6,
+          6
+        ]
+      }
+    },
+    "BLUE": {
+      "lqr": {
+        "Q": [
+          1,
+          1,
+          0.05,
+          10,
+          10,
+          1
+        ],
+        "R": [
+          6,
+          6,
+          6
+        ]
+      }
+    },
+    "ARM": {
+      "position": {
+        "P": [
+          25,
+          56,
+          21
+        ],
+        "I": [
+          10,
+          10,
+          10
+        ],
+        "D": [
+          1545,
+          230,
+          236
+        ],
+        "profileVelocity": 5,
+        "profileAcceleration": 0,
+        "pwmLimit": 80
+      },
+      "velocity": {
+        "P": [
+          160,
+          70,
+          30
+        ],
+        "I": [
+          220,
+          1500,
+          300
+        ],
+        "profileAcceleration": 0,
+        "pwmLimit": 885
+      }
+    }
+  }
+}

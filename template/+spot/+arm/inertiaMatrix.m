@@ -1,0 +1,136 @@
+function M = inertiaMatrix(p, x)
+%INERTIAMATRIX Mass matrix of the Chaser (RED) with its three-link arm, free floating.
+%   M = spot.arm.inertiaMatrix(p, x) for the state x = [x y theta q1 q2 q3 ...] (only x(3:6) are
+%   used) and the parameters p (mRED, IRED, Phi, b0, a1, b1, a2, b2, a3, b3, mPROX, mDIST, mEE,
+%   IPROX, IDIST, IEE; see spot.arm.defaults). M is 6 x 6, for [x y theta q1 q2 q3].
+%   Generated with the Symbolic Math Toolbox (2017); moved here from the diagram's "Inertia
+%   Function 1" block, unchanged.
+%#codegen
+M = inertiaFunc3Link(p.mRED, p.IRED, p.Phi, p.b0, p.a1, p.b1, p.a2, p.b2, p.a3, p.b3, p.mPROX, p.mDIST, ...
+                     p.mEE, p.IPROX, p.IDIST, x, p.IEE);
+end
+
+function InertiaS = inertiaFunc3Link(mRED, IRED, Phi, b0, a1, b1, a2, b2, a3, b3, mPROX, mDIST, mEE, IPROX, IDIST, x, IEE)
+
+    q0 = x(3);
+    q1 = x(4);
+    q2 = x(5);
+    q3 = x(6);
+    
+    t2 = a1+b1;
+    t3 = a1.*mPROX;
+    t4 = mDIST.*t2;
+    t5 = mEE.*t2;
+    t6 = q0+q1;
+    t7 = cos(t6);
+    t8 = t3+t4+t5;
+    t9 = a2.*mDIST;
+    t10 = a2+b2;
+    t11 = mEE.*t10;
+    t12 = q0+q1+q2;
+    t13 = cos(t12);
+    t14 = t9+t11;
+    t15 = q0+q1+q2+q3;
+    t16 = cos(t15);
+    t17 = mRED+mPROX+mDIST+mEE;
+    t18 = b0.*mPROX;
+    t19 = b0.*mDIST;
+    t20 = b0.*mEE;
+    t21 = t18+t19+t20;
+    t22 = (pi/2-Phi)+q0;
+    t23 = sin(t6);
+    t24 = sin(t12);
+    t25 = sin(t15);
+    t26 = a2.*mEE;
+    t27 = b2.*mEE;
+    t28 = t9+t26+t27;
+    t29 = sin(t22);
+    t86 = t7.*t8;
+    t87 = t13.*t14;
+    t88 = a3.*mEE.*t16;
+    t30 = -t86-t87-t88-t21.*t29;
+    t31 = cos(t22);
+    t32 = t21.*t31;
+    t89 = t8.*t23;
+    t90 = t14.*t24;
+    t91 = a3.*mEE.*t25;
+    t33 = t32-t89-t90-t91;
+    t34 = a1.^2;
+    t35 = a2.^2;
+    t36 = b0.^2;
+    t37 = b1.^2;
+    t38 = a1.*a2.*mDIST.*2.0;
+    t39 = a1.*a2.*mEE.*2.0;
+    t40 = a2.*b1.*mDIST.*2.0;
+    t41 = a1.*b2.*mEE.*2.0;
+    t42 = a2.*b1.*mEE.*2.0;
+    t43 = b1.*b2.*mEE.*2.0;
+    t44 = t38+t39+t40+t41+t42+t43;
+    t45 = cos(q2);
+    t46 = t44.*t45;
+    t47 = a2.*a3.*mEE.*2.0;
+    t48 = a3.*b2.*mEE.*2.0;
+    t49 = t47+t48;
+    t50 = cos(q3);
+    t51 = t49.*t50;
+    t52 = a1.*a3.*mEE.*2.0;
+    t53 = a3.*b1.*mEE.*2.0;
+    t54 = t52+t53;
+    t55 = q2+q3;
+    t56 = cos(t55);
+    t57 = t54.*t56;
+    t58 = (pi/2-Phi)-q1;
+    t59 = sin(t58);
+    t60 = -(pi/2-Phi)+q1+q2;
+    t61 = sin(t60);
+    t62 = -(pi/2-Phi)+q1+q2+q3;
+    t63 = sin(t62);
+    t64 = mPROX.*t34;
+    t65 = mDIST.*t34;
+    t66 = mEE.*t34;
+    t67 = mDIST.*t35;
+    t68 = mEE.*t35;
+    t69 = a3.^2;
+    t70 = mEE.*t69;
+    t71 = mDIST.*t37;
+    t72 = mEE.*t37;
+    t73 = b2.^2;
+    t74 = mEE.*t73;
+    t75 = a1.*b1.*mDIST.*2.0;
+    t76 = a1.*b1.*mEE.*2.0;
+    t77 = a2.*b2.*mEE.*2.0;
+    t78 = a2.*b0.*mDIST;
+    t79 = a2.*b0.*mEE;
+    t80 = b0.*b2.*mEE;
+    t81 = t78+t79+t80;
+    t82 = a1.*a3.*mEE;
+    t83 = a3.*b1.*mEE;
+    t84 = t82+t83;
+    t85 = t56.*t84;
+    t92 = a1.*b0.*mPROX;
+    t93 = a1.*b0.*mDIST;
+    t94 = a1.*b0.*mEE;
+    t95 = b0.*b1.*mDIST;
+    t96 = b0.*b1.*mEE;
+    t97 = t92+t93+t94+t95+t96;
+    t98 = t59.*t97;
+    t112 = t61.*t81;
+    t113 = a3.*b0.*mEE.*t63;
+    t99 = IPROX+IDIST+IEE+t46+t51+t57+t64+t65+t66+t67+t68+t70+t71+t72+t74+t75+t76+t77+t98-t112-t113;
+    t100 = a1.*a2.*mDIST;
+    t101 = a1.*a2.*mEE;
+    t102 = a2.*b1.*mDIST;
+    t103 = a1.*b2.*mEE;
+    t104 = a2.*b1.*mEE;
+    t105 = b1.*b2.*mEE;
+    t106 = t100+t101+t102+t103+t104+t105;
+    t107 = t45.*t106;
+    t108 = a2.*a3.*mEE;
+    t109 = a3.*b2.*mEE;
+    t110 = t108+t109;
+    t111 = t50.*t110;
+    t114 = IDIST+IEE+t51+t67+t68+t70+t74+t77+t85+t107;
+    t115 = IEE+t70+t85+t111;
+    t116 = IEE+t70+t111;
+    InertiaS = reshape([t17,0.0,t30,-t86-t87-t88,-t88-t13.*t28,-t88,0.0,t17,t33,-t89-t90-t91,-t91-t24.*t28,-t91,t30,t33,IRED+IPROX+IDIST+IEE+t46+t51+t57+t64+t65+t66+t67+t68+t70+t71+t72+t74+t75+t76+t77+t59.*(a1.*b0.*mPROX.*2.0+a1.*b0.*mDIST.*2.0+a1.*b0.*mEE.*2.0+b0.*b1.*mDIST.*2.0+b0.*b1.*mEE.*2.0)+mPROX.*t36+mDIST.*t36+mEE.*t36-t61.*(a2.*b0.*mDIST.*2.0+a2.*b0.*mEE.*2.0+b0.*b2.*mEE.*2.0)-a3.*b0.*mEE.*t63.*2.0,t99,IDIST+IEE+t51+t67+t68+t70+t74+t77+t85+t107-t112-t113,IEE+t70+t85+t111-t113,-t7.*t8-t13.*t14-a3.*mEE.*t16,-t8.*t23-t14.*t24-a3.*mEE.*t25,t99,IPROX+IDIST+IEE+t46+t51+t57+t64+t65+t66+t67+t68+t70+t71+t72+t74+t75+t76+t77,t114,t115,-t13.*t28-a3.*mEE.*t16,-t24.*t28-a3.*mEE.*t25,IDIST+IEE+t51+t67+t68+t70+t74+t77+t85+t107-t61.*t81-a3.*b0.*mEE.*t63,t114,IDIST+IEE+t51+t67+t68+t70+t74+t77,t116,-a3.*mEE.*t16,-a3.*mEE.*t25,IEE+t70+t85+t111-a3.*b0.*mEE.*t63,t115,t116,IEE+t70],[6,6]);
+end

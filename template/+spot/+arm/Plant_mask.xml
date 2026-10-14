@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mask SelfModifiable="on">
+  <Type>spot.arm.Plant</Type>
+  <SourceCheckSum>6A83EA033CD15CD0B6F7D4712B139BCE</SourceCheckSum>
+  <Display IconOpaque="transparent" RunInitForIconRedraw="off">disp([&apos;RED + ARM&apos;]);
+port_label(&apos;input&apos;,1,&apos;F_RED&apos;);
+port_label(&apos;input&apos;,2,&apos;Torque&apos;);
+port_label(&apos;output&apos;,1,&apos;Position&apos;);
+port_label(&apos;output&apos;,2,&apos;Velocity&apos;);
+port_label(&apos;output&apos;,3,&apos;Torque&apos;);
+</Display>
+  <Description>The Chaser and its arm with its three Dynamixel servos (current control) and their friction, integrated at armModel.innerStep (1 ms) within each step of the diagram. Inputs: the thruster forces and the joint torques [N m] (ARM_Controls, as sent to the real servos). Outputs: the positions, velocities and the torques the servos report. See help spot.arm.Plant.</Description>
+  <MaskParameter Name="Model" Type="edit" Tunable="off">
+    <Prompt>armModel (spot.arm.parameters):</Prompt>
+    <Value>armModel</Value>
+  </MaskParameter>
+  <MaskParameter Name="FixedBase" Type="checkbox" Evaluate="off" Tunable="off">
+    <Prompt>FixedBase</Prompt>
+    <Value>off</Value>
+  </MaskParameter>
+  <MaskParameter Name="MotorTorque" Type="edit" Tunable="off" NeverSave="on" ReadOnly="on" Enabled="off">
+    <Prompt>[N m] at each joint:</Prompt>
+    <Value>zeros( 3, 1 )</Value>
+  </MaskParameter>
+  <MaskParameter Name="FrictionTorque" Type="edit" Tunable="off" NeverSave="on" ReadOnly="on" Enabled="off">
+    <Prompt>[N m] at each joint (dry + viscous), signed:</Prompt>
+    <Value>zeros( 3, 1 )</Value>
+  </MaskParameter>
+  <MaskParameter Name="Current" Type="edit" Tunable="off" NeverSave="on" ReadOnly="on" Enabled="off">
+    <Prompt>[A] each motor&apos;s current:</Prompt>
+    <Value>zeros( 3, 1 )</Value>
+  </MaskParameter>
+  <MaskParameter Name="Stuck" Type="edit" Tunable="off" NeverSave="on" ReadOnly="on" Enabled="off">
+    <Prompt>the joint is held by its friction:</Prompt>
+    <Value>false( 3, 1 )</Value>
+  </MaskParameter>
+  <MaskParameter Name="SimulateUsing" Type="popup" Evaluate="off" Tunable="off">
+    <Prompt>SystemBlock:MATLABSystem:SimulateUsing</Prompt>
+    <Value>Code generation</Value>
+    <TypeOptions>
+      <Option>SystemBlock:MATLABSystem:SimulateUsingCodeGeneration</Option>
+      <Option>SystemBlock:MATLABSystem:SimulateUsingInterpretedExecution</Option>
+    </TypeOptions>
+  </MaskParameter>
+  <DialogControl Type="Group" Name="DescGroupVar">
+    <Prompt>RED + ARM Plant</Prompt>
+    <DialogControl Type="Text" Name="DescTextVar">
+      <Prompt>%&lt;MaskDescription&gt;</Prompt>
+    </DialogControl>
+    <DialogControl Type="Hyperlink" Name="SourceCodeLink">
+      <Prompt>Source code</Prompt>
+      <Callback>edit(&apos;spot.arm.Plant&apos;);</Callback>
+    </DialogControl>
+  </DialogControl>
+  <DialogControl Type="Group" Name="SectionGroup0_Section1">
+    <Prompt>Simulink:studio:ToolBarParametersMenu</Prompt>
+    <ControlOptions AlignPrompts="on"/>
+    <DialogControl Type="Edit" Name="Model">
+      <Prompt>armModel (spot.arm.parameters):</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="CheckBox" Name="FixedBase">
+      <Prompt>FixedBase</Prompt>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="MotorTorque">
+      <Prompt>[N m] at each joint:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="FrictionTorque">
+      <Prompt>[N m] at each joint (dry + viscous), signed:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="Current">
+      <Prompt>[A] each motor&apos;s current:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+    <DialogControl Type="Edit" Name="Stuck">
+      <Prompt>the joint is held by its friction:</Prompt>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+  </DialogControl>
+  <DialogControl Type="Panel" Name="SectionGroup0_Section2">
+    <ControlOptions AlignPrompts="on"/>
+    <DialogControl Type="Popup" Name="SimulateUsing">
+      <Prompt>Simulate using:</Prompt>
+      <Tooltip>SystemBlock:MATLABSystem:SimulateUsingDescription</Tooltip>
+      <ControlOptions PromptLocation="left"/>
+    </DialogControl>
+  </DialogControl>
+</Mask>
