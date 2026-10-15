@@ -137,9 +137,32 @@ case "$CMD" in
         lat="/sys/bus/usb-serial/devices/${ARM_DEV##*/}/latency_timer"
         if [ -r "$lat" ]; then echo "latency $(cat "$lat")"; else echo "latency unknown"; fi
         if id -nG | tr ' ' '\n' | grep -qx dialout; then echo "dialout yes"; else echo "dialout no"; fi
-        users_of "$ARM_DEV" | sed 's/^/user /'
+        holders=$(users_of "$ARM_DEV")
+        [ -n "$holders" ] && echo "$holders" | sed 's/^/user /'
         if [ -f "$ARM/calibrate_arm.py" ]; then echo "script yes"; else echo "script no"; fi
-        if pid=$(arm_pid); then echo "running $pid"; else echo "running no"; fi
+        if pid=$(arm_pid); then running=yes; echo "running $pid"; else running=no; echo "running no"; fi
+        # The servos that answer a ping (IDs 0-10), at the bus's 1 Mbps and at the Dynamixel factory default
+        # 57600 (a reset or new servo is ID 1 there): "servos <baud> <id>:<model> ...", "-" for none.
+        # Only with the port free (pinging doesn't move anything)
+        if [ -z "$holders" ] && [ "$running" = no ] && [ -r "$ARM_DEV" ] && [ -w "$ARM_DEV" ] \
+                && python3 -c "import dynamixel_sdk" 2>/dev/null; then
+            timeout 10 python3 - "$ARM_DEV" <<'SCAN' 2>/dev/null || echo "servos error"
+import sys
+from dynamixel_sdk import PortHandler, PacketHandler, COMM_SUCCESS
+port, ph = PortHandler(sys.argv[1]), PacketHandler(2.0)
+if not port.openPort():
+    print("servos error"); sys.exit()
+for baud in (1000000, 57600):
+    port.setBaudRate(baud)
+    found = []
+    for i in range(11):
+        model, result, _ = ph.ping(port, i)
+        if result == COMM_SUCCESS:
+            found.append("%d:%d" % (i, model))
+    print("servos %d %s" % (baud, " ".join(found) or "-"))
+port.closePort()
+SCAN
+        fi
         ;;
     arm-cal-receive)
         if arm_pid > /dev/null; then echo "A calibration is running; stop it first" >&2; exit 4; fi

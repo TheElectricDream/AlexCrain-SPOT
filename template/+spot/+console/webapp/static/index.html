@@ -26,6 +26,7 @@
       <button type="button" data-page="hardware">Hardware<span id="hwLiveDot" class="live-dot" title="Something is switched on" hidden></span></button>
       <button type="button" data-page="designer" hidden title="Spacecraft Designer: the docking cones and solar panels on each platform">Designer</button>
       <button type="button" data-page="calibration" hidden title="Measure the lab (the table's slope, the thrusters, the arm) so simulations behave as the experiments do">Calibration</button>
+      <button type="button" data-page="vision" hidden title="Computer vision: stream the cameras plugged into the Jetson Orin (the ZED, the L515 LiDAR, any USB camera)">Vision</button>
     </nav>
     <div id="settingsBar" class="settings-bar" role="group" aria-label="Simulation and experiment settings" hidden>
       <span class="sb-label" title="The settings on the Simulation tab (scenario, timeline, initial conditions, platforms, control, solver), used for simulations and for building experiments. They are saved automatically to this file in the project folder.">
@@ -35,6 +36,7 @@
       <button type="button" id="simReset" class="btn btn-sm" title="Start from a clean slate: the template's default settings, the page's default view, no loaded results (you choose which)"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M4.6 15a8 8 0 1 0 1.9-8.3L4 9"/></svg><span>Reset…</span></button>
     </div>
     <div class="topstats">
+      <button type="button" id="labSetupBtn" class="btn btn-sm btn-ghost" hidden>Lab Setup</button>
       <a id="labLink" class="btn btn-sm" target="_blank" rel="noopener" hidden title="PhaseSpace and the platform hardware run on the lab console (the TX2)">Lab Console ↗</a>
       <span class="stat"><span class="stat-label">Packets</span><span id="statRate" class="stat-value">0 Hz</span></span>
       <span id="connBadge" class="badge badge-warn"><span class="dot"></span>Connecting</span>
@@ -193,14 +195,19 @@
             <button data-view="top">Top</button>
             <button data-view="side">Side</button>
           </div>
-          <div class="segmented pose-picker local-only" role="group" aria-label="Initial conditions shown on the table"
-               title="Which poses to show on the table: where the platforms start (Initial) or where they go back to (Home). Drag them on the Simulation tab to move them.">
-            <span class="seg-label">Initial Conditions</span>
+          <div class="view-opts">
+            <button type="button" id="viewOptsBtn" class="btn btn-sm view-opts-btn" aria-haspopup="true" aria-expanded="false">Viewing Options <span class="pb-caret">▾</span></button>
+            <div id="viewOpts" class="view-opts-menu" hidden>
+          <div class="view-opts-group local-only">
+          <span class="view-opts-head tip" title="Which poses to show on the table: where the platforms start (Initial) or where they go back to (Home). Drag them on the Simulation tab to move them.">Initial Conditions</span>
+          <div class="segmented pose-picker" role="group" aria-label="Initial conditions shown on the table">
             <button type="button" data-pose="off">Off</button>
             <button type="button" data-pose="initial">Initial</button>
             <button type="button" data-pose="home">Home</button>
           </div>
-          <label class="toggle live-only"><input id="toggleLedLabels" type="checkbox" checked><span></span>LED IDs</label>
+          </div>
+          <div class="view-opts-group">
+          <label class="toggle live-only" title="The ID of each LED PhaseSpace sees"><input id="toggleLedLabels" type="checkbox" checked><span></span>LED IDs</label>
           <label class="toggle" title="Show the name tags on the platforms and the initial conditions"><input id="toggleNames" type="checkbox" checked><span></span>Labels</label>
           <label class="toggle" title="Show each platform's own +X/+Y/+Z axes (the table's frame stays)"><input id="toggleAxes" type="checkbox" checked><span></span>Axes</label>
           <label class="toggle" title="Draw the platforms from the lab's CAD instead of cubes: the Chaser in silver MLI with its ZED2 and arm, the Target in gold MLI, and the Obstacle with blue plexiglass panels on an aluminium frame, each with the docking cone and solar panels set on the Designer tab. Loaded the first time it is switched on (about 1 MB)."><input id="toggleCad" type="checkbox"><span></span>Use CAD</label>
@@ -208,6 +215,12 @@
           <label class="toggle live-only" title="A vertical line from each LED PhaseSpace sees down to the table, to show how high it is"><input id="toggleDrop" type="checkbox" checked><span></span>LED Height Lines</label>
           <label class="toggle" id="toggleSlopeLabel" title="Colour the table by its height, from the table slope calibration (Calibration tab): blue low, red high, with contour lines"><input id="toggleSlope" type="checkbox"><span></span>Table Slope</label>
           <label class="toggle live-only" id="overlayToggle" hidden title="Show the last simulation on top of the live view"><input id="toggleOverlay" type="checkbox"><span></span>Simulation</label>
+          <label class="toggle sim-only" title="Draw each platform's path in the replay"><input id="pbTraces" type="checkbox" checked><span></span>Paths</label>
+          <label class="toggle exp-only" title="Draw the paths the platforms take live"><input id="expLivePaths" type="checkbox" checked><span></span>Live Paths</label>
+          <label class="toggle exp-only" title="Show the last simulation on top of the live view"><input id="expSimOverlay" type="checkbox"><span></span>Simulation</label>
+          </div>
+            </div>
+          </div>
           <span class="info-tip" title="Table 3.5 × 2.4 m, origin (0, 0, 0) at the corner with the axes.&#10;Drag to orbit, right-drag to pan, scroll to zoom.">?</span>
         </div>
         <div class="legend live-only">
@@ -246,8 +259,8 @@
       <div class="segmented sim-tabs" role="tablist" aria-label="Simulation settings">
         <button type="button" data-simtab="scenario" class="active">Scenario</button>
         <button type="button" data-simtab="platforms">Platforms</button>
+        <button type="button" data-simtab="calibration">Calibration</button>
         <button type="button" data-simtab="control">Control</button>
-        <button type="button" data-simtab="solver">Solver</button>
         <button type="button" data-simtab="workspace">Workspace</button>
       </div>
       <div id="simNotice" class="hw-detail warn" hidden></div>
@@ -282,8 +295,7 @@
     <main class="main">
       <div class="viewer-slot" data-slot="simulation">
         <div id="simEmpty" class="viewer-empty sim-empty">
-          <strong>No Simulation Yet</strong>
-          <span>Run one to replay it here. Drag the platforms on the table to set their positions.</span>
+          <strong class="tip" title="Run one to replay it here. Drag the platforms on the table to set their positions.">No Simulation Yet</strong>
           <button type="button" id="simEmptyLoad" class="btn btn-sm sim-empty-load" title="Replay an experiment or a saved simulation">Replay Saved Results…</button>
         </div>
         <div id="playback" class="playback" hidden>
@@ -301,7 +313,6 @@
           <button type="button" id="pbCompare" class="btn btn-sm pb-compare" aria-haspopup="true" aria-expanded="false" title="Replay loaded results (experiments, earlier simulations) over this simulation">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M12 3 2 8l10 5 10-5-10-5zM2 13l10 5 10-5M2 17.5l10 5 10-5"/></svg>
             <span class="pb-compare-text">Compare</span><span class="pb-compare-count" hidden></span><span class="pb-caret">▾</span></button>
-          <label class="toggle"><input id="pbTraces" type="checkbox" checked><span></span>Paths</label>
           <div id="pbOverlays" class="pb-overlays" hidden></div>
         </div>
       </div>
@@ -391,7 +402,8 @@
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>Platforms</h2><span class="muted small" id="expDiagram"></span></div>
+        <div class="card-head"><h2>Platforms</h2></div>
+        <p id="expDiagram" class="hint mono exp-diagram" title="The diagram the experiment is built from"></p>
         <div id="expPlatforms" class="exp-platforms"></div>
       </section>
 
@@ -434,11 +446,8 @@
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>Data</h2></div>
-        <div class="exp-row">
-          <span class="hint">Copies the platforms' ExpLog files into Saved Data and converts them with MATLAB.</span>
-          <button type="button" id="expData" class="btn btn-sm">Collect</button>
-        </div>
+        <div class="card-head"><h2>Data</h2>
+          <button type="button" id="expData" class="btn btn-sm" title="Copies the platforms' ExpLog files into Saved Data and converts them with MATLAB">Collect</button></div>
         <p id="expDataOut" class="hint mono"></p>
       </section>
     </aside>
@@ -447,8 +456,6 @@
       <div class="viewer-slot" data-slot="experiment">
         <div class="exp-overlay">
           <div id="expClocks" class="exp-clocks"></div>
-          <label class="toggle"><input id="expLivePaths" type="checkbox" checked><span></span>Live Paths</label>
-          <label class="toggle"><input id="expSimOverlay" type="checkbox"><span></span>Simulation</label>
           <button type="button" id="expClearPaths" class="btn btn-sm">Clear Paths</button>
         </div>
         <div id="expEmpty" class="viewer-empty sim-empty">
@@ -491,9 +498,8 @@
         <span class="info-tip" title="Click a signal on the left to add it to the selected plot (click again to remove).&#10;Drag across a plot to zoom, double-click to zoom out.">?</span>
         <span class="res-spacer"></span>
         <details class="res-export">
-          <summary class="btn btn-sm" title="MATLAB draws the plots in the lab's publication style (GetStarted templates) and saves or shows them">Export ▾</summary>
+          <summary class="btn btn-sm" title="MATLAB draws the plots in the lab's publication style (GetStarted templates: Times New Roman, platform colours, every sample) and saves or shows them">Export ▾</summary>
           <div class="res-export-body">
-            <span class="hint">Drawn by MATLAB in the lab's style: Times New Roman, platform colours (Chaser silver-grey, Target gold, Obstacle blue), every sample.</span>
             <label>Width<input id="resExpW" class="input" type="number" min="1" max="20" step="0.1"><span>in</span></label>
             <label>Height<input id="resExpH" class="input" type="number" min="1" max="20" step="0.1" placeholder="auto"><span>in</span></label>
             <label>Font<input id="resExpF" class="input" type="number" min="6" max="20" step="1"><span>pt</span></label>
@@ -516,7 +522,7 @@
     <aside class="sidebar dz-sidebar" id="dzSide" aria-label="Spacecraft Designer"></aside>
     <main class="main">
       <div class="viewer-slot" data-slot="designer">
-        <div class="dz-overlay"><b>Spacecraft Designer</b><span>Drag to orbit, right-drag to pan, scroll to zoom. Click a disc to move the docking cone there.</span></div>
+        <div class="dz-overlay"><b class="tip" title="Drag to orbit, right-drag to pan, scroll to zoom. Click a disc to move the docking cone there.">Spacecraft Designer</b></div>
       </div>
     </main>
   </div>
@@ -525,10 +531,7 @@
     <div class="cal-scroll">
       <div class="cal-head">
         <div>
-          <h2>Calibration</h2>
-          <p class="hint">Measurements of the lab that make simulations behave as the experiments do. The lab console
-            runs them and keeps the lab's calibration; each project keeps a copy (resources/spot_calibration.json),
-            which its simulations use.</p>
+          <h2 class="tip" title="Measurements of the lab that make simulations behave as the experiments do. The lab console runs them and keeps the lab's calibration; each project keeps a copy (resources/spot_calibration.json), which its simulations use.">Calibration</h2>
         </div>
         <div class="segmented cal-sections" role="group" aria-label="Calibration">
           <button type="button" data-calsec="table" class="active">Table Slope</button>
@@ -541,14 +544,56 @@
     </div>
   </div>
 
+  <div id="pageVision" class="layout page vision-page" hidden>
+    <aside class="sidebar vision-side">
+      <section class="card">
+        <div class="card-head">
+          <h2 class="tip" title="The cameras plugged into the Jetson Orin, streamed by its SPOT Vision service (+spot/+console/deploy/deploy_orin.sh installs it). The video goes from the Orin straight to this page. A camera opens when you press Play and closes a few seconds after you stop or leave the tab, so experiments can use it the rest of the time.">Computer Vision</h2>
+          <span id="visionPill" class="pill">Checking…</span>
+        </div>
+        <div class="vision-addr">
+          <label class="field-label" for="visionHost" title="The Jetson Orin's address (SPOT Vision, port 8090)">Orin</label>
+          <input id="visionHost" class="input mono" spellcheck="false" autocomplete="off" placeholder="192.168.1.115">
+          <button type="button" id="visionSave" class="btn btn-sm">Save</button>
+          <button type="button" id="visionRefresh" class="btn btn-sm" title="Look for cameras again">↻</button>
+        </div>
+        <p id="visionError" class="hw-detail err" hidden></p>
+      </section>
+      <section class="card vision-params-card">
+        <div class="card-head">
+          <h2 id="visionParamsTitle" class="tip" title="The settings the camera's own library offers, with their ranges. A change applies at once (those marked ↻ reopen the camera); they are kept on the Orin and applied each time the camera opens.">Camera Settings</h2>
+          <button type="button" id="visionReset" class="btn btn-sm" title="Every setting back to the camera's default">Reset</button>
+        </div>
+        <div id="visionParams" class="vision-params"></div>
+      </section>
+    </aside>
+    <main class="main vision-main">
+      <div id="visionTabs" class="vision-tabs" role="tablist" aria-label="Cameras"></div>
+      <div id="visionStage" class="vision-stage">
+        <div class="vision-frame" id="visionFrame">
+          <img id="visionImg" alt="">
+          <div class="vision-msg" id="visionMsg"></div>
+        </div>
+        <div class="vision-controls">
+          <div class="segmented" id="visionViews" role="group" aria-label="View"></div>
+          <select class="input" id="visionFps" title="Frames per second"></select>
+          <select class="input" id="visionSize" title="Image width (Full: the camera's own)"></select>
+          <span class="hint mono" id="visionMeta"></span>
+          <span class="vision-spacer"></span>
+          <button type="button" class="btn btn-sm" id="visionSnap" title="One full-size frame, in a new tab">Snapshot</button>
+          <button type="button" class="btn btn-sm" id="visionFull" title="Fill the screen (Esc to leave)">Fullscreen</button>
+          <button type="button" class="btn btn-sm btn-go" id="visionPlay">Play</button>
+        </div>
+      </div>
+      <div id="visionEmpty" class="viewer-empty" hidden><strong>No Cameras</strong><span>Plug one into the Orin (USB 3 for the ZED and the L515).</span></div>
+    </main>
+  </div>
+
   <div id="pageHardware" class="page hw-page" hidden>
     <div class="hw-scroll">
       <div class="hw-head">
         <div>
-          <h2>Platform Hardware</h2>
-          <p class="hint">Pucks and thrusters on each platform's Teensy, sent from this console over SSH. The Teensy
-            switches everything off when commands stop for 2 s, so things stay on only while this console is running
-            and can reach the platform. Controls lock while another program (an experiment) has the Teensy open.</p>
+          <h2 class="tip" title="Pucks and thrusters on each platform's Teensy, sent from this console over SSH. The Teensy switches everything off when commands stop for 2 s, so things stay on only while this console is running and can reach the platform. Controls lock while another program (an experiment) has the Teensy open.">Platform Hardware</h2>
         </div>
       </div>
       <div id="hwCards" class="hw-grid"></div>
@@ -709,16 +754,16 @@
     <form method="dialog" class="dialog-inner">
       <div class="dialog-head">
         <h2>Before the Thruster Calibration</h2>
-        <button value="cancel" class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
+        <button value="cancel" formnovalidate class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
       </div>
       <div class="reset-body">
         <p>The thrust is worked out from how each burn moves the platform, so it is only as good as what the
           console takes the <b id="calThrustName">platform</b>'s mass, inertia and centre of gravity to be:</p>
         <div class="cal-assume">
-          <label><span class="field-label">Mass [kg]</span><input class="input" type="number" step="0.01" data-assume="mass"></label>
-          <label><span class="field-label">Inertia [kg m²]</span><input class="input" type="number" step="0.0001" data-assume="inertia"></label>
-          <label title="The centre of gravity from the body's centre, along +x (the front)"><span class="field-label">CG x [mm]</span><input class="input" type="number" step="0.1" data-assume="cgx"></label>
-          <label title="The centre of gravity from the body's centre, along +y"><span class="field-label">CG y [mm]</span><input class="input" type="number" step="0.1" data-assume="cgy"></label>
+          <label><span class="field-label">Mass [kg]</span><input class="input" type="number" step="any" data-assume="mass"></label>
+          <label><span class="field-label">Inertia [kg m²]</span><input class="input" type="number" step="any" data-assume="inertia"></label>
+          <label title="The centre of gravity from the body's centre, along +x (the front)"><span class="field-label">CG x [mm]</span><input class="input" type="number" step="any" data-assume="cgx"></label>
+          <label title="The centre of gravity from the body's centre, along +y"><span class="field-label">CG y [mm]</span><input class="input" type="number" step="any" data-assume="cgy"></label>
         </div>
         <ul class="lock-reasons">
           <li>These are SPOT's default mass properties (from the default scale readings and bifilar test), as the lab
@@ -726,17 +771,47 @@
           <li>A mass 5 % off gives thrusts 5 % off. The torque each burn gives checks the centre of gravity and the
             inertia: a <b>torque ratio</b> far from 1 says they are off.</li>
           <li id="calThrustTable"></li>
-          <li>Each thruster fires at full thrust for the burn time with the platform floating; the console flies it
-            back to where it started between burns. Clear the table around it.</li>
+          <li>Before each burn the console flies it to the table's centre and sets it down (pucks off) for 5 s; the
+            pucks then come on with the thruster firing at full thrust for the burn time. Clear the table around the centre.</li>
         </ul>
         <label class="reset-opt"><input type="checkbox" id="calThrustAck"><span><b>I understand</b><span class="hint">The
           thrust comes from these values, and the platform will float and fire each thruster in turn.</span></span></label>
       </div>
       <div class="dialog-foot">
         <div>
-          <button value="cancel" class="btn">Cancel</button>
+          <button value="cancel" formnovalidate class="btn">Cancel</button>
           <button type="button" id="calThrustGo" class="btn btn-go" disabled>Start</button>
         </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="labSetupDialog" class="dialog ls-dialog">
+    <form method="dialog" class="dialog-inner">
+      <div class="dialog-head">
+        <h2 class="tip" title="The deployment scripts of +spot/+console/deploy, run from this computer: they need the lab network and the lab key (~/.ssh/id_ed25519_spot).">Lab Setup</h2>
+        <button value="cancel" class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
+      </div>
+      <div class="ls-body">
+        <p id="labSetupProblem" class="hw-detail warn" hidden></p>
+        <div id="labSetupActions" class="ls-actions"></div>
+        <div class="ls-log-head"><span class="field-label">Output</span>
+          <button type="button" id="labSetupCancel" class="btn btn-sm btn-stop" hidden>Cancel</button>
+          <button type="button" id="labSetupClear" class="btn btn-sm btn-ghost">Clear</button></div>
+        <pre id="labSetupLog" class="ls-log"></pre>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="calDetailsDialog" class="dialog reset-dialog">
+    <form method="dialog" class="dialog-inner">
+      <div class="dialog-head">
+        <h2 id="calDetailsTitle">How It Works</h2>
+        <button value="cancel" class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
+      </div>
+      <div class="reset-body" id="calDetailsBody"></div>
+      <div class="dialog-foot">
+        <div><button value="cancel" class="btn">Close</button></div>
       </div>
     </form>
   </dialog>
@@ -773,12 +848,11 @@
   <dialog id="resultsDialog" class="dialog results-dialog">
     <form method="dialog" class="dialog-inner">
       <div class="dialog-head">
-        <h2>Saved Data</h2>
+        <h2 class="tip" title="Newest first. Experiments are collected on the Experiment tab; simulations with Save Results.">Saved Data</h2>
         <button value="cancel" class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
       </div>
       <div id="resultsList" class="results-list"></div>
       <div class="dialog-foot">
-        <span class="hint">Newest first. Experiments are collected on the Experiment tab; simulations with Save Results.</span>
         <div>
           <button type="button" id="resultsRefresh" class="btn btn-ghost">↻</button>
           <button type="button" id="resultsOpenFile" class="btn">Other .mat File…</button>

@@ -1,55 +1,90 @@
-"""The Calibration tab: measuring the lab so that simulations behave as the experiments do, and the
-calibration file that holds the results.
+"""The Calibration tab: measuring the lab, and the calibration file.
 
-The file (one per console): the lab console keeps the lab's in its home (~/.spot_calibration.json),
-next to the raw data of every run (~/SPOTCalibration/<stamp>_<kind>/run.json); a project keeps a copy in
-resources/spot_calibration.json, which spot.params.apply reads (spot.params.loadCalibration) for the
-simulation. Whenever the local console sees the lab console and the lab's file is newer, its page
-offers to update the project's copy (which can be declined, or never asked again: the copy's "sync").
+Measuring the lab so that simulations behave as the experiments do,
+and the calibration file that holds the results.
+
+The file (one per console): the lab console keeps the lab's in its
+home (~/.spot_calibration.json), next to the raw data of every run
+(~/SPOTCalibration/<stamp>_<kind>/run.json); a project keeps a copy in
+resources/spot_calibration.json, which spot.params.apply reads
+(spot.params.loadCalibration) for the simulation. Whenever the local
+console sees the lab console and the lab's file is newer, its page
+offers to update the project's copy (which can be declined, or never
+asked again: the copy's "sync").
 
     {"format": "spot-calibration", "version": 1,
-     "updated": "2026-10-13T15:02:11Z",                  (the newest section's; UTC, so it sorts as text)
-     "table": {"updated", "by", "model": "quadratic" | "plane", "height": [a1 .. a5] (calfit.py),
-               "centre": [x, y], "damping": {"RED": c, ...}, "tilt_centre_mrad", ..., "drifts": [...]},
-     "thrusters": {"RED": {"updated", "by", "thrust": [8 x N], ...}, ...},
+     "updated": "2026-10-13T15:02:11Z",  (the newest section's; UTC,
+                                          so it sorts as text)
+     "table": {"updated", "by", "model": "quadratic" | "plane",
+               "height": [a1 .. a5] (calfit.py), "centre": [x, y],
+               "damping": {"RED": c, ...}, "tilt_centre_mrad", ...,
+               "drifts": [...]},
+     "thrusters": {"RED": {"updated", "by", "thrust": [8 x N], ...},
+                   ...},
      "arm": {... spot-arm-calibration ...},
-     "sync": {"ask": true, "declined": null}}           (a project's copy only)
+     "sync": {"ask": true, "declined": null}}  (a project's copy only)
 
-The table slope calibration (TableRun): with PhaseSpace streaming and the platform resting on the table,
+The table slope calibration (TableRun), with PhaseSpace streaming and
+the platform resting on the table:
   1. record it sitting still (the cameras' noise);
-  2. float it (pucks on, thrusters off) and record it drifting from where it is;
-  3. fly it (the diagram's own controller, as Interactive Mode) to each point of a grid over the table,
-     let it settle, switch the thrusters off and record it drifting again;
-  4. pucks off, and fit the table's height surface and the air bearings' drag to the drifts (calfit.py).
-A drift ends after its time, or at once (pucks off: the platform stops on the table) when the platform
-nears an edge or another platform, or goes too fast.
+  2. float it (pucks on, thrusters off) and record it drifting from
+     where it is;
+  3. fly it (the diagram's own controller, as Interactive Mode) to
+     each point of a grid over the table, let it settle, switch the
+     thrusters and pucks off so it comes to rest there, then float it
+     again and record it drifting;
+  4. pucks off, and fit the table's height surface and the air
+     bearings' drag to the drifts (calfit.py).
+A drift ends after its time, or at once (pucks off: the platform stops
+on the table) when the platform nears an edge or another platform, or
+goes too fast.
 
-The thruster calibration (ThrusterRun), with PhaseSpace streaming and the platform resting on the table:
-for each thruster 1-8 (and each repeat),
-  1. float it (pucks on) where it rests;
-  2. fire the thruster at 100 % for the burn time, recording every PhaseSpace frame;
-  3. fly it back (the diagram's own controller) to where it started;
-  4. pucks off, and let it rest.
-Each burn's thrust comes from the motion it gave the platform (calfit.fit_burn), with the platform's
-mass, inertia and centre of gravity taken as known (the person starting it confirms them; the controller's
-defaults unless changed) and the table's pull (its calibration) taken out. The lab's calibrated thrust is
-then what Interactive Mode, the calibrations' own flights and (through the projects' copies) simulations
-and experiments use.
+The thruster calibration (ThrusterRun), with PhaseSpace streaming and
+the platform resting on the table, for each thruster 1-8 (and each
+repeat):
+  1. fly it (pucks on, the diagram's own controller) to the table's
+     centre;
+  2. pucks off, and let it come to rest (REST_TIME);
+  3. pucks on and the thruster at 100 % at once, for the burn time,
+     recording every PhaseSpace frame.
+Each burn's thrust comes from the motion it gave the platform
+(calfit.fit_burn), with the platform's mass, inertia and centre of
+gravity taken as known (the person starting it confirms them; the
+controller's defaults unless changed) and the table's pull (its
+calibration) taken out. The lab's calibrated thrust is then what
+Interactive Mode, the calibrations' own flights and (through the
+projects' copies) simulations and experiments use.
 
-The arm calibration (ArmRun) runs the arm calibration script (calibrate_arm.py, from the template's
-resources/arm_calibration; on the TX2 next to the console) on the Chaser, through its agent
-(spot_agent.sh: arm-cal-check, -receive, -start, -status, -stop, -data): it checks the Chaser has what the
-script needs (python3, the Dynamixel SDK, the U2D2 and access to it, nothing else holding it), keeps the
-Chaser resting (nothing can float it meanwhile), sends the script, starts it, follows its progress, and
-collects its data and fit. A rehearsal runs the script's simulated servos instead: it needs none of that
-hardware, and its result is shown but never becomes the lab's.
+The thrusters together (DecayRun), the second stage, after a thruster
+calibration of that platform: each firing opens thrusters 1, then 1-2,
+1-3, ... 1-8 at once (as one burn above: centre, pucks off and rest,
+pucks on and the thrusters firing), and its push is compared with the
+sum of what each gives alone (the thruster calibration).
+calfit.fit_decay fits how the output falls with the number open; the
+result is kept with the platform's thruster calibration (its "decay").
+All eight together give no net push (opposite thrusters cancel), so
+that firing is only a check; the fit covers it.
 
-A calibration drives one platform at a time, through the hardware driver (hardware.py: claim, drive,
-release), as Interactive Mode does: it can't start while an experiment or Interactive Mode runs, and
-they can't start while it runs. Everything goes off, and the run stops, when the Calibration tab's Stop
-(or Esc) is pressed, the Hardware tab switches the platform off, PhaseSpace loses it, it leaves the
-table, the link to it is lost, or the console stops. And its Teensy switches everything off by itself
-when packets stop for 2 s.
+The arm calibration (ArmRun) runs the arm calibration script
+(calibrate_arm.py, from the template's resources/arm_calibration; on
+the TX2 next to the console) on the Chaser, through its agent
+(spot_agent.sh: arm-cal-check, -receive, -start, -status, -stop,
+-data). It checks the Chaser has what the script needs (python3, the
+Dynamixel SDK, the U2D2 and access to it, nothing else holding it),
+keeps the Chaser resting (nothing can float it meanwhile), sends the
+script, starts it, follows its progress, and collects its data and
+fit. A rehearsal runs the script's simulated servos instead: it needs
+none of that hardware, and its result is shown but never becomes the
+lab's.
+
+A calibration drives one platform at a time, through the hardware
+driver (hardware.py: claim, drive, release), as Interactive Mode does:
+it can't start while an experiment or Interactive Mode runs, and they
+can't start while it runs. Everything goes off, and the run stops,
+when the Calibration tab's Stop (or Esc) is pressed, the Hardware tab
+switches the platform off, PhaseSpace loses it, it leaves the table,
+the link to it is lost, or the console stops. And its Teensy switches
+everything off by itself when packets stop for 2 s.
 
 Part of the SPOT Console (webapp/app.py starts it).
 """
@@ -78,41 +113,59 @@ from .phasespace import monitor, streamer
 PLATFORMS = ("RED", "BLACK", "BLUE")
 SECTIONS = ("table", "thrusters", "arm")
 RUNS_DIR = Path.home() / "SPOTCalibration"   # the lab console's raw data of each run
-MAX_FILE = 4 * 1024 * 1024                   # [bytes] a calibration file is a few hundred kB at most
+MAX_FILE = 4 * 1024 * 1024                   # [bytes] a calibration is a few hundred kB at most
 
-# Flying between points (fly_to): the goal moves towards the point at these speeds, so the
-# controller isn't kicked by a jump in its goal (as a dragged goal in Interactive Mode moves)
+# Flying between points (fly_to): the goal moves towards the point at
+# these speeds, so the controller isn't kicked by a jump in its goal
+# (as a dragged goal in Interactive Mode moves).
 GOAL_SPEED = 0.10            # [m/s]
 GOAL_TURN = math.radians(15)  # [rad/s]
-# There: within SETTLED_POS of the point and SETTLED_ATT of its attitude, and slower than SETTLED_SPEED,
-# for SETTLED_TIME. Only roughly at the point: the diagram's LQR has no integral action, so on a sloping
-# table it holds the platform a few centimetres downhill of its goal; what matters is that it is at rest.
+
+# There: within SETTLED_POS of the point and SETTLED_ATT of its
+# attitude, and slower than SETTLED_SPEED, for SETTLED_TIME. Only
+# roughly at the point: the diagram's LQR has no integral action, so on
+# a sloping table it holds the platform a few centimetres downhill of
+# its goal; what matters is that it is at rest.
 SETTLED_POS = 0.10           # [m]
 SETTLED_ATT = math.radians(5)
 SETTLED_SPEED = 0.01         # [m/s]
 SETTLED_TIME = 1.5           # [s]
 FLY_TIMEOUT = 90.0           # [s] to reach a point
-LOST_TIMEOUT = 1.0           # [s] PhaseSpace may lose the platform this long (thrusters off meanwhile)
-CLEARANCE = 0.45             # [m] from other platforms (centre to centre), as Interactive Mode's goals
-STOP_PAUSE = 2.0             # [s] after the pucks go off to end a drift: the platform comes to rest
-# The data's own check: from one frame to the next a drifting platform moves at most a few mm, so a
-# bigger jump is a glitch (PhaseSpace mis-tracking it, or a second stream on the monitor's port); with
-# more than GLITCH_FRACTION of them, the run is not saved
+LOST_TIMEOUT = 1.0           # [s] PhaseSpace may lose the platform this long (thrusters off)
+CLEARANCE = 0.45             # [m] from other platforms (centre to centre), as Interactive Mode
+# [s] after the pucks go off (at each point before its drift, or to end
+# a drift early): the platform comes to rest.
+STOP_PAUSE = 5.0
+DRIFT_LIFT = 5.0             # [s] the pucks lift the platform before a drift is recorded
+
+# The data's own check: from one frame to the next a drifting platform
+# moves at most a few mm, so a bigger jump is a glitch (PhaseSpace
+# mis-tracking it, or a second stream on the monitor's port); with more
+# than GLITCH_FRACTION of them, the run is not saved.
 GLITCH_STEP = 0.02           # [m]
 GLITCH_FRACTION = 0.005
-# The fit's: a position residual above POOR_FIT_FACTOR times the cameras' noise (at least POOR_FIT_FLOOR)
-# means the model doesn't describe the table well (a plane on a curved table: more grid points give a
-# surface), which the result says; above REJECT_RESIDUAL something else moved the platform: not saved
+
+# The fit's check: a position residual above POOR_FIT_FACTOR times the
+# cameras' noise (at least POOR_FIT_FLOOR) means the model doesn't
+# describe the table well (a plane on a curved table: more grid points
+# give a surface), which the result says; above REJECT_RESIDUAL
+# something else moved the platform: not saved.
 POOR_FIT_FACTOR = 5.0
 POOR_FIT_FLOOR = 1.0         # [mm]
 REJECT_RESIDUAL = 20.0       # [mm]
 
+MIN_THRUST = 0.01            # [N] plausible calibrated thrust
+MAX_THRUST = 2.0             # [N]
+PUBLISH_PERIOD = 0.2         # [s] run status to the pages, at most this often
+
 
 def now_iso():
+    """Return the time now, ISO 8601 in UTC (so it sorts as text)."""
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
 def stamp():
+    """Return the local time as a folder stamp: YYYYmmdd_HHMMSS."""
     return time.strftime("%Y%m%d_%H%M%S")
 
 
@@ -120,72 +173,113 @@ class Abort(Exception):
     """A calibration run stops (the message says why)."""
 
 
-# ---------------------------------------------------------------------------- the file
+# The file
+
 
 def _finite(v, what):
+    """Return v as a float if it is a finite number (not a bool).
+
+    Raises:
+        ApiError: otherwise, naming what.
+    """
     if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v):
         raise ApiError("%s must be a finite number." % what)
     return float(v)
 
 
 def _numbers(v, n, what):
+    """Return v as a list of n finite floats.
+
+    Raises:
+        ApiError: otherwise, naming what.
+    """
     if not isinstance(v, list) or len(v) != n:
         raise ApiError("%s must be a list of %d numbers." % (what, n))
     return [_finite(x, what) for x in v]
 
 
 def validate(cal, local=False):
-    """A checked copy of the calibration CAL: the values the simulation reads are checked (the rest
-    is what the pages show). LOCAL: a project's copy (it keeps "sync")."""
+    """Return a checked copy of a calibration.
+
+    The values the simulation reads are checked; the rest is what the
+    pages show.
+
+    Args:
+        cal: The calibration.
+        local: A project's copy (it keeps "sync").
+
+    Raises:
+        ApiError: if it isn't a SPOT calibration, or a value the
+            simulation reads isn't valid.
+    """
     if not isinstance(cal, dict):
         raise ApiError("The calibration must be an object.")
     if cal.get("format", "spot-calibration") != "spot-calibration":
         raise ApiError("This is not a SPOT calibration file.")
     out = {"format": "spot-calibration", "version": 1}
+
+    # The table: the height coefficients, the centre, each platform's
+    # drag and the model.
     table = cal.get("table")
     if table is not None:
         if not isinstance(table, dict):
             raise ApiError("calibration.table must be an object.")
-        t = copy.deepcopy(table)
-        t["height"] = _numbers(table.get("height"), 5, "table.height")
-        t["centre"] = _numbers(table.get("centre", list(calfit.CENTRE)), 2, "table.centre")
+        checked = copy.deepcopy(table)
+        checked["height"] = _numbers(table.get("height"), 5, "table.height")
+        checked["centre"] = _numbers(table.get("centre", list(calfit.CENTRE)), 2, "table.centre")
         damping = table.get("damping") or {}
         if not isinstance(damping, dict) or any(k not in PLATFORMS for k in damping):
             raise ApiError("table.damping must map RED, BLACK, BLUE to numbers.")
-        t["damping"] = dict((k, _finite(v, "table.damping.%s" % k)) for k, v in damping.items())
-        if t.get("model") not in ("quadratic", "plane"):
+        checked["damping"] = dict((k, _finite(v, "table.damping.%s" % k))
+                                  for k, v in damping.items())
+        if checked.get("model") not in ("quadratic", "plane"):
             raise ApiError("table.model must be quadratic or plane.")
-        out["table"] = t
+        out["table"] = checked
+
+    # The thrusters: each platform's 8 plausible thrusts.
     thrusters = cal.get("thrusters")
     if thrusters is not None:
         if not isinstance(thrusters, dict) or any(k not in PLATFORMS for k in thrusters):
-            raise ApiError("calibration.thrusters must map RED, BLACK, BLUE to their calibration.")
+            raise ApiError("calibration.thrusters must map RED, BLACK, BLUE to their "
+                           "calibration.")
         out["thrusters"] = {}
         for k, v in thrusters.items():
             if not isinstance(v, dict):
                 raise ApiError("thrusters.%s must be an object." % k)
-            c = copy.deepcopy(v)
-            c["thrust"] = _numbers(v.get("thrust"), NUM_THRUSTERS, "thrusters.%s.thrust" % k)
-            if not all(0.01 <= f <= 2.0 for f in c["thrust"]):
+            checked = copy.deepcopy(v)
+            checked["thrust"] = _numbers(v.get("thrust"), NUM_THRUSTERS,
+                                         "thrusters.%s.thrust" % k)
+            if not all(MIN_THRUST <= f <= MAX_THRUST for f in checked["thrust"]):
                 raise ApiError("thrusters.%s.thrust must be 0.01 to 2 N each." % k)
-            out["thrusters"][k] = c
+            out["thrusters"][k] = checked
+
+    # The arm: calibrate_arm.py's own format.
     arm = cal.get("arm")
     if arm is not None:
         if not isinstance(arm, dict) or arm.get("format") != "spot-arm-calibration":
             raise ApiError("calibration.arm must be an arm calibration (calibrate_arm.py's).")
         out["arm"] = copy.deepcopy(arm)
+
+    # The newest section's time, and a project copy's "sync".
     out["updated"] = newest(out)
     if local:
         sync = cal.get("sync") or {}
         out["sync"] = {"ask": bool(sync.get("ask", True)),
-                       "declined": sync.get("declined") if isinstance(sync.get("declined"), str) else None}
+                       "declined": sync.get("declined")
+                                   if isinstance(sync.get("declined"), str) else None}
     return out
 
 
+def thruster_updated(c):
+    """Return a thruster calibration's time (thrusts' or decay's)."""
+    times = [c.get("updated"), (c.get("decay") or {}).get("updated")]
+    return max([t for t in times if isinstance(t, str)] or [""])
+
+
 def newest(cal):
-    """The newest section's time (None for an empty calibration)."""
+    """Return the newest section's time (None if empty)."""
     times = [cal["table"].get("updated")] if cal.get("table") else []
-    times += [v.get("updated") for v in (cal.get("thrusters") or {}).values()]
+    times += [thruster_updated(v) for v in (cal.get("thrusters") or {}).values()]
     if cal.get("arm"):
         times.append(cal["arm"].get("updated"))
     times = [t for t in times if isinstance(t, str)]
@@ -193,26 +287,37 @@ def newest(cal):
 
 
 def sections_newer(lab, mine):
-    """Which of the lab's sections are newer than (or missing from) this project's: ["table",
-    "thrusters RED", "arm", ...]."""
+    """Return the lab's sections newer than (or not in) a project's.
+
+    Returns:
+        For example ["table", "thrusters RED", "arm"].
+    """
     out = []
-    lt, mt = lab.get("table"), mine.get("table")
-    if lt and (not mt or lt.get("updated", "") > mt.get("updated", "")):
+
+    # The table.
+    lab_table, my_table = lab.get("table"), mine.get("table")
+    if lab_table and (not my_table
+                      or lab_table.get("updated", "") > my_table.get("updated", "")):
         out.append("table")
+
+    # Each platform's thrusters.
     for name, c in sorted((lab.get("thrusters") or {}).items()):
-        m = (mine.get("thrusters") or {}).get(name)
-        if not m or c.get("updated", "") > m.get("updated", ""):
+        my_cal = (mine.get("thrusters") or {}).get(name)
+        if not my_cal or thruster_updated(c) > thruster_updated(my_cal):
             out.append("thrusters " + name)
-    la, ma = lab.get("arm"), mine.get("arm")
-    if la and (not ma or la.get("updated", "") > ma.get("updated", "")):
+
+    # The arm.
+    lab_arm, my_arm = lab.get("arm"), mine.get("arm")
+    if lab_arm and (not my_arm or lab_arm.get("updated", "") > my_arm.get("updated", "")):
         out.append("arm")
     return out
 
 
 class CalibrationStore:
-    """This console's calibration file (as design.py's DesignStore keeps the design)."""
+    """This console's calibration file (as DesignStore, design.py)."""
 
     def __init__(self):
+        """Start with an empty calibration and no file."""
         self._lock = threading.Lock()
         self.path = None
         self.local = False
@@ -220,6 +325,15 @@ class CalibrationStore:
         self.saved = False
 
     def open(self, path, local=False):
+        """Use a calibration file, reading it if it exists.
+
+        A file that can't be read is reported in the log, and no
+        calibration is used.
+
+        Args:
+            path: The file.
+            local: A project's copy (it keeps "sync").
+        """
         self.path, self.local = Path(path), local
         self.cal = validate({}, local)
         try:
@@ -229,19 +343,28 @@ class CalibrationStore:
         except FileNotFoundError:
             pass
         except (OSError, ValueError, ApiError) as e:
-            hub.log("hardware", "The calibration file %s could not be read (%s); no calibration is used." % (self.path, e))
+            hub.log("hardware", "The calibration file %s could not be read (%s); no calibration "
+                                "is used." % (self.path, e))
 
     def get(self):
+        """Return the calibration, its file and whether it is saved."""
         with self._lock:
-            return {"calibration": copy.deepcopy(self.cal), "path": str(self.path) if self.path else None,
-                    "saved": self.saved}
+            return {"calibration": copy.deepcopy(self.cal),
+                    "path": str(self.path) if self.path else None, "saved": self.saved}
 
     def _write(self, cal):
-        """Save CAL (checked) and tell the pages (call without the lock)."""
+        """Save a calibration (checked) and tell the pages.
+
+        Call without the lock. The file is replaced atomically.
+
+        Raises:
+            ApiError: if it isn't valid, or is larger than MAX_FILE.
+        """
         cal = validate(cal, self.local)
         data = json.dumps(cal, indent=1, allow_nan=False) + "\n"
         if len(data) > MAX_FILE:
-            raise ApiError("The calibration would be %d kB; at most %d kB." % (len(data) // 1024, MAX_FILE // 1024))
+            raise ApiError("The calibration would be %d kB; at most %d kB."
+                           % (len(data) // 1024, MAX_FILE // 1024))
         with self._lock:
             self.cal = cal
             if self.path:
@@ -254,7 +377,13 @@ class CalibrationStore:
         return self.get()
 
     def set_section(self, section, value, platform=None):
-        """Replace one section (a platform's, for thrusters) with VALUE (None: remove it)."""
+        """Replace one section (a platform's, for thrusters).
+
+        Args:
+            section: "table", "thrusters" or "arm".
+            value: The new section; None to remove it.
+            platform: For thrusters, the platform.
+        """
         with self._lock:
             cal = copy.deepcopy(self.cal)
         if section == "thrusters":
@@ -266,17 +395,25 @@ class CalibrationStore:
             cal["thrusters"] = th or None
         else:
             cal[section] = value
+
+        # Removed sections are left out.
         cal = dict((k, v) for k, v in cal.items() if v is not None)
         return self._write(cal)
 
     def take(self, lab_cal):
-        """A project's copy becomes the lab's (keeping its own "sync")."""
+        """Make a project's copy the lab's (keeping its own "sync")."""
         with self._lock:
             sync = copy.deepcopy(self.cal.get("sync"))
         cal = dict(validate(lab_cal), sync=sync)
         return self._write(cal)
 
     def set_sync(self, ask=None, declined=None):
+        """Change whether to offer the lab's newer calibration.
+
+        Args:
+            ask: False: never ask again.
+            declined: The lab calibration's time that was declined.
+        """
         with self._lock:
             cal = copy.deepcopy(self.cal)
         sync = cal.get("sync") or {"ask": True, "declined": None}
@@ -291,7 +428,8 @@ class CalibrationStore:
 store = CalibrationStore()
 
 
-# ---------------------------------------------------------------------------- a run
+# A run
+
 
 class Run:
     """One calibration being run: what the page shows of it."""
@@ -299,6 +437,14 @@ class Run:
     label = "Calibration"   # what the hardware tab says drives the platform
 
     def __init__(self, kind, platform, params, requester):
+        """Start a run's record.
+
+        Args:
+            kind: "table", "thrusters", "decay" or "arm".
+            platform: The platform's key.
+            params: The run's settings.
+            requester: Who started it.
+        """
         self.kind = kind
         self.platform = platform
         self.params = params
@@ -307,7 +453,9 @@ class Run:
         self.stamp = stamp()
         self.state = "running"            # running, stopping, done, failed, stopped
         self.step = None                  # the step under way (an index into steps)
-        self.steps = []                   # [{"name", "state": waiting/running/done/skipped/failed, "note"}]
+        # [{"name", "state", "note"}]; state: waiting, running, done,
+        # skipped or failed.
+        self.steps = []
         self.message = "Starting…"
         self.log = collections.deque(maxlen=200)
         self.stop_reason = None
@@ -322,12 +470,15 @@ class Run:
         self.controller = None            # ControllerProcess while it flies
 
     def status(self):
-        return {"kind": self.kind, "platform": self.platform, "params": self.params, "by": self.by,
-                "started": self.started, "state": self.state, "step": self.step, "steps": self.steps,
-                "message": self.message, "log": list(self.log), "pose": self.pose, "goal": self.goal,
+        """Return what the page shows of the run."""
+        return {"kind": self.kind, "platform": self.platform, "params": self.params,
+                "by": self.by, "started": self.started, "state": self.state,
+                "step": self.step, "steps": self.steps, "message": self.message,
+                "log": list(self.log), "pose": self.pose, "goal": self.goal,
                 "path": self.path[-400:], "records": self.records, "result": self.result,
                 "points": getattr(self, "points", None),
-                "check": getattr(self, "check", None), "armlog": getattr(self, "armlog", [])[-40:],
+                "check": getattr(self, "check", None),
+                "armlog": getattr(self, "armlog", [])[-40:],
                 "error": self.error, "finished": self.finished}
 
 
@@ -335,32 +486,43 @@ class Calibrator:
     """Runs one calibration at a time on the lab console."""
 
     def __init__(self):
+        """Start with no run."""
         self._lock = threading.Lock()
         self.run = None        # the run under way, or the last one
         self._published = 0.0
 
     def active(self):
+        """Return whether a calibration is running (or stopping)."""
         with self._lock:
             return self.run is not None and self.run.state in ("running", "stopping")
 
     def status(self):
+        """Return whether one runs, and the current or last run."""
         with self._lock:
             return {"active": self.run is not None and self.run.state in ("running", "stopping"),
                     "run": self.run.status() if self.run else None}
 
     def publish(self, force=True):
+        """Send the status to the pages (unforced: every 0.2 s)."""
         now = time.monotonic()
-        if not force and now - self._published < 0.2:
+        if not force and now - self._published < PUBLISH_PERIOD:
             return
         self._published = now
         hub.publish("calibration_run", self.status())
 
-    # ---- requests
+    # Requests
 
     def _check_free(self, platform):
+        """Refuse unless the platform can be calibrated now.
+
+        Raises:
+            ApiError: if PhaseSpace isn't streaming or doesn't see it,
+                or an experiment, Interactive Mode or a calibration
+                runs.
+        """
         if not streamer.status()["running"]:
-            raise ApiError("Start PhaseSpace streaming first (PhaseSpace tab): the calibration measures the "
-                           "platform's motion with it.")
+            raise ApiError("Start PhaseSpace streaming first (PhaseSpace tab): the calibration "
+                           "measures the platform's motion with it.")
         if experiment.status()["phase"] in EXPERIMENT_BUSY:
             raise ApiError("An experiment is under way; calibrate once it has stopped.")
         if interactive.status()["active"]:
@@ -368,9 +530,21 @@ class Calibrator:
         if self.active():
             raise ApiError("A calibration is already running; stop it first.")
         if fresh_pose(platform, time.time()) is None:
-            raise ApiError("PhaseSpace doesn't see the %s right now (on the table, LEDs on?)." % shown(platform))
+            raise ApiError("PhaseSpace doesn't see the %s right now (on the table, LEDs on?)."
+                           % shown(platform))
 
     def start_table(self, body, requester):
+        """Start a table slope calibration.
+
+        Args:
+            body: platform, and optional nx, ny (grid), drift [s],
+                margin [m], max_speed [m/s], model ("auto",
+                "quadratic", "plane").
+            requester: Who asked.
+
+        Raises:
+            ApiError: for a bad setting, or if it can't start now.
+        """
         platform = parse_platform(body.get("platform"))
         params = {
             "nx": int(number(body.get("nx", 3), "Grid columns", 1, 5)),
@@ -387,22 +561,195 @@ class Calibrator:
         self._begin(run, TableRun(self, run).main)
         return self.status()
 
+    def load_table(self, body, requester):
+        """Set the lab's table calibration from a saved run.
+
+        Its drifts are fitted again, with body's model ("auto",
+        "quadratic" or "plane"). The run's data isn't changed.
+
+        Raises:
+            ApiError: if a calibration runs, or the run is missing or
+                can't be used.
+        """
+        if self.active():
+            raise ApiError("A calibration is running; wait for it to finish.")
+
+        # The saved run, and the model.
+        name = str(body.get("run") or "")
+        match = TABLE_RUN_RE.match(name)
+        folder = RUNS_DIR / name
+        if not match or not (folder / "run.json").is_file():
+            raise ApiError("The lab console has no saved table run %s."
+                           % (name or "(none chosen)"))
+        model = str(body.get("model") or "auto")
+        if model not in ("auto", "quadratic", "plane"):
+            raise ApiError("model must be auto, quadratic or plane.")
+
+        # Fit its drifts again.
+        try:
+            data = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+            fit = fit_drifts(data.get("drifts"), data.get("still"),
+                             None if model == "auto" else model)
+            saved = data.get("params")
+            params = dict(saved if isinstance(saved, dict) else {}, model=model)
+        except Abort as e:
+            raise ApiError("Run %s can't be used: %s." % (name, e))
+        except (OSError, ValueError, AttributeError, KeyError, TypeError) as e:
+            raise ApiError("Run %s's data can't be read (%s)." % (name, e))
+
+        # Keep it as the lab's.
+        result = dict(fit, updated=now_iso(), by=requester, platform=match.group(3),
+                      run="%s_%s" % (match.group(1), match.group(2)), params=params,
+                      folder=str(folder), loaded=True)
+        out = store.set_section("table", result)
+        hw_log("calibration: table slope from saved run %s (%s, %.2f mrad at the centre), by %s"
+               % (name, fit["model"], fit["tilt_centre_mrad"], requester))
+        return out
+
+    def load_thrusters(self, body, requester):
+        """Set a platform's thruster calibration from a saved run.
+
+        Each burn is fitted again from its frames, with the run's mass
+        properties and the lab's table calibration now. The run's data
+        isn't changed.
+
+        Raises:
+            ApiError: if a calibration runs, the run is missing or
+                can't be read, or no burn can be fitted.
+        """
+        if self.active():
+            raise ApiError("A calibration is running; wait for it to finish.")
+
+        # The saved run.
+        name = str(body.get("run") or "")
+        match = RUN_RE["thrusters"].match(name)
+        folder = RUNS_DIR / name
+        if not match or not (folder / "run.json").is_file():
+            raise ApiError("The lab console has no saved thruster run %s."
+                           % (name or "(none chosen)"))
+        platform = match.group(3)
+
+        # Fit each burn again.
+        try:
+            data = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+            burns = usable_burns(data.get("burns"))
+            params = data["params"]
+            run = Run("thrusters", platform, params, requester)
+            run.stamp = "%s_%s" % (match.group(1), match.group(2))
+            refit = ThrusterRun(self, run)
+            for b in burns:
+                b["fit"], b["error"] = refit.fit(b["thruster"], b["frames"], b["t_on"],
+                                                 b["t_off"])
+            result = refit.result(burns)
+        except (OSError, ValueError, AttributeError, KeyError, TypeError) as e:
+            raise ApiError("Run %s's data can't be read (%s)." % (name, e))
+        if not any(result["valid"]):
+            why = next((b["error"] for b in burns if b.get("error")), "it has no burns")
+            raise ApiError("Run %s has no burn that can be fitted (%s); the lab's calibration "
+                           "was not changed." % (name, why))
+
+        # Keep it as the lab's, with the platform's decay.
+        result.update(folder=str(folder), loaded=True)
+        out = store.set_section("thrusters", keep_decay(result, platform), platform)
+        good = sum(1 for b in burns if b["fit"])
+        hw_log("calibration: %s thrusters from saved run %s (%d of %d burns fitted), by %s"
+               % (shown(platform), name, good, len(burns), requester))
+        return out
+
+    def load_decay(self, body, requester):
+        """Set a platform's thrust decay from a saved Together run.
+
+        Each firing is fitted again from its frames (the run's mass
+        properties and single thrusts, the lab's table calibration
+        now), and kept with the platform's thruster calibration. The
+        run's data isn't changed.
+
+        Raises:
+            ApiError: if a calibration runs, the run is missing or
+                can't be used, or the platform has no thruster
+                calibration.
+        """
+        if self.active():
+            raise ApiError("A calibration is running; wait for it to finish.")
+
+        # The saved run, and the thruster calibration it goes with.
+        name = str(body.get("run") or "")
+        match = RUN_RE["decay"].match(name)
+        folder = RUNS_DIR / name
+        if not match or not (folder / "run.json").is_file():
+            raise ApiError("The lab console has no saved Together run %s."
+                           % (name or "(none chosen)"))
+        platform = match.group(3)
+        single = (store.get()["calibration"].get("thrusters") or {}).get(platform)
+        if not single:
+            raise ApiError("The %s has no thruster calibration for the decay to go with."
+                           % shown(platform))
+
+        # Fit each firing again.
+        try:
+            data = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+            burns = usable_burns(data.get("burns"))
+            run = Run("decay", platform, data["params"], requester)
+            run.stamp = "%s_%s" % (match.group(1), match.group(2))
+            refit = DecayRun(self, run)
+            for b in burns:
+                b["fit"], b["error"] = refit.fit(b["thruster"], b["frames"], b["t_on"],
+                                                 b["t_off"])
+            result = refit.result(burns)
+        except Abort as e:
+            raise ApiError("Run %s can't be used: %s." % (name, e))
+        except (OSError, ValueError, AttributeError, KeyError, TypeError) as e:
+            raise ApiError("Run %s's data can't be read (%s)." % (name, e))
+
+        # Keep it with the thruster calibration.
+        result.update(folder=str(folder), loaded=True)
+        out = store.set_section("thrusters", dict(single, decay=result), platform)
+        hw_log("calibration: %s thrust decay from saved run %s (%.1f %% per valve), by %s"
+               % (shown(platform), name, 100 * result["slope"], requester))
+        return out
+
     def start_thrusters(self, body, requester):
+        """Start a thruster calibration (body: see _thruster_params)."""
         platform = parse_platform(body.get("platform"))
+        run = self._thruster_params(platform, body, requester, "thrusters")
+        self._begin(run, ThrusterRun(self, run).main)
+        return self.status()
+
+    def _thruster_params(self, platform, body, requester, kind):
+        """Return a thruster run, checked but not started.
+
+        Args:
+            platform: The platform's key.
+            body: acknowledged (must be true: the mass properties are
+                right), assumed ({mass, inertia, cg_mm}; default the
+                controller's), repeats, burn [s], margin [m].
+            requester: Who asked.
+            kind: "thrusters" or "decay".
+
+        Raises:
+            ApiError: if not acknowledged, a value is out of range, or
+                the platform can't be calibrated now.
+        """
         if body.get("acknowledged") is not True:
-            raise ApiError("Confirm first that the platform's mass, inertia and centre of gravity are right: the "
-                           "thrust is worked out from them.")
+            raise ApiError("Confirm first that the platform's mass, inertia and centre of "
+                           "gravity are right: the thrust is worked out from them.")
+
+        # The mass properties assumed, and whether they differ from the
+        # defaults.
         defaults = assumed_defaults()[platform]
-        a = body.get("assumed") or {}
-        cg = a.get("cg_mm", defaults["cg_mm"])
+        given = body.get("assumed") or {}
+        cg = given.get("cg_mm", defaults["cg_mm"])
         if not isinstance(cg, list) or len(cg) != 2:
             raise ApiError("cg_mm must be [x, y] in mm.")
-        assumed = {"mass": number(a.get("mass", defaults["mass"]), "Mass", 1, 50),
-                   "inertia": number(a.get("inertia", defaults["inertia"]), "Inertia", 0.01, 5),
+        assumed = {"mass": number(given.get("mass", defaults["mass"]), "Mass", 1, 50),
+                   "inertia": number(given.get("inertia", defaults["inertia"]), "Inertia",
+                                     0.01, 5),
                    "cg_mm": [number(cg[0], "CG x", -60, 60), number(cg[1], "CG y", -60, 60)]}
         assumed["dist2CG"] = dist_from_cg(assumed["cg_mm"])
-        assumed["changed"] = any(abs(assumed[k] - defaults[k]) > 1e-9 for k in ("mass", "inertia")) or \
-            any(abs(u - v) > 1e-9 for u, v in zip(assumed["cg_mm"], defaults["cg_mm"]))
+        assumed["changed"] = (
+            any(abs(assumed[k] - defaults[k]) > 1e-9 for k in ("mass", "inertia"))
+            or any(abs(u - v) > 1e-9 for u, v in zip(assumed["cg_mm"], defaults["cg_mm"])))
+
         params = {
             "repeats": int(number(body.get("repeats", 2), "Repeats", 1, 3)),
             "burn": number(body.get("burn", 2.0), "Burn time", 0.5, 3.0),
@@ -410,36 +757,81 @@ class Calibrator:
             "assumed": assumed,
         }
         self._check_free(platform)
-        run = Run("thrusters", platform, params, requester)
-        self._begin(run, ThrusterRun(self, run).main)
+        return Run(kind, platform, params, requester)
+
+    def start_decay(self, body, requester):
+        """Start the second stage (DecayRun) on a calibrated platform.
+
+        body as for start_thrusters (one repeat by default).
+
+        Raises:
+            ApiError: if the platform has no thruster calibration.
+        """
+        platform = parse_platform(body.get("platform"))
+        single = (store.get()["calibration"].get("thrusters") or {}).get(platform)
+        if not single or not any(single.get("valid") or []):
+            raise ApiError("Calibrate the %s's thrusters one at a time first: the combined "
+                           "firings are measured against what each gives alone."
+                           % shown(platform))
+        body = dict(body, repeats=body.get("repeats", 1))
+        run = self._thruster_params(platform, body, requester, "decay")
+        run.params["single"] = {"thrust": list(single["thrust"]), "run": single.get("run")}
+        self._begin(run, DecayRun(self, run).main)
         return self.status()
 
     def start_arm(self, body, requester):
+        """Start the arm calibration on the Chaser.
+
+        Args:
+            body: joints (some of 1, 2, 3), tests (some of ARM_TESTS),
+                simulate (a rehearsal with simulated servos), and
+                acknowledged (must be true for a real run: the arm is
+                clear to move).
+            requester: Who asked.
+
+        Raises:
+            ApiError: for bad joints or tests, if not acknowledged, or
+                if an experiment, Interactive Mode or a calibration
+                runs.
+        """
+        # Joints and tests: non-empty lists of known ones, no repeats.
         joints = body.get("joints", [1, 2, 3])
         tests = body.get("tests", list(ARM_TESTS))
-        if not isinstance(joints, list) or not joints or any(j not in (1, 2, 3) for j in joints) or len(set(joints)) != len(joints):
+        if (not isinstance(joints, list) or not joints or any(j not in (1, 2, 3) for j in joints)
+                or len(set(joints)) != len(joints)):
             raise ApiError("joints must be some of 1 (shoulder), 2 (elbow), 3 (wrist).")
-        if not isinstance(tests, list) or not tests or any(t not in ARM_TESTS for t in tests) or len(set(tests)) != len(tests):
+        if (not isinstance(tests, list) or not tests or any(t not in ARM_TESTS for t in tests)
+                or len(set(tests)) != len(tests)):
             raise ApiError("tests must be some of %s." % ", ".join(ARM_TESTS))
+
+        # A real run needs the arm clear, and nothing else running.
         simulate = body.get("simulate") is True
         if not simulate and body.get("acknowledged") is not True:
-            raise ApiError("Confirm first that the Chaser rests on the table and its arm is clear to move.")
+            raise ApiError("Confirm first that the Chaser rests on the table and its arm is "
+                           "clear to move.")
         if experiment.status()["phase"] in EXPERIMENT_BUSY:
             raise ApiError("An experiment is under way; calibrate once it has stopped.")
         if interactive.status()["active"]:
             raise ApiError("Interactive Mode is flying; stop it first (PhaseSpace tab).")
         if self.active():
             raise ApiError("A calibration is already running; stop it first.")
-        params = {"joints": sorted(joints), "tests": [t for t in ARM_TESTS if t in tests], "simulate": simulate}
+
+        params = {"joints": sorted(joints), "tests": [t for t in ARM_TESTS if t in tests],
+                  "simulate": simulate}
         run = Run("arm", "RED", params, requester)
         self._begin(run, ArmRun(self, run).main)
         return self.status()
 
     def arm_check(self):
-        """What the Chaser has for the arm calibration (arm-cal-check), without starting anything."""
+        """Return what the Chaser has for the arm calibration."""
         return arm_check()
 
     def _begin(self, run, main):
+        """Make run the current one and run main in the background.
+
+        Raises:
+            ApiError: if another run is under way.
+        """
         with self._lock:
             if self.run is not None and self.run.state in ("running", "stopping"):
                 raise ApiError("A calibration is already running; stop it first.")
@@ -448,20 +840,24 @@ class Calibrator:
         self.publish()
 
     def stop(self, requester, reason=None):
+        """Stop the run under way: everything off on its platform."""
         with self._lock:
             run = self.run
             if run is None or run.state not in ("running", "stopping"):
                 return self.status_unlocked()
             run.state = "stopping"
             run.stop_reason = reason or "stopped by %s" % requester
-        hardware.get(run.platform).release(run, "Calibration stopped (%s); all off" % run.stop_reason)
+        hardware.get(run.platform).release(run, "Calibration stopped (%s); all off"
+                                           % run.stop_reason)
         self.publish()
         return self.status()
 
     def status_unlocked(self):
+        """Return the status (nothing running) without the lock."""
         return {"active": False, "run": self.run.status() if self.run else None}
 
     def shutdown(self):
+        """Stop the run (the console is shutting down)."""
         self.stop("the console", "the console is shutting down")
 
 
@@ -469,6 +865,11 @@ calibrator = Calibrator()
 
 
 def parse_platform(name):
+    """Return a platform key from a request.
+
+    Raises:
+        ApiError: if it isn't RED, BLACK or BLUE.
+    """
     name = str(name or "").strip().upper()
     if name not in PLATFORMS:
         raise ApiError("Choose the platform: RED, BLACK or BLUE.")
@@ -476,6 +877,11 @@ def parse_platform(name):
 
 
 def number(value, what, low, high):
+    """Return a request value as a float within [low, high].
+
+    Raises:
+        ApiError: if it isn't a finite number within the range.
+    """
     try:
         v = float(value)
     except (TypeError, ValueError):
@@ -486,7 +892,7 @@ def number(value, what, low, high):
 
 
 def thin(points, n):
-    """At most N of POINTS, evenly spread, the last one kept."""
+    """Return at most n of points, evenly spread, the last one kept."""
     if len(points) <= n:
         return list(points)
     step = len(points) / float(n)
@@ -495,14 +901,25 @@ def thin(points, n):
     return out
 
 
-# ---------------------------------------------------------------------------- driving a platform
+# Driving a platform
+
 
 class Driver:
-    """What every calibration does with its platform: records PhaseSpace, floats it, flies it to a
-    point with the diagram's controller, and stops when it must. Every wait goes through tick(),
-    which keeps the platform's packets going and raises Abort when the run must stop."""
+    """What every calibration does with its platform.
+
+    Records PhaseSpace, floats it, flies it to a point with the
+    diagram's controller, and stops when it must. Every wait goes
+    through check(), which keeps the platform's packets going and
+    raises Abort when the run must stop.
+    """
 
     def __init__(self, cal, run):
+        """Set up the driver for a run.
+
+        Args:
+            cal: The Calibrator (for publishing).
+            run: The Run.
+        """
         self.cal = cal
         self.run = run
         self.name = run.platform
@@ -514,9 +931,10 @@ class Driver:
         self.lost_since = None
         self.backwards = 0      # frames recorded whose time went backwards (see _on_frame)
 
-    # ---- reporting
+    # Reporting
 
     def say(self, message, log=True):
+        """Show a message on the page (and log it, unless told not)."""
         self.run.message = message
         if log:
             self.run.log.append("%s  %s" % (time.strftime("%H:%M:%S"), message))
@@ -524,92 +942,130 @@ class Driver:
         self.cal.publish(force=False)
 
     def begin_step(self, index, note=None):
-        r = self.run
-        if r.step is not None and r.steps[r.step]["state"] == "running":
-            r.steps[r.step]["state"] = "done"
-        r.step = index
-        r.steps[index]["state"] = "running"
+        """Start step index; the running one (if any) is done."""
+        run = self.run
+        if run.step is not None and run.steps[run.step]["state"] == "running":
+            run.steps[run.step]["state"] = "done"
+        run.step = index
+        run.steps[index]["state"] = "running"
         if note:
-            r.steps[index]["note"] = note
+            run.steps[index]["note"] = note
         self.cal.publish()
 
     def end_step(self, state="done", note=None):
-        r = self.run
-        if r.step is not None:
-            r.steps[r.step]["state"] = state
+        """End the current step (done, skipped or failed)."""
+        run = self.run
+        if run.step is not None:
+            run.steps[run.step]["state"] = state
             if note:
-                r.steps[r.step]["note"] = note
+                run.steps[run.step]["note"] = note
         self.cal.publish()
 
-    # ---- recording every PhaseSpace frame
+    # Recording every PhaseSpace frame
 
     def _on_frame(self, frame):
+        """Record a frame of the platform while recording.
+
+        Frames whose time goes back (a second stream on the monitor's
+        port?) are counted, not recorded.
+        """
         rec = self.run.recording
-        c = frame["crafts"].get(self.name)
-        if rec is None or not c or not c["tracked"] or c["x"] is None or c["y"] is None or c["att"] is None:
+        craft = frame["crafts"].get(self.name)
+        if (rec is None or not craft or not craft["tracked"] or craft["x"] is None
+                or craft["y"] is None or craft["att"] is None):
             return
         t = frame["t"] if frame.get("t") is not None else frame["received"]
         if rec and t <= rec[-1][0]:
-            self.backwards += 1   # PhaseSpace's time went back: a second stream on the monitor's port?
+            self.backwards += 1
             return
-        rec.append([t, c["x"], c["y"], c["att"], frame["received"]])
+        rec.append([t, craft["x"], craft["y"], craft["att"], frame["received"]])
 
     def start_recording(self):
+        """Start recording every frame (and a new path for the page)."""
         self.run.recording = []
         self.run.path = []
         monitor.add_listener(self._on_frame)
 
     def stop_recording(self):
+        """Stop recording; return [[t, x, y, theta, received]]."""
         monitor.remove_listener(self._on_frame)
         rec, self.run.recording = self.run.recording or [], None
         return rec
 
-    # ---- the platform
+    # The platform
 
     def claim(self):
-        self.hw.claim(self.run, self.run.by)   # raises ApiError if it can't be driven now
+        """Take the platform (pucks on); ApiError if it can't be."""
+        self.hw.claim(self.run, self.run.by)
         self.claimed = True
         self.pucks = True
 
     def release(self, note):
+        """Give the platform back (everything off), with a note."""
         if self.claimed:
             self.hw.release(self.run, note)
             self.claimed = False
 
     def set(self, duty=None, pucks=None):
+        """Set the duty cycles [%] and/or pucks (sent next check)."""
         if duty is not None:
             self.duty = list(duty)
         if pucks is not None:
             self.pucks = pucks
 
     def check(self):
-        """Raise Abort if the run must stop; returns the platform's pose (None while lost)."""
-        r = self.run
-        if r.state != "running":
-            raise Abort(r.stop_reason or "stopped")
+        """Keep the platform going; return its pose (None while lost).
+
+        Raises:
+            Abort: if the run is stopping, PhaseSpace lost the platform
+                for LOST_TIMEOUT, it is off the table, or it was taken
+                back.
+        """
+        run = self.run
+        if run.state != "running":
+            raise Abort(run.stop_reason or "stopped")
+
+        # The pose; while lost, thrusters off (until LOST_TIMEOUT).
         now = time.time()
         pose = fresh_pose(self.name, now)
         if pose is None:
             self.lost_since = self.lost_since or now
             if now - self.lost_since > LOST_TIMEOUT:
-                raise Abort("PhaseSpace lost the %s for more than %g s" % (shown(self.name), LOST_TIMEOUT))
+                raise Abort("PhaseSpace lost the %s for more than %g s"
+                            % (shown(self.name), LOST_TIMEOUT))
             self.duty = [0.0] * NUM_THRUSTERS
         else:
             self.lost_since = None
             if not (0 <= pose[0] <= TABLE[0] and 0 <= pose[1] <= TABLE[1]):
-                raise Abort("PhaseSpace sees the %s off the table (x %.2f m, y %.2f m)" % (shown(self.name), pose[0], pose[1]))
-            r.pose = [pose[0], pose[1], math.degrees(pose[2])]
-            if r.recording is not None:
-                if not r.path or math.hypot(pose[0] - r.path[-1][0], pose[1] - r.path[-1][1]) > 0.003:
-                    r.path.append([round(pose[0], 4), round(pose[1], 4)])
-        if self.claimed and not self.hw.drive(r, self.duty, self.pucks):
-            la = self.hw.status()["last_action"]
-            raise Abort("the %s was taken back (%s)" % (shown(self.name), la["text"] if la else "switched off"))
+                raise Abort("PhaseSpace sees the %s off the table (x %.2f m, y %.2f m)"
+                            % (shown(self.name), pose[0], pose[1]))
+
+            # For the page: the pose, and the path while recording
+            # (points 3 mm apart).
+            run.pose = [pose[0], pose[1], math.degrees(pose[2])]
+            if run.recording is not None:
+                if not run.path or math.hypot(pose[0] - run.path[-1][0],
+                                              pose[1] - run.path[-1][1]) > 0.003:
+                    run.path.append([round(pose[0], 4), round(pose[1], 4)])
+
+        # Send the packet; taken back: stop.
+        if self.claimed and not self.hw.drive(run, self.duty, self.pucks):
+            last = self.hw.status()["last_action"]
+            raise Abort("the %s was taken back (%s)"
+                        % (shown(self.name), last["text"] if last else "switched off"))
         self.cal.publish(force=False)
         return pose
 
     def wait(self, seconds, until=None):
-        """Keep the platform going for SECONDS (or until UNTIL(pose) is true); returns the last pose."""
+        """Keep the platform going for some seconds.
+
+        Args:
+            seconds: How long.
+            until: Optional until(pose); stop early when it is true.
+
+        Returns:
+            The last pose.
+        """
         end = time.monotonic() + seconds
         pose = None
         while True:
@@ -622,74 +1078,106 @@ class Driver:
             time.sleep(min(self.period, left))
 
     def others(self):
-        """The other platforms PhaseSpace sees: {NAME: [x, y]}."""
+        """Return the other platforms seen: {NAME: [x, y]}."""
         now, out = time.time(), {}
-        for n in PLATFORMS:
-            if n != self.name:
-                p = fresh_pose(n, now)
-                if p is not None:
-                    out[n] = p[:2]
+        for name in PLATFORMS:
+            if name != self.name:
+                pose = fresh_pose(name, now)
+                if pose is not None:
+                    out[name] = pose[:2]
         return out
 
     def path_clear(self, a, b):
-        """Whether the straight path from A to B keeps CLEARANCE from the other platforms; else which one."""
-        for n, p in self.others().items():
-            if segment_distance(p, a, b) < CLEARANCE:
-                return n
+        """Return which platform a straight path a-b passes, or None.
+
+        A platform within CLEARANCE of the path blocks it.
+        """
+        for name, pos in self.others().items():
+            if segment_distance(pos, a, b) < CLEARANCE:
+                return name
         return None
 
     def fly_to(self, goal):
-        """Fly the platform (pucks on) to GOAL = [x, y, theta] with the diagram's controller, the goal
-        moving there gradually, until it has settled there."""
-        r = self.run
-        if r.controller is None:
-            r.controller = ControllerProcess(self.name, self.controller_params())
-            r.controller.wait_ready()
+        """Fly the platform (pucks on) to a goal, as the diagram does.
+
+        The goal moves there gradually, at GOAL_SPEED and GOAL_TURN.
+
+        Args:
+            goal: [x, y, theta] [m, m, rad].
+
+        Returns:
+            The pose once it has settled there (SETTLED_* for
+            SETTLED_TIME).
+
+        Raises:
+            Abort: if PhaseSpace doesn't see it, or it doesn't settle
+                within FLY_TIMEOUT.
+        """
+        run = self.run
+
+        # The controller process, started on the first flight.
+        if run.controller is None:
+            run.controller = ControllerProcess(self.name, self.controller_params())
+            run.controller.wait_ready()
         pose = self.check()
         if pose is None:
             raise Abort("PhaseSpace doesn't see the %s" % shown(self.name))
+
+        # The target (the shorter way round), and the moving goal.
         target = [goal[0], goal[1], pose[2] + wrap(goal[2] - pose[2])]
         current = [pose[0], pose[1], pose[2]]
-        r.goal = [goal[0], goal[1], math.degrees(goal[2])]
+        run.goal = [goal[0], goal[1], math.degrees(goal[2])]
         self.pucks = True
         started, settled_since = time.monotonic(), None
         next_step = time.monotonic()
         while True:
-            # the goal moves towards the target
-            d = math.hypot(target[0] - current[0], target[1] - current[1])
+            # The goal moves towards the target.
+            dist = math.hypot(target[0] - current[0], target[1] - current[1])
             step = GOAL_SPEED * self.period
-            if d > step:
-                current[0] += (target[0] - current[0]) * step / d
-                current[1] += (target[1] - current[1]) * step / d
+            if dist > step:
+                current[0] += (target[0] - current[0]) * step / dist
+                current[1] += (target[1] - current[1]) * step / dist
             else:
                 current[0], current[1] = target[0], target[1]
             dth, turn = target[2] - current[2], GOAL_TURN * self.period
             current[2] = target[2] if abs(dth) <= turn else current[2] + math.copysign(turn, dth)
+
+            # One control step.
             pose = fresh_pose(self.name, time.time())
             if pose is not None:
-                _u, duty, _b = r.controller.step(pose, list(current))
+                _u, duty, _b = run.controller.step(pose, list(current))
                 self.duty = [100 * v for v in duty]
+
+            # Settled at the target: close, slow, for SETTLED_TIME.
             pose = self.check()
             if pose is not None and current == target:
-                close = (math.hypot(pose[0] - target[0], pose[1] - target[1]) < SETTLED_POS and
-                         abs(wrap(pose[2] - target[2])) < SETTLED_ATT and
-                         math.hypot(pose[3], pose[4]) < SETTLED_SPEED and abs(pose[5]) < math.radians(2))
+                close = (math.hypot(pose[0] - target[0], pose[1] - target[1]) < SETTLED_POS
+                         and abs(wrap(pose[2] - target[2])) < SETTLED_ATT
+                         and math.hypot(pose[3], pose[4]) < SETTLED_SPEED
+                         and abs(pose[5]) < math.radians(2))
                 if close:
                     settled_since = settled_since or time.monotonic()
                     if time.monotonic() - settled_since >= SETTLED_TIME:
                         self.duty = [0.0] * NUM_THRUSTERS
-                        r.goal = None
+                        run.goal = None
                         return pose
                 else:
                     settled_since = None
+
+            # Too long: say how far off it is.
             if time.monotonic() - started > FLY_TIMEOUT:
                 why = ""
                 if pose is not None:
-                    why = " (it is %.0f mm and %.1f deg from it, moving at %.0f mm/s and %.1f deg/s)" % (
-                        1000 * math.hypot(pose[0] - target[0], pose[1] - target[1]), math.degrees(abs(wrap(pose[2] - target[2]))),
-                        1000 * math.hypot(pose[3], pose[4]), math.degrees(abs(pose[5])))
+                    why = (" (it is %.0f mm and %.1f deg from it, moving at %.0f mm/s and "
+                           "%.1f deg/s)" % (
+                               1000 * math.hypot(pose[0] - target[0], pose[1] - target[1]),
+                               math.degrees(abs(wrap(pose[2] - target[2]))),
+                               1000 * math.hypot(pose[3], pose[4]),
+                               math.degrees(abs(pose[5]))))
                 raise Abort("the %s didn't settle at (%.2f m, %.2f m) within %g s%s"
                             % (shown(self.name), goal[0], goal[1], FLY_TIMEOUT, why))
+
+            # The next step, at the controller's rate.
             next_step += self.period
             delay = next_step - time.monotonic()
             if delay > 0:
@@ -698,48 +1186,67 @@ class Driver:
                 next_step = time.monotonic()
 
     def controller_params(self):
-        """The controller's parameters: SPOT's defaults, with the lab's calibrated thrust."""
+        """Return the controller's parameters (calibrated thrust)."""
         return controller_params(self.name)
 
     def finish(self, ok, note):
-        r = self.run
-        if r.recording is not None:
+        """End driving: stop recording, release, end controller."""
+        run = self.run
+        if run.recording is not None:
             self.stop_recording()
         self.release(note)
-        if r.controller is not None:
-            r.controller.close()
-            r.controller = None
-        r.goal = None
+        if run.controller is not None:
+            run.controller.close()
+            run.controller = None
+        run.goal = None
 
 
 def segment_distance(p, a, b):
-    """The distance from point P to the segment AB."""
+    """Return the distance from point p to the segment a-b."""
     ax, ay, bx, by = a[0], a[1], b[0], b[1]
     dx, dy = bx - ax, by - ay
-    L = dx * dx + dy * dy
-    s = 0.0 if L == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L))
-    return math.hypot(p[0] - (ax + s * dx), p[1] - (ay + s * dy))
+    length_sq = dx * dx + dy * dy
+
+    # The nearest point's fraction along the segment, in [0, 1].
+    frac = 0.0 if length_sq == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy)
+                                                   / length_sq))
+    return math.hypot(p[0] - (ax + frac * dx), p[1] - (ay + frac * dy))
 
 
 def save_run(run, data):
-    """The raw data of a run, kept on the lab console (~/SPOTCalibration/<stamp>_<kind>/run.json)."""
+    """Keep a run's raw data on the lab console.
+
+    In ~/SPOTCalibration/<stamp>_<kind>_<platform>/run.json.
+
+    Returns:
+        The folder, or None if it couldn't be saved (logged).
+    """
     try:
         folder = RUNS_DIR / ("%s_%s_%s" % (run.stamp, run.kind, run.platform))
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / "run.json").write_text(json.dumps(data, allow_nan=False) + "\n", encoding="utf-8")
+        (folder / "run.json").write_text(json.dumps(data, allow_nan=False) + "\n",
+                                         encoding="utf-8")
         return str(folder)
     except (OSError, ValueError) as e:
         hw_log("calibration: could not save the run's data (%s)" % e)
         return None
 
 
-# ---------------------------------------------------------------------------- the table's slope
+# The table's slope
+
 
 def grid_points(nx, ny, margin):
-    """The grid of start points: NX x NY, spread over the table inside MARGIN + 0.35 m, in a snake."""
+    """Return the grid of start points, in a snake.
+
+    nx x ny points, spread over the table inside margin + 0.35 m.
+    """
     inset = margin + 0.35
-    xs = [TABLE[0] / 2] if nx == 1 else [inset + (TABLE[0] - 2 * inset) * i / (nx - 1) for i in range(nx)]
-    ys = [TABLE[1] / 2] if ny == 1 else [inset + (TABLE[1] - 2 * inset) * j / (ny - 1) for j in range(ny)]
+    xs = [TABLE[0] / 2] if nx == 1 else [inset + (TABLE[0] - 2 * inset) * i / (nx - 1)
+                                         for i in range(nx)]
+    ys = [TABLE[1] / 2] if ny == 1 else [inset + (TABLE[1] - 2 * inset) * j / (ny - 1)
+                                         for j in range(ny)]
+
+    # Alternate rows reversed, so each point is next to the last.
     out = []
     for j, y in enumerate(ys):
         row = xs if j % 2 == 0 else list(reversed(xs))
@@ -747,445 +1254,972 @@ def grid_points(nx, ny, margin):
     return out
 
 
+# A drift needs this many frames to be fitted (calfit.fit_table's
+# min_samples).
+MIN_DRIFT_SAMPLES = 20
+
+# A saved run's folder (save_run): <stamp>_<kind>_<platform>.
+RUN_RE = {kind: re.compile(r"^(\d{8})_(\d{6})_%s_(RED|BLACK|BLUE)$" % kind)
+          for kind in ("table", "thrusters", "decay")}
+TABLE_RUN_RE = RUN_RE["table"]
+
+
+class Rejected(Abort):
+    """The drifts can't give a calibration.
+
+    Attributes:
+        data: What the run's saved data records about it.
+    """
+
+    def __init__(self, message, data):
+        """Keep the message and the data."""
+        super().__init__(message)
+        self.data = data
+
+
+def usable_drifts(drifts):
+    """Return the drifts long enough to fit."""
+    return [x for x in drifts or [] if isinstance(x, dict) and isinstance(x.get("t"), list)
+            and len(x["t"]) >= MIN_DRIFT_SAMPLES]
+
+
+def fit_drifts(drifts, still, model=None, backwards=0):
+    """Fit the table's slope to drifts.
+
+    Args:
+        drifts: TableRun.drift's records, from a run just made or a
+            saved one.
+        still: The resting frames, for the cameras' noise.
+        model: "quadratic", "plane" or None (calfit chooses).
+        backwards: The frames whose time went back while recording.
+
+    Returns:
+        calfit.fit_table's fit, with noise_mm, paths (thinned, for the
+        page) and a warning if it fits poorly.
+
+    Raises:
+        Abort: if no drift is long enough.
+        Rejected: if PhaseSpace's data or the fit is too poor to use.
+    """
+    records = usable_drifts(drifts)
+    if not records:
+        raise Abort("no drift was long enough to fit")
+
+    # PhaseSpace's data must be consistent.
+    samples = sum(len(x["t"]) for x in records)
+    jumps = sum(x.get("glitches", 0) for x in records)
+    if jumps + backwards > GLITCH_FRACTION * samples:
+        raise Rejected("PhaseSpace's data isn't consistent: %d of %d positions jumped, and %d "
+                       "frames went back in time (mis-tracking, or a second stream on the "
+                       "console's port?); the lab's calibration was not changed"
+                       % (jumps, samples, backwards), {"rejected": "glitches"})
+
+    # Fit, and judge the residual against the cameras' noise.
+    fit = calfit.fit_table(records, model)
+    noise = noise_mm(still)
+    if fit["rms_mm"] > REJECT_RESIDUAL:
+        raise Rejected("the drifts don't follow the model at all (position residual %.1f mm): "
+                       "something else moved the platform; the lab's calibration was not "
+                       "changed" % fit["rms_mm"], {"rejected_fit": fit})
+    if fit["rms_mm"] > max(POOR_FIT_FLOOR, POOR_FIT_FACTOR * (noise or 0.2)):
+        fit["warning"] = ("The drifts follow the %s only to %.1f mm (the cameras' noise is "
+                          "%.2f mm): the table isn't that simple here.%s"
+                          % (fit["model"], fit["rms_mm"], noise or 0.0,
+                             " A larger grid (3 x 2 or more) fits a surface."
+                             if fit["model"] == "plane" else ""))
+    return dict(fit, noise_mm=noise,
+                paths=[{"platform": x["platform"], "cut": x.get("cut"),
+                        "points": [[round(a, 4), round(b, 4)]
+                                   for a, b in thin(list(zip(x["x"], x["y"])), 150)]}
+                       for x in records])
+
+
+def usable_burns(burns):
+    """Return the saved burns that can be fitted again.
+
+    ThrusterRun.burn's records, each with its frames and times.
+    """
+    return [b for b in burns or [] if isinstance(b, dict) and isinstance(b.get("frames"), list)
+            and b["frames"] and b.get("thruster") in range(1, NUM_THRUSTERS + 1)
+            and isinstance(b.get("t_on"), (int, float))
+            and isinstance(b.get("t_off"), (int, float))
+            and isinstance(b.get("start"), list)]
+
+
+def saved_runs(kind):
+    """Return the saved runs of a kind with data to fit, newest first.
+
+    What Calibrator.load_table / load_thrusters / load_decay can make
+    the lab's calibration again.
+
+    Args:
+        kind: "table", "thrusters" or "decay".
+
+    Returns:
+        [{"id", "platform", "started", "count", "seconds", "stopped",
+        "note", "current"}].
+    """
+    cal = store.get()["calibration"]
+    out = []
+    folders = sorted(RUNS_DIR.iterdir(), reverse=True) if RUNS_DIR.is_dir() else []
+    for folder in folders:
+        match = RUN_RE[kind].match(folder.name)
+        if not match:
+            continue
+        platform = match.group(3)
+
+        # Its usable drifts or burns (and the drifts' total time).
+        try:
+            data = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+            if kind == "table":
+                parts = usable_drifts(data.get("drifts"))
+                seconds = sum(x["t"][-1] - x["t"][0] for x in parts)
+            else:
+                parts = usable_burns(data.get("burns"))
+                seconds = None
+        except (OSError, ValueError, AttributeError, TypeError):
+            continue
+        if not parts:
+            continue
+
+        # Whether it is the lab's calibration now.
+        current = (cal.get("table") if kind == "table"
+                   else (cal.get("thrusters") or {}).get(platform)) or {}
+        if kind == "decay":
+            current = current.get("decay") or {}
+
+        day, hms = match.group(1), match.group(2)
+        out.append({"id": folder.name, "platform": platform,
+                    "started": "%s-%s-%s %s:%s" % (day[:4], day[4:6], day[6:], hms[:2], hms[2:4]),
+                    "count": len(parts), "seconds": None if seconds is None else round(seconds, 1),
+                    "stopped": bool(data.get("aborted")), "note": data.get("aborted"),
+                    "current": current.get("folder") == str(folder)})
+    return out
+
+
 class TableRun:
+    """A table slope calibration (see the module's help)."""
+
     def __init__(self, cal, run):
+        """Set up the run with its Driver."""
         self.cal = cal
         self.run = run
         self.d = Driver(cal, run)
 
     def main(self):
-        r, d, p = self.run, self.d, self.run.params
-        points = grid_points(p["nx"], p["ny"], p["margin"])
-        r.steps = ([{"name": "Still", "state": "waiting", "note": "Noise while resting"},
-                    {"name": "Float Here", "state": "waiting", "note": "Drift from where it is"}] +
-                   [{"name": "Point %d" % (i + 1), "state": "waiting", "note": "(%.2f, %.2f) m" % tuple(pt)}
-                    for i, pt in enumerate(points)] +
-                   [{"name": "Fit", "state": "waiting", "note": ""}])
-        r.points = points
+        """Run it: still, float here, each grid point, fit and save."""
+        run, drv, params = self.run, self.d, self.run.params
+        points = grid_points(params["nx"], params["ny"], params["margin"])
+        run.steps = ([{"name": "Still", "state": "waiting", "note": "Noise while resting"},
+                      {"name": "Float Here", "state": "waiting",
+                       "note": "Drift from where it is"}]
+                     + [{"name": "Point %d" % (i + 1), "state": "waiting",
+                         "note": "(%.2f, %.2f) m" % tuple(pt)}
+                        for i, pt in enumerate(points)]
+                     + [{"name": "Fit", "state": "waiting", "note": ""}])
+        run.points = points
         drifts, still = [], None
         ok, note = False, None
         try:
-            # 1. resting: the cameras' noise
-            d.begin_step(0)
-            d.say("Recording the %s resting on the table (2 s)." % shown(r.platform))
-            d.start_recording()
-            d.wait(2.0)
-            still = d.stop_recording()
+            # 1. Resting: the cameras' noise.
+            drv.begin_step(0)
+            drv.say("Recording the %s resting on the table (2 s)." % shown(run.platform))
+            drv.start_recording()
+            drv.wait(2.0)
+            still = drv.stop_recording()
             noise = noise_mm(still)
-            d.end_step(note="%.2f mm" % noise if noise is not None else "no data")
-            # 2. float it, and let it drift from where it is
-            d.begin_step(1)
-            d.claim()
-            pose = d.check()
+            drv.end_step(note="%.2f mm" % noise if noise is not None else "no data")
+
+            # 2. Float it, and let it drift from where it is.
+            drv.begin_step(1)
+            drv.claim()
+            pose = drv.check()
             if pose is not None and self.inside(pose, extra=0.1):
                 drifts.append(self.drift(1))
             else:
-                d.end_step("skipped", "too close to an edge or a platform")
-            # 3. each point of the grid
+                drv.end_step("skipped", "too close to an edge or a platform")
+
+            # 3. Each point of the grid: fly there (unless another
+            # platform is in the way), rest, drift.
             for i, pt in enumerate(points):
-                d.begin_step(2 + i)
-                pose = d.check()
+                drv.begin_step(2 + i)
+                pose = drv.check()
                 if pose is None:
-                    raise Abort("PhaseSpace doesn't see the %s" % shown(r.platform))
-                blocker = d.path_clear(pose[:2], pt)
+                    raise Abort("PhaseSpace doesn't see the %s" % shown(run.platform))
+                blocker = drv.path_clear(pose[:2], pt)
                 if blocker:
-                    d.say("Point %d skipped: the path passes the %s." % (i + 1, shown(blocker)))
-                    d.end_step("skipped", "path passes the %s" % shown(blocker))
+                    drv.say("Point %d skipped: the path passes the %s." % (i + 1, shown(blocker)))
+                    drv.end_step("skipped", "path passes the %s" % shown(blocker))
                     continue
-                d.say("Flying to point %d (%.2f m, %.2f m)." % (i + 1, pt[0], pt[1]))
-                d.fly_to([pt[0], pt[1], pose[2]])
+                drv.say("Flying to point %d (%.2f m, %.2f m)." % (i + 1, pt[0], pt[1]))
+                drv.fly_to([pt[0], pt[1], pose[2]])
+                drv.set(duty=[0.0] * NUM_THRUSTERS, pucks=False)
+                drv.say("At point %d: pucks off, resting (%g s)." % (i + 1, STOP_PAUSE))
+                drv.wait(STOP_PAUSE)
                 drifts.append(self.drift(2 + i))
-            d.finish(True, "Calibration finished; all off")
-            # 4. fit
-            d.begin_step(len(r.steps) - 1)
-            d.say("Fitting the table's slope to %d drifts." % len(drifts))
-            records = [x for x in drifts if x and len(x["t"]) >= 20]
-            if not records:
-                raise Abort("no drift was long enough to fit")
-            samples = sum(len(x["t"]) for x in records)
-            jumps = sum(x["glitches"] for x in records)
-            if jumps + d.backwards > GLITCH_FRACTION * samples:
-                save_run(r, {"kind": "table", "platform": r.platform, "params": p, "still": still, "drifts": drifts,
-                             "rejected": "glitches"})
-                raise Abort("PhaseSpace's data isn't consistent: %d of %d positions jumped, and %d frames went back in time "
-                            "(mis-tracking, or a second stream on the console's port?); the lab's calibration was not "
-                            "changed" % (jumps, samples, d.backwards))
-            model = None if p["model"] == "auto" else p["model"]
-            fit = calfit.fit_table(records, model)
-            noise = noise_mm(still)
-            if fit["rms_mm"] > REJECT_RESIDUAL:
-                save_run(r, {"kind": "table", "platform": r.platform, "params": p, "still": still,
-                             "drifts": drifts, "rejected_fit": fit})
-                raise Abort("the drifts don't follow the model at all (position residual %.1f mm): something else moved "
-                            "the platform; the lab's calibration was not changed" % fit["rms_mm"])
-            if fit["rms_mm"] > max(POOR_FIT_FLOOR, POOR_FIT_FACTOR * (noise or 0.2)):
-                fit["warning"] = ("The drifts follow the %s only to %.1f mm (the cameras' noise is %.2f mm): the table "
-                                  "isn't that simple here.%s" % (fit["model"], fit["rms_mm"], noise or 0.0,
-                                  " A larger grid (3 x 2 or more) fits a surface." if fit["model"] == "plane" else ""))
-            result = dict(fit, updated=now_iso(), by=r.by, platform=r.platform, noise_mm=noise_mm(still),
-                          run=r.stamp, params=p,
-                          paths=[{"platform": x["platform"], "cut": x["cut"],
-                                  "points": [[round(a, 4), round(b, 4)] for a, b in thin(list(zip(x["x"], x["y"])), 150)]}
-                                 for x in records])
-            folder = save_run(r, {"kind": "table", "platform": r.platform, "params": p, "still": still,
-                                  "drifts": drifts, "fit": result})
+            drv.finish(True, "Calibration finished; all off")
+
+            # 4. Fit (a rejected fit's data is still saved).
+            drv.begin_step(len(run.steps) - 1)
+            drv.say("Fitting the table's slope to %d drifts." % len(drifts))
+            try:
+                fit = fit_drifts(drifts, still,
+                                 None if params["model"] == "auto" else params["model"],
+                                 drv.backwards)
+            except Rejected as e:
+                save_run(run, dict({"kind": "table", "platform": run.platform, "params": params,
+                                    "still": still, "drifts": drifts}, **e.data))
+                raise
+
+            # Save the run and make the fit the lab's.
+            result = dict(fit, updated=now_iso(), by=run.by, platform=run.platform,
+                          run=run.stamp, params=params)
+            folder = save_run(run, {"kind": "table", "platform": run.platform, "params": params,
+                                    "still": still, "drifts": drifts, "fit": result})
             result["folder"] = folder
             store.set_section("table", result)
-            r.result = result
-            d.end_step(note="%s, %.2f mrad at the centre" % (fit["model"], fit["tilt_centre_mrad"]))
-            d.say("Done: the table tilts %.2f mrad at its centre (%.2f mrad at most), downhill towards %.0f deg; "
-                  "position residual %.2f mm.%s" % (fit["tilt_centre_mrad"], fit["tilt_max_mrad"], fit["downhill_deg"],
-                                                    fit["rms_mm"], " " + fit["warning"] if fit.get("warning") else ""))
+            run.result = result
+            drv.end_step(note="%s, %.2f mrad at the centre"
+                              % (fit["model"], fit["tilt_centre_mrad"]))
+            drv.say("Done: the table tilts %.2f mrad at its centre (%.2f mrad at most), downhill "
+                    "towards %.0f deg; position residual %.2f mm.%s"
+                    % (fit["tilt_centre_mrad"], fit["tilt_max_mrad"], fit["downhill_deg"],
+                       fit["rms_mm"], " " + fit["warning"] if fit.get("warning") else ""))
             ok = True
         except Abort as e:
             note = str(e)
         except ApiError as e:
             note = str(e)
-        except Exception as e:   # never leave the platform floating after a bug
+        except Exception as e:
+            # Never leave the platform floating after a bug.
             note = "internal error: %s: %s" % (type(e).__name__, e)
         finally:
-            d.finish(ok, "Calibration %s; all off" % ("finished" if ok else "stopped (%s)" % note))
+            drv.finish(ok, "Calibration %s; all off"
+                       % ("finished" if ok else "stopped (%s)" % note))
         self.done(ok, note, drifts, still)
 
     def inside(self, pose, extra=0.0):
-        """Whether the platform is clear of the edges (the margin) and the other platforms."""
-        m = self.run.params["margin"] + extra
-        if not (m <= pose[0] <= TABLE[0] - m and m <= pose[1] <= TABLE[1] - m):
+        """Return whether it is clear of the edges and the others.
+
+        The edges: the run's margin, plus extra.
+        """
+        margin = self.run.params["margin"] + extra
+        if not (margin <= pose[0] <= TABLE[0] - margin
+                and margin <= pose[1] <= TABLE[1] - margin):
             return False
-        return all(math.hypot(pose[0] - o[0], pose[1] - o[1]) >= CLEARANCE for o in self.d.others().values())
+        return all(math.hypot(pose[0] - o[0], pose[1] - o[1]) >= CLEARANCE
+                   for o in self.d.others().values())
 
     def drift(self, step):
-        """Thrusters off, pucks on: record the platform drifting until the drift time is up, or it nears an
-        edge or another platform or goes too fast (then the pucks go off at once, and it stops)."""
-        r, d, p = self.run, self.d, self.run.params
-        d.set(duty=[0.0] * NUM_THRUSTERS, pucks=True)
-        d.say("Drifting (up to %g s)." % p["drift"])
-        d.start_recording()
+        """Record the platform drifting, thrusters off, pucks on.
+
+        Once the pucks have lifted it, record until the drift time is
+        up, or it nears an edge or another platform or goes too fast
+        (then the pucks go off at once, and it stops). The same checks
+        run while the pucks lift it.
+
+        Returns:
+            The drift's record: platform, t, x, y, theta, cut (why it
+            was cut short, or None), glitches.
+        """
+        run, drv, params = self.run, self.d, self.run.params
         why = []
 
         def stop(pose):
+            """Return whether the drift must stop now (record why)."""
             if not self.inside(pose):
                 why.append("near an edge or a platform")
                 return True
-            if math.hypot(pose[3], pose[4]) > p["max_speed"]:
-                why.append("faster than %g m/s" % p["max_speed"])
+            if math.hypot(pose[3], pose[4]) > params["max_speed"]:
+                why.append("faster than %g m/s" % params["max_speed"])
                 return True
             return False
-        d.wait(p["drift"], until=stop)
-        rec = d.stop_recording()
+
+        # Lift, then record.
+        drv.set(duty=[0.0] * NUM_THRUSTERS, pucks=True)
+        drv.say("Pucks on, lifting (%g s)." % DRIFT_LIFT)
+        drv.wait(DRIFT_LIFT, until=stop)
+        drv.start_recording()
+        if not why:
+            drv.say("Drifting (up to %g s)." % params["drift"])
+            drv.wait(params["drift"], until=stop)
+        rec = drv.stop_recording()
+
+        # Cut short: pucks off until it rests, then on again.
         cut = why[0] if why else None
         if cut:
-            d.set(pucks=False)
-            d.say("Drift cut short (%s): pucks off." % cut)
-            d.wait(STOP_PAUSE)
-            d.set(pucks=True)
+            drv.set(pucks=False)
+            drv.say("Drift cut short (%s): pucks off." % cut)
+            drv.wait(STOP_PAUSE)
+            drv.set(pucks=True)
+
+        # How far and long, and the jumps between frames.
         moved = math.hypot(rec[-1][1] - rec[0][1], rec[-1][2] - rec[0][2]) if len(rec) > 1 else 0.0
         secs = rec[-1][0] - rec[0][0] if len(rec) > 1 else 0.0
         note = "%.1f s, %.0f mm%s" % (secs, 1000 * moved, " (cut: %s)" % cut if cut else "")
-        d.end_step(note=note)
-        glitches = sum(1 for a, b in zip(rec, rec[1:]) if math.hypot(b[1] - a[1], b[2] - a[2]) > GLITCH_STEP)
-        record = {"platform": r.platform, "t": [s[0] for s in rec], "x": [s[1] for s in rec], "y": [s[2] for s in rec],
-                  "theta": [s[3] for s in rec], "cut": cut, "glitches": glitches}
-        r.records.append({"points": [[round(s[1], 4), round(s[2], 4)] for s in thin(rec, 150)], "cut": cut})
+        drv.end_step(note=note)
+        glitches = sum(1 for a, b in zip(rec, rec[1:])
+                       if math.hypot(b[1] - a[1], b[2] - a[2]) > GLITCH_STEP)
+
+        record = {"platform": run.platform, "t": [s[0] for s in rec], "x": [s[1] for s in rec],
+                  "y": [s[2] for s in rec], "theta": [s[3] for s in rec], "cut": cut,
+                  "glitches": glitches}
+        run.records.append({"points": [[round(s[1], 4), round(s[2], 4)] for s in thin(rec, 150)],
+                            "cut": cut})
         return record
 
     def done(self, ok, note, drifts, still):
-        r = self.run
+        """Record how the run ended; keep a stopped run's drifts."""
+        run = self.run
         if not ok:
-            if r.step is not None and r.steps[r.step]["state"] == "running":
-                r.steps[r.step]["state"] = "failed"
-            r.error = note if r.state == "running" else None
-            stopped = r.state == "stopping"
-            r.state = "stopped" if stopped else "failed"
-            self.d.say(("Stopped: %s." if stopped else "Failed: %s.") % (r.stop_reason if stopped else note))
+            if run.step is not None and run.steps[run.step]["state"] == "running":
+                run.steps[run.step]["state"] = "failed"
+            run.error = note if run.state == "running" else None
+            stopped = run.state == "stopping"
+            run.state = "stopped" if stopped else "failed"
+            self.d.say(("Stopped: %s." if stopped else "Failed: %s.")
+                       % (run.stop_reason if stopped else note))
             if drifts:
-                save_run(r, {"kind": "table", "platform": r.platform, "params": r.params, "still": still,
-                             "drifts": drifts, "aborted": note})
+                save_run(run, {"kind": "table", "platform": run.platform, "params": run.params,
+                               "still": still, "drifts": drifts, "aborted": note})
         else:
-            r.state = "done"
-        r.finished = time.time()
+            run.state = "done"
+        run.finished = time.time()
         self.cal.publish()
 
 
-# ---------------------------------------------------------------------------- the thrusters
+# The thrusters
 
-THRUSTER_INSET = 0.081       # [m] the thrusters sit this far in from the body's edges (spot.massprops.centerOfGravity)
-BURN_LATENCY = 0.15          # [s] from the command to the thruster pushing (SSH, the Teensy, the valve): skipped
-BURN_LIFT = 0.5              # [s] the pucks lift the platform before the burn
-REST_TIME = 1.0              # [s] resting between burns
-BURN_RMS_LIMIT = 3.0         # [mm] a burn whose motion doesn't follow a constant force better than this is left out
+# [m] the thrusters sit this far in from the body's edges
+# (spot.massprops.centerOfGravity).
+THRUSTER_INSET = 0.081
+# [s] from the command to the thruster pushing (SSH, the Teensy, the
+# valve): skipped.
+BURN_LATENCY = 0.15
+# [s] pucks off before each burn, at the table's centre: the platform
+# comes to rest.
+REST_TIME = 5.0
+# [mm] a burn whose motion doesn't follow a constant force better than
+# this is left out.
+BURN_RMS_LIMIT = 3.0
+# A burn needs this many frames to fit its 6 unknowns (2 s at the 10 Hz
+# data rate gives ~18).
+MIN_BURN_FRAMES = 10
+HALF_SIDE = 0.15             # [m] body centre to edge
+MIN_FIT_THRUST = 0.02        # [N] a fitted thrust outside this range is unlikely
+MAX_FIT_THRUST = 1.5         # [N]
+START_CLEARANCE = CLEARANCE + 0.15   # [m] others from the centre, where burns start
 
 
 def dist_from_cg(cg_mm):
-    """The mixer's thruster_dist2CG [mm] for a centre of gravity at CG_MM [x, y] [mm] from the body's centre,
-    as spot.massprops.centerOfGravity makes them."""
-    e = 0.15 - THRUSTER_INSET
+    """Return the mixer's thruster_dist2CG [mm] for a centre of gravity.
+
+    As spot.massprops.centerOfGravity makes them.
+
+    Args:
+        cg_mm: [x, y] [mm] from the body's centre.
+    """
+    e = HALF_SIDE - THRUSTER_INSET
     X, Y = cg_mm[0] / 1000.0, cg_mm[1] / 1000.0
     return [1000 * v for v in (e - Y, -(e + Y), e - X, -(e + X), e + Y, -(e - Y), e + X, -(e - X))]
 
 
 def assumed_defaults():
-    """What the console takes each platform's mass, inertia and centre of gravity to be: the controller's
-    defaults (control.DEFAULTS: SPOT's default settings), the CG worked back from its thruster offsets."""
-    e = 0.15 - THRUSTER_INSET
+    """Return each platform's mass properties as the console takes them.
+
+    The controller's defaults (control.DEFAULTS: SPOT's default
+    settings), the CG worked back from its thruster offsets.
+
+    Returns:
+        {NAME: {"mass", "inertia", "thrust", "thrust_decay", "cg_mm"}}.
+    """
+    e = HALF_SIDE - THRUSTER_INSET
     out = {}
-    for n in PLATFORMS:
-        p = DEFAULTS["platforms"][n]
-        d = p["thruster_dist2CG"]
-        out[n] = {"mass": p["mass"], "inertia": p["inertia"], "thrust": p["thrust"],
-                  "cg_mm": [round(1000 * e - d[2], 3), round(1000 * e - d[0], 3)]}
+    for name in PLATFORMS:
+        plat = DEFAULTS["platforms"][name]
+        dist = plat["thruster_dist2CG"]
+        out[name] = {"mass": plat["mass"], "inertia": plat["inertia"], "thrust": plat["thrust"],
+                     "thrust_decay": plat["thrust_decay"],
+                     "cg_mm": [round(1000 * e - dist[2], 3), round(1000 * e - dist[0], 3)]}
     return out
 
 
 def controller_params(platform):
-    """The controller's parameters (control.Controller) for PLATFORM: SPOT's defaults, with the lab's
-    calibrated thrust of each thruster when the lab has a thruster calibration for it."""
+    """Return the controller's parameters for a platform.
+
+    SPOT's defaults, with the lab's calibrated thrust of each thruster
+    and its thrust decay (the Together stage) when the lab has them.
+    """
     params = copy.deepcopy(DEFAULTS)
-    th = (store.get()["calibration"].get("thrusters") or {}).get(platform)
-    if th:
-        params["platforms"][platform]["thrust"] = list(th["thrust"])
+    thrusters_cal = (store.get()["calibration"].get("thrusters") or {}).get(platform)
+    if thrusters_cal:
+        params["platforms"][platform]["thrust"] = list(thrusters_cal["thrust"])
+        decay = thrusters_cal.get("decay") or {}
+        if (decay.get("model", "linear") == "linear"
+                and isinstance(decay.get("slope"), (int, float))):
+            params["platforms"][platform]["thrust_decay"] = decay["slope"]
     return params
 
 
 class ThrusterRun:
+    """A thruster calibration (see the module's help)."""
+
     def __init__(self, cal, run):
+        """Set up the run with its Driver."""
         self.cal = cal
         self.run = run
         self.d = Driver(cal, run)
 
     def main(self):
-        r, d, p = self.run, self.d, self.run.params
+        """Run it: each thruster's burns, then fit and save."""
+        run, drv, params = self.run, self.d, self.run.params
         order = [k for k in range(1, NUM_THRUSTERS + 1)]
-        r.steps = ([{"name": "Start", "state": "waiting", "note": "A clear place to start"}] +
-                   [{"name": "Thruster %d" % k, "state": "waiting", "note": ""} for k in order] +
-                   [{"name": "Fit", "state": "waiting", "note": ""}])
+        run.steps = ([{"name": "Start", "state": "waiting", "note": "A clear place to start"}]
+                     + [{"name": "Thruster %d" % k, "state": "waiting", "note": ""} for k in order]
+                     + [{"name": "Fit", "state": "waiting", "note": ""}])
         burns, ok, note = [], False, None
         try:
-            d.begin_step(0)
-            pose = d.check()
+            # Where every burn starts, and take the platform.
+            drv.begin_step(0)
+            pose = drv.check()
             if pose is None:
-                raise Abort("PhaseSpace doesn't see the %s" % shown(r.platform))
-            d.claim()
+                raise Abort("PhaseSpace doesn't see the %s" % shown(run.platform))
             start = self.start_place(pose)
-            if start:
-                d.say("Flying to a clear place to start (%.2f m, %.2f m)." % (start[0], start[1]))
-                d.fly_to(start)
-            d.set(duty=[0.0] * NUM_THRUSTERS, pucks=False)
-            d.wait(REST_TIME)
-            d.end_step(note="(%.2f, %.2f) m" % tuple(d.check()[:2]))
+            drv.claim()
+            drv.end_step(note="(%.2f, %.2f) m" % tuple(start[:2]))
+
+            # Each thruster, repeated.
             for k in order:
-                d.begin_step(k)
+                drv.begin_step(k)
                 notes = []
-                for rep in range(p["repeats"]):
-                    b = self.burn(k, rep)
+                for rep in range(params["repeats"]):
+                    b = self.burn(k, rep, start)
                     burns.append(b)
                     notes.append("%.3f N" % b["fit"]["thrust"] if b.get("fit") else "no fit")
-                    d.end_step("running", " · ".join(notes))
-                d.end_step(note=" · ".join(notes))
-            d.finish(True, "Calibration finished; all off")
-            d.begin_step(len(r.steps) - 1)
+                    drv.end_step("running", " · ".join(notes))
+                drv.end_step(note=" · ".join(notes))
+            drv.finish(True, "Calibration finished; all off")
+
+            # Fit: at least one good burn.
+            drv.begin_step(len(run.steps) - 1)
             result = self.result(burns)
-            folder = save_run(r, {"kind": "thrusters", "platform": r.platform, "params": p, "burns": burns,
-                                  "result": result})
+            if not any(result["valid"]):
+                why = next((b["error"] for b in burns if b.get("error")), "no burn was recorded")
+                raise Abort("no burn could be fitted (%s); the lab's calibration was not changed"
+                            % why)
+
+            # Save the run and make it the lab's (keeping the decay).
+            folder = save_run(run, {"kind": "thrusters", "platform": run.platform,
+                                    "params": params, "burns": burns, "result": result})
             result["folder"] = folder
-            store.set_section("thrusters", result, r.platform)
-            r.result = result
+            store.set_section("thrusters", keep_decay(result, run.platform), run.platform)
+            run.result = result
             bad = [k + 1 for k in range(NUM_THRUSTERS) if not result["valid"][k]]
-            d.end_step("done" if not bad else "failed",
-                       "%.3f-%.3f N" % (min(result["thrust"]), max(result["thrust"])))
-            d.say("Done: thrust %s N.%s" % (", ".join("%.3f" % f for f in result["thrust"]),
-                  " No good burn of thruster %s: it keeps the nominal thrust." % ", ".join(map(str, bad)) if bad else ""))
+            drv.end_step("done" if not bad else "failed",
+                         "%.3f-%.3f N" % (min(result["thrust"]), max(result["thrust"])))
+            drv.say("Done: thrust %s N.%s"
+                    % (", ".join("%.3f" % f for f in result["thrust"]),
+                       " No good burn of thruster %s: it keeps the nominal thrust."
+                       % ", ".join(map(str, bad)) if bad else ""))
             ok = True
         except Abort as e:
             note = str(e)
         except ApiError as e:
             note = str(e)
-        except Exception as e:   # never leave the platform floating after a bug
+        except Exception as e:
+            # Never leave the platform floating after a bug.
             note = "internal error: %s: %s" % (type(e).__name__, e)
         finally:
-            d.finish(ok, "Calibration %s; all off" % ("finished" if ok else "stopped (%s)" % note))
+            drv.finish(ok, "Calibration %s; all off"
+                       % ("finished" if ok else "stopped (%s)" % note))
         self.done(ok, note, burns)
 
     def start_place(self, pose):
-        """Where to start: where it is if that leaves room for a burn (the margin plus 0.25 m from the edges,
-        clear of the other platforms), else the nearest such place; None for here."""
-        m = self.run.params["margin"] + 0.25
-        x = min(max(pose[0], m), TABLE[0] - m)
-        y = min(max(pose[1], m), TABLE[1] - m)
-        here = abs(x - pose[0]) < 1e-9 and abs(y - pose[1]) < 1e-9
-        clear = all(math.hypot(x - o[0], y - o[1]) >= CLEARANCE + 0.15 for o in self.d.others().values())
-        if not clear:
-            raise Abort("another platform is within %.2f m of where the %s would start; move it, or the %s"
-                        % (CLEARANCE + 0.15, shown(self.run.platform), shown(self.run.platform)))
-        return None if here else [x, y, pose[2]]
+        """Return where burns start: the table's centre, as turned now.
 
-    def burn(self, k, rep):
-        """One burn of thruster K: float, fire, back to the start, pucks off, rest. Returns its record and fit."""
-        r, d, p = self.run, self.d, self.run.params
-        pose = d.check()
-        start = [pose[0], pose[1], pose[2]]
-        d.say("Thruster %d%s: floating, then firing for %g s." % (k, " (repeat %d)" % (rep + 1) if p["repeats"] > 1 else "",
-                                                                     p["burn"]))
-        d.set(duty=[0.0] * NUM_THRUSTERS, pucks=True)
-        d.start_recording()
-        d.wait(BURN_LIFT)
-        duty = [0.0] * NUM_THRUSTERS
-        duty[k - 1] = 100.0
-        d.set(duty=duty)
+        Raises:
+            Abort: if another platform is too close to it.
+        """
+        x, y = TABLE[0] / 2, TABLE[1] / 2
+        if not all(math.hypot(x - o[0], y - o[1]) >= START_CLEARANCE
+                   for o in self.d.others().values()):
+            raise Abort("another platform is within %.2f m of the table's centre, where every "
+                        "burn starts; move it" % (START_CLEARANCE))
+        return [x, y, pose[2]]
+
+    def burn(self, k, rep, start, opened=None):
+        """Fire one burn and record it.
+
+        Fly to start (the table's centre), pucks off and rest, then
+        pucks on and the thruster(s) firing at once.
+
+        Args:
+            k: The thruster (or, with opened, their number).
+            rep: The repeat, from 0.
+            start: [x, y, theta] where it starts.
+            opened: The thrusters fired together; default [k].
+
+        Returns:
+            The burn's record, with its fit (self.fit).
+        """
+        run, drv, params = self.run, self.d, self.run.params
+        opened = opened or [k]
+        what = ("Thruster %d" % k if len(opened) == 1
+                else "Thrusters %d-%d" % (opened[0], opened[-1]))
+        again = " (repeat %d)" % (rep + 1) if params["repeats"] > 1 else ""
+
+        # To the centre, then rest there.
+        drv.say("%s%s: flying to the centre." % (what, again))
+        drv.fly_to(start)
+        drv.set(duty=[0.0] * NUM_THRUSTERS, pucks=False)
+        drv.say("%s%s: pucks off, resting (%g s)." % (what, again, REST_TIME))
+        here = drv.wait(REST_TIME)
+        if here is None:
+            raise Abort("PhaseSpace doesn't see the %s" % shown(run.platform))
+
+        # Fire (pucks and thrusters sent together, in the next packet),
+        # recording; cut short near an edge.
+        drv.say("%s%s: pucks on, firing for %g s." % (what, again, params["burn"]))
+        duty = [100.0 if j + 1 in opened else 0.0 for j in range(NUM_THRUSTERS)]
+        drv.start_recording()
+        drv.set(duty=duty, pucks=True)
         t_on = time.time()
         cut = []
 
         def stop(pose):
-            m = p["margin"]
-            if not (m <= pose[0] <= TABLE[0] - m and m <= pose[1] <= TABLE[1] - m):
+            """Return whether the burn must stop: near an edge."""
+            margin = params["margin"]
+            if not (margin <= pose[0] <= TABLE[0] - margin
+                    and margin <= pose[1] <= TABLE[1] - margin):
                 cut.append("near an edge")
                 return True
             return False
-        d.wait(p["burn"], until=stop)
+
+        drv.wait(params["burn"], until=stop)
         t_off = time.time()
-        d.set(duty=[0.0] * NUM_THRUSTERS)
-        d.wait(0.2)
-        rec = d.stop_recording()
+        drv.set(duty=[0.0] * NUM_THRUSTERS)
+        drv.wait(0.2)
+        rec = drv.stop_recording()
         if cut:
-            d.say("Thruster %d: burn cut short (%s)." % (k, cut[0]))
-        r.records.append({"thruster": k, "points": [[round(s[1], 4), round(s[2], 4)] for s in thin(rec, 80)],
-                          "cut": cut[0] if cut else None})
-        record = {"thruster": k, "repeat": rep, "t_on": t_on, "t_off": t_off, "cut": cut[0] if cut else None,
-                  "frames": rec, "start": start}
+            drv.say("%s: burn cut short (%s)." % (what, cut[0]))
+
+        # The record, for the page and the fit.
+        run.records.append({"thruster": k,
+                            "points": [[round(s[1], 4), round(s[2], 4)] for s in thin(rec, 80)],
+                            "cut": cut[0] if cut else None})
+        record = {"thruster": k, "open": opened, "repeat": rep, "t_on": t_on, "t_off": t_off,
+                  "cut": cut[0] if cut else None, "frames": rec, "start": here[:3]}
         record["fit"], record["error"] = self.fit(k, rec, t_on, t_off)
-        # back where it started, then rest
-        d.say("Thruster %d: flying back to the start." % k)
-        d.fly_to(start)
-        d.set(duty=[0.0] * NUM_THRUSTERS, pucks=False)
-        d.wait(REST_TIME)
         return record
 
-    def fit(self, k, rec, t_on, t_off):
-        """(the burn's fit, or None, and why not)."""
-        a = self.run.params["assumed"]
+    @staticmethod
+    def burn_frames(rec, t_on, t_off):
+        """Return the frames while the thrusters pushed, or None."""
         burn = [s for s in rec if t_on + BURN_LATENCY <= s[4] <= t_off]
-        if len(burn) < 20:
-            return None, "too few frames during the burn (%d)" % len(burn)
-        jumps = sum(1 for u, v in zip(burn, burn[1:]) if math.hypot(v[1] - u[1], v[2] - u[2]) > GLITCH_STEP)
+        if len(burn) < MIN_BURN_FRAMES:
+            return None, ("too few frames during the burn (%d; stream PhaseSpace faster or burn "
+                          "longer)" % len(burn))
+        jumps = sum(1 for u, v in zip(burn, burn[1:])
+                    if math.hypot(v[1] - u[1], v[2] - u[2]) > GLITCH_STEP)
         if jumps:
             return None, "PhaseSpace's positions jumped %d times" % jumps
+        return burn, None
+
+    def table_pull(self):
+        """Return the table's slope and this platform's drag.
+
+        (None, 0) without a table calibration.
+        """
         table = store.get()["calibration"].get("table")
-        slope = table["height"] if table else None
-        damping = (table or {}).get("damping", {}).get(self.run.platform, 0.0) if table else 0.0
-        f = calfit.fit_burn([s[0] for s in burn], [s[1] for s in burn], [s[2] for s in burn], [s[3] for s in burn],
-                            a["mass"], a["inertia"], k, a["dist2CG"][k - 1], slope=slope, damping=damping)
-        if f["rms_mm"] > BURN_RMS_LIMIT:
-            return None, "the motion doesn't follow a constant thrust (residual %.1f mm)" % f["rms_mm"]
-        if not 0.02 <= f["thrust"] <= 1.5:
-            return None, "an unlikely thrust (%.3f N): did the thruster fire?" % f["thrust"]
-        return f, None
+        if not table:
+            return None, 0.0
+        return table["height"], table.get("damping", {}).get(self.run.platform, 0.0)
+
+    def fit(self, k, rec, t_on, t_off):
+        """Fit a burn of thruster k.
+
+        Returns:
+            (the fit, None), or (None, why not).
+        """
+        assumed = self.run.params["assumed"]
+        burn, why = self.burn_frames(rec, t_on, t_off)
+        if burn is None:
+            return None, why
+        slope, damping = self.table_pull()
+        fitted = calfit.fit_burn([s[0] for s in burn], [s[1] for s in burn],
+                                 [s[2] for s in burn], [s[3] for s in burn],
+                                 assumed["mass"], assumed["inertia"], k,
+                                 assumed["dist2CG"][k - 1], slope=slope, damping=damping)
+
+        # A constant thrust, of a likely size.
+        if fitted["rms_mm"] > BURN_RMS_LIMIT:
+            return None, ("the motion doesn't follow a constant thrust (residual %.1f mm)"
+                          % fitted["rms_mm"])
+        if not MIN_FIT_THRUST <= fitted["thrust"] <= MAX_FIT_THRUST:
+            return None, "an unlikely thrust (%.3f N): did the thruster fire?" % fitted["thrust"]
+        return fitted, None
 
     def result(self, burns):
-        """The calibration: each thruster's thrust (the mean of its good burns; the nominal one without any),
-        its spread, how far it is turned, its torque ratio, and each burn, for the page."""
-        r, p = self.run, self.run.params
-        nominal = assumed_defaults()[r.platform]["thrust"]
-        out = {"updated": now_iso(), "by": r.by, "platform": r.platform, "run": r.stamp, "params": p,
-               "nominal": nominal, "table_used": bool(store.get()["calibration"].get("table")),
-               "thrust": [], "thrust_sd": [], "angle": [], "torque_ratio": [], "valid": [], "burns": []}
+        """Return the calibration from the burns.
+
+        Each thruster's thrust (the mean of its good burns; the nominal
+        one without any), its spread, how far it is turned, its torque
+        ratio, and each burn, for the page.
+        """
+        run, params = self.run, self.run.params
+        nominal = assumed_defaults()[run.platform]["thrust"]
+        out = {"updated": now_iso(), "by": run.by, "platform": run.platform, "run": run.stamp,
+               "params": params, "nominal": nominal,
+               "table_used": bool(store.get()["calibration"].get("table")),
+               "thrust": [], "thrust_sd": [], "angle": [], "torque_ratio": [], "valid": [],
+               "burns": []}
+
+        # Each thruster from its good burns (one burn: no spread).
         for k in range(1, NUM_THRUSTERS + 1):
             fits = [b["fit"] for b in burns if b["thruster"] == k and b["fit"]]
-            mean, sd = calfit.summarise([f["thrust"] for f in fits])
-            angle, _ = calfit.summarise([f["angle"] for f in fits])
-            ratios = [f["torque_ratio"] for f in fits if f["torque_ratio"] is not None]
+            mean, sd = calfit.summarise([fitted["thrust"] for fitted in fits])
+            angle, _ = calfit.summarise([fitted["angle"] for fitted in fits])
+            ratios = [fitted["torque_ratio"] for fitted in fits
+                      if fitted["torque_ratio"] is not None]
             ratio, _ = calfit.summarise(ratios)
             out["valid"].append(bool(fits))
             out["thrust"].append(mean if fits else nominal)
-            out["thrust_sd"].append(sd if len(fits) > 1 else None)   # (one burn: no spread to give)
+            out["thrust_sd"].append(sd if len(fits) > 1 else None)
             out["angle"].append(angle)
             out["torque_ratio"].append(ratio)
+
+        # Each burn, its path relative to its start, for the page.
         for b in burns:
-            f = b["fit"]
-            out["burns"].append({"thruster": b["thruster"], "repeat": b["repeat"], "cut": b["cut"], "error": b["error"],
-                                 "thrust": f and f["thrust"], "angle": f and f["angle"],
-                                 "torque_ratio": f and f["torque_ratio"], "rms_mm": f and f["rms_mm"],
-                                 "points": [[round(s[1] - b["start"][0], 4), round(s[2] - b["start"][1], 4)]
-                                            for s in thin([s for s in b["frames"] if s[4] >= b["t_on"]], 60)],
-                                 "start_deg": math.degrees(b["start"][2])})
+            fitted = b["fit"]
+            out["burns"].append({
+                "thruster": b["thruster"], "repeat": b["repeat"], "cut": b["cut"],
+                "error": b["error"], "thrust": fitted and fitted["thrust"],
+                "angle": fitted and fitted["angle"],
+                "torque_ratio": fitted and fitted["torque_ratio"],
+                "rms_mm": fitted and fitted["rms_mm"],
+                "points": [[round(s[1] - b["start"][0], 4), round(s[2] - b["start"][1], 4)]
+                           for s in thin([s for s in b["frames"] if s[4] >= b["t_on"]], 60)],
+                "start_deg": math.degrees(b["start"][2])})
         return out
 
     def done(self, ok, note, burns):
-        r = self.run
+        """Record how the run ended; keep a stopped run's burns."""
+        run = self.run
         if not ok:
-            if r.step is not None and r.steps[r.step]["state"] == "running":
-                r.steps[r.step]["state"] = "failed"
-            stopped = r.state == "stopping"
-            r.error = None if stopped else note
-            r.state = "stopped" if stopped else "failed"
-            self.d.say(("Stopped: %s." if stopped else "Failed: %s.") % (r.stop_reason if stopped else note))
+            if run.step is not None and run.steps[run.step]["state"] == "running":
+                run.steps[run.step]["state"] = "failed"
+            stopped = run.state == "stopping"
+            run.error = None if stopped else note
+            run.state = "stopped" if stopped else "failed"
+            self.d.say(("Stopped: %s." if stopped else "Failed: %s.")
+                       % (run.stop_reason if stopped else note))
             if burns:
-                save_run(r, {"kind": "thrusters", "platform": r.platform, "params": r.params, "burns": burns,
-                             "aborted": note})
+                save_run(run, {"kind": "thrusters", "platform": run.platform,
+                               "params": run.params, "burns": burns, "aborted": note})
         else:
-            r.state = "done"
-        r.finished = time.time()
+            run.state = "done"
+        run.finished = time.time()
         self.cal.publish()
 
 
-# ---------------------------------------------------------------------------- the arm
+def keep_decay(result, platform):
+    """Return a thruster calibration with the current decay."""
+    old = (store.get()["calibration"].get("thrusters") or {}).get(platform) or {}
+    if old.get("decay"):
+        result = dict(result, decay=old["decay"])
+    return result
+
+
+# A firing whose thrusters alone push less than this many single
+# thrusts is left out.
+DECAY_MIN_PUSH = 0.5
+
+
+class DecayRun(ThrusterRun):
+    """The second stage: thrusters 1, 1-2, ... 1-8 fired together.
+
+    Measured against the platform's thruster calibration.
+    """
+
+    def main(self):
+        """Run it: each set of thrusters, then fit and save."""
+        run, drv, params = self.run, self.d, self.run.params
+        sets = [list(range(1, n + 1)) for n in range(1, NUM_THRUSTERS + 1)]
+        run.steps = ([{"name": "Start", "state": "waiting", "note": "The table's centre"}]
+                     + [{"name": "Thrusters 1" if n == 1 else "Thrusters 1-%d" % n,
+                         "state": "waiting", "note": ""}
+                        for n in range(1, NUM_THRUSTERS + 1)]
+                     + [{"name": "Fit", "state": "waiting", "note": ""}])
+        burns, ok, note = [], False, None
+        try:
+            # Where every firing starts, and take the platform.
+            drv.begin_step(0)
+            pose = drv.check()
+            if pose is None:
+                raise Abort("PhaseSpace doesn't see the %s" % shown(run.platform))
+            start = self.start_place(pose)
+            drv.claim()
+            drv.end_step(note="(%.2f, %.2f) m" % tuple(start[:2]))
+
+            # Each set, repeated.
+            for n, opened in enumerate(sets, 1):
+                drv.begin_step(n)
+                notes = []
+                for rep in range(params["repeats"]):
+                    b = self.burn(n, rep, start, opened)
+                    burns.append(b)
+                    fitted = b.get("fit")
+                    notes.append("%.0f %%" % (100 * fitted["ratio"]) if fitted and fitted["used"]
+                                 else "cancels" if fitted else "no fit")
+                    drv.end_step("running", " · ".join(notes))
+                drv.end_step(note=" · ".join(notes))
+            drv.finish(True, "Calibration finished; all off")
+
+            # Fit, save the run, and keep it with the thruster
+            # calibration.
+            drv.begin_step(len(run.steps) - 1)
+            result = self.result(burns)
+            folder = save_run(run, {"kind": "decay", "platform": run.platform, "params": params,
+                                    "burns": burns, "result": result})
+            result["folder"] = folder
+            entry = dict((store.get()["calibration"].get("thrusters") or {})[run.platform],
+                         decay=result)
+            store.set_section("thrusters", entry, run.platform)
+            run.result = result
+            how = ("1 - %.3f (N - 1)" % result["slope"] if result["model"] == "linear"
+                   else "1 / (1 + %.3f (N - 1))" % result["k"])
+            drv.end_step(note="%s: %s" % (result["model"], how))
+            drv.say("Done: with N thrusters open each gives %s of its thrust alone: %s." % (
+                how, ", ".join("%d: -%.0f %%" % (n, v)
+                               for n, v in enumerate(result["drop_pct"], 1) if n > 1)))
+            ok = True
+        except Abort as e:
+            note = str(e)
+        except ApiError as e:
+            note = str(e)
+        except Exception as e:
+            # Never leave the platform floating after a bug.
+            note = "internal error: %s: %s" % (type(e).__name__, e)
+        finally:
+            drv.finish(ok, "Calibration %s; all off"
+                       % ("finished" if ok else "stopped (%s)" % note))
+        self.done(ok, note, burns)
+
+    def alone(self):
+        """Return each thruster's thrust alone [N]: {1: F1, ..., 8: F8}.
+
+        From the platform's thruster calibration.
+        """
+        return dict(enumerate(self.run.params["single"]["thrust"], 1))
+
+    def fit(self, n, rec, t_on, t_off):
+        """Fit a firing of thrusters 1-n against their pushes alone.
+
+        Returns:
+            (the fit, None), or (None, why not). A firing whose
+            thrusters alone would push little (they cancel) isn't used
+            for the decay.
+        """
+        assumed = self.run.params["assumed"]
+        burn, why = self.burn_frames(rec, t_on, t_off)
+        if burn is None:
+            return None, why
+
+        # The push it gave: a constant force.
+        slope, damping = self.table_pull()
+        fitted = calfit.fit_force([s[0] for s in burn], [s[1] for s in burn],
+                                  [s[2] for s in burn], [s[3] for s in burn],
+                                  assumed["mass"], slope=slope, damping=damping)
+        if fitted["rms_mm"] > BURN_RMS_LIMIT:
+            return None, ("the motion doesn't follow a constant push (residual %.1f mm)"
+                          % fitted["rms_mm"])
+
+        # Against their pushes alone.
+        alone = self.alone()
+        ratio, ratio_sd, P = calfit.combined_ratio(fitted["Fb"], fitted["sd"],
+                                                   {k: alone[k] for k in range(1, n + 1)})
+        single = sum(alone.values()) / len(alone)
+        used = ratio is not None and math.hypot(*P) >= DECAY_MIN_PUSH * single
+        return {"Fb": fitted["Fb"], "push_alone": P, "ratio": ratio, "ratio_sd": ratio_sd,
+                "rms_mm": fitted["rms_mm"], "used": used,
+                "net_N": math.hypot(*fitted["Fb"])}, None
+
+    def result(self, burns):
+        """Return the decay: each firing's ratio, and the fitted curve.
+
+        Raises:
+            Abort: with fewer than 3 different firings that pushed.
+        """
+        run, params = self.run, self.run.params
+        rows = [(b["thruster"], b["fit"]["ratio"], b["fit"]["ratio_sd"]) for b in burns
+                if b.get("fit") and b["fit"]["used"]]
+        if len({n for n, _, _ in rows}) < 3:
+            why = next((b["error"] for b in burns if b.get("error")),
+                       "too few firings with a push to measure")
+            raise Abort("the decay can't be fitted (%s); the lab's calibration was not changed"
+                        % why)
+        fit = calfit.fit_decay(rows)
+
+        # Each firing, for the page.
+        firings = []
+        for b in burns:
+            fitted = b.get("fit") or {}
+            firings.append({"n": b["thruster"], "repeat": b["repeat"], "open": b["open"],
+                            "error": b.get("error"), "ratio": fitted.get("ratio"),
+                            "ratio_sd": fitted.get("ratio_sd"), "used": bool(fitted.get("used")),
+                            "net_N": fitted.get("net_N"),
+                            "push_alone_N": math.hypot(*fitted["push_alone"]) if fitted else None,
+                            "rms_mm": fitted.get("rms_mm")})
+        return dict(fit, updated=now_iso(), by=run.by, run=run.stamp,
+                    single_run=params["single"].get("run"),
+                    params={k: v for k, v in params.items() if k != "single"},
+                    firings=firings, table_used=bool(store.get()["calibration"].get("table")))
+
+
+# The arm
 
 ARM_TESTS = ("breakaway", "sweep", "inertia", "steps")
 JOINT_NAMES = {1: "Shoulder", 2: "Elbow", 3: "Wrist"}
 ARM_POLL = 2.0               # [s] between status checks while the script runs
-ARM_TIMEOUT = 45 * 60        # [s] the longest a run may take (three joints, every test: about 15 min)
+# [s] the longest a run may take (three joints, every test: about 15
+# min).
+ARM_TIMEOUT = 45 * 60
+ARM_FILE_LIMIT = 20 * 1024 * 1024   # [bytes] a data file larger than this is left out
+AGENT_TIMEOUT = 20           # [s] agent commands
+SEND_TIMEOUT = 30            # [s] sending and starting the script
+DATA_TIMEOUT = 120           # [s] collecting its data
 
 
 def arm_script():
-    """The arm calibration script: next to the console on the TX2 (deploy_tx2.sh copies it there), or in
-    the template's resources/arm_calibration."""
-    for p in (PROJECT_DIR / "arm_calibration" / "calibrate_arm.py",
-              PROJECT_DIR.parent.parent / "resources" / "arm_calibration" / "calibrate_arm.py"):
-        if p.is_file():
-            return p
+    """Return the arm calibration script's path.
+
+    Next to the console on the TX2 (deploy_tx2.sh copies it there), or
+    in the template's resources/arm_calibration.
+
+    Raises:
+        ApiError: if it is in neither place.
+    """
+    for path in (PROJECT_DIR / "arm_calibration" / "calibrate_arm.py",
+                 PROJECT_DIR.parent.parent / "resources" / "arm_calibration" / "calibrate_arm.py"):
+        if path.is_file():
+            return path
     raise ApiError("calibrate_arm.py is not on the lab console: run deploy_tx2.sh (it copies "
                    "resources/arm_calibration/calibrate_arm.py there).")
 
 
 def arm_check():
-    """{"ok": whether a real run can start, "items": [{"what", "ok", "value", "fix"}], "raw"} from the Chaser's
-    arm-cal-check: what calibrate_arm.py needs there."""
-    rc, out, err = platform_run("RED", "arm-cal-check", timeout=20)
+    """Return what calibrate_arm.py needs on the Chaser.
+
+    Returns:
+        {"ok": whether a real run can start, "reachable", "items":
+        [{"what", "ok", "value", "fix"}], "running", "script", "raw"};
+        or, if the Chaser doesn't answer, {"ok": False, "reachable":
+        False, "error"}.
+    """
+    rc, out, err = platform_run("RED", "arm-cal-check", timeout=AGENT_TIMEOUT)
     text = decode(out)
     if rc != 0 or not text:
         reason = err or text or "no answer (code %s)" % rc
         if "only accepts" in reason:
-            reason = "the Chaser's agent is older than this console: run setup_hardware_link.sh to update it"
+            reason = ("the Chaser's agent is older than this console: run "
+                      "setup_hardware_link.sh to update it")
         return {"ok": False, "reachable": False, "items": [], "error": reason, "raw": text}
-    kv, users = {}, []
+
+    # Its lines: "<key> <value>", "user <program>" and "servos <baud>
+    # <id>:<model> ...".
+    fields, users, servos = {}, [], {}
     for line in text.splitlines():
         key, _, value = line.partition(" ")
         if key == "user":
             users.append(value)
+        elif key == "servos" and value != "error":
+            baud, _, found = value.partition(" ")
+            servos[baud] = {int(i): int(m)
+                            for i, m in (x.split(":") for x in found.split() if ":" in x)}
         else:
-            kv[key] = value
-    py = kv.get("python", "no")
+            fields[key] = value
+
+    # One item per requirement, with how to fix it.
+    python_ver = fields.get("python", "no")
     items = [
-        {"what": "Python 3", "ok": py != "no", "value": py if py != "no" else "missing",
+        {"what": "Python 3", "ok": python_ver != "no",
+         "value": python_ver if python_ver != "no" else "missing",
          "fix": "Install python3 on the Chaser."},
-        {"what": "Dynamixel SDK", "ok": kv.get("sdk") == "yes", "value": "installed" if kv.get("sdk") == "yes" else "missing",
+        {"what": "Dynamixel SDK", "ok": fields.get("sdk") == "yes",
+         "value": "installed" if fields.get("sdk") == "yes" else "missing",
          "fix": "On the Chaser: pip3 install --user dynamixel-sdk"},
-        {"what": "U2D2 at /dev/ttyUSB0", "ok": kv.get("port") == "yes", "value": "found" if kv.get("port") == "yes" else "not found",
+        {"what": "U2D2 at /dev/ttyUSB0", "ok": fields.get("port") == "yes",
+         "value": "found" if fields.get("port") == "yes" else "not found",
          "fix": "Plug in the U2D2 and power the arm."},
-        {"what": "Access to the port", "ok": kv.get("access") == "yes", "value": "yes" if kv.get("access") == "yes" else "no",
-         "fix": "Run +spot/+hardware/arm/setup_arm_serial.sh for the Chaser (dialout group, udev rule), then log in again."},
+        {"what": "Access to the port", "ok": fields.get("access") == "yes",
+         "value": "yes" if fields.get("access") == "yes" else "no",
+         "fix": "Run +spot/+hardware/arm/setup_arm_serial.sh for the Chaser (dialout group, "
+                "udev rule), then log in again."},
         {"what": "Port free", "ok": not users, "value": ", ".join(users) if users else "free",
          "fix": "Stop the program holding it (an experiment?)."},
-        {"what": "Latency timer", "ok": True, "warn": kv.get("latency") not in ("1",),
-         "value": "%s ms" % kv["latency"] if kv.get("latency", "unknown") != "unknown" else "unknown",
+        {"what": "Latency timer", "ok": True, "warn": fields.get("latency") not in ("1",),
+         "value": "%s ms" % fields["latency"]
+                  if fields.get("latency", "unknown") != "unknown" else "unknown",
          "fix": "setup_arm_serial.sh sets it to 1 ms (16 ms works, but the data comes slower)."},
     ]
-    running = kv.get("running", "no")
-    return {"ok": all(i["ok"] for i in items) and running == "no", "reachable": True, "items": items,
-            "running": running != "no", "script": kv.get("script") == "yes", "raw": text}
+    items.append(servo_item(fields, servos, users))
+    running = fields.get("running", "no")
+    return {"ok": all(i["ok"] for i in items) and running == "no", "reachable": True,
+            "items": items, "running": running != "no", "script": fields.get("script") == "yes",
+            "raw": text}
+
+
+# Model numbers (calibrate_arm.py's MODELS).
+ARM_SERVO_NAMES = {311: "MX-64", 321: "MX-106", 30: "MX-28", 1020: "XM430", 1120: "XM540"}
+
+
+def servo_item(fields, servos, users):
+    """Return the setup check's servo line.
+
+    Whether IDs 1, 2 and 3 answer at the bus's 1 Mbps (the agent's
+    scan), and if not, what to check.
+    """
+    what = "Servos 1-3 (1 Mbps)"
+
+    # Not scanned: the port was busy, the scan failed, or the agent is
+    # old.
+    if not servos:
+        why = ("not scanned: the port is in use" if users or fields.get("running", "no") != "no"
+               else "not scanned" + (": the scan failed" if "servos" in fields
+                                     else ": the Chaser's agent is older (run "
+                                          "+spot/+console/deploy/setup_hardware_link.sh red)"))
+        return {"what": what, "ok": True, "warn": True, "value": why,
+                "fix": "The run pings them first anyway."}
+
+    # The servos at 1 Mbps; all three there: fine.
+    bus = servos.get("1000000", {})
+    names = {1: "shoulder", 2: "elbow", 3: "wrist"}
+    missing = [i for i in (1, 2, 3) if i not in bus]
+    found = ", ".join("%d %s" % (i, ARM_SERVO_NAMES.get(m, m))
+                      for i, m in sorted(bus.items())) or "none"
+    slow = servos.get("57600", {})
+    if not missing:
+        return {"what": what, "ok": True, "value": found, "fix": ""}
+
+    # Missing: the cables, a reset servo at 57600 baud, or a wrong ID.
+    fix = ("No answer from %s. Check its cable in the daisy chain (and the next one along) and "
+           "the arm's power." % ", ".join("ID %d (%s)" % (i, names[i]) for i in missing))
+    if slow:
+        fix += (" At 57600 baud (the factory default: a servo reset or replaced) %s answer%s: "
+                "give it its ID and 1 Mbps in Dynamixel Wizard."
+                % (", ".join("ID %d" % i for i in sorted(slow)), "s" if len(slow) == 1 else ""))
+    others = sorted(set(bus) - {1, 2, 3})
+    if others:
+        fix += (" Also answering at 1 Mbps: %s (a servo with the wrong ID?)."
+                % ", ".join("ID %d" % i for i in others))
+    return {"what": what, "ok": not missing, "value": found, "fix": fix}
 
 
 class ArmRun:
+    """An arm calibration (see the module's help)."""
+
     def __init__(self, cal, run):
+        """Set up the run with its Driver and the Chaser."""
         self.cal = cal
         self.run = run
         self.d = Driver(cal, run)
@@ -1193,60 +2227,83 @@ class ArmRun:
         self.reserved = False
 
     def main(self):
-        r, d, p = self.run, self.d, self.run.params
-        r.steps = ([{"name": "Check", "state": "waiting", "note": "What the Chaser has"},
-                    {"name": "Send Script", "state": "waiting", "note": "calibrate_arm.py"}] +
-                   [{"name": "%s %s" % (JOINT_NAMES[j], t.capitalize()), "state": "waiting", "note": "", "joint": j, "test": t}
-                    for j in p["joints"] for t in p["tests"]] +
-                   [{"name": "Collect", "state": "waiting", "note": "Data and fit"}])
-        r.check = None
+        """Run it: check, send the script, follow it, collect."""
+        run, drv, params = self.run, self.d, self.run.params
+        run.steps = ([{"name": "Check", "state": "waiting", "note": "What the Chaser has"},
+                      {"name": "Send Script", "state": "waiting", "note": "calibrate_arm.py"}]
+                     + [{"name": "%s %s" % (JOINT_NAMES[j], t.capitalize()), "state": "waiting",
+                         "note": "", "joint": j, "test": t}
+                        for j in params["joints"] for t in params["tests"]]
+                     + [{"name": "Collect", "state": "waiting", "note": "Data and fit"}])
+        run.check = None
         ok, note, started = False, None, False
         try:
-            d.begin_step(0)
-            chk = arm_check()
-            r.check = chk
-            if not chk["reachable"]:
-                raise Abort("the Chaser doesn't answer: %s" % chk["error"])
-            if chk["running"]:
-                raise Abort("a calibration is already running on the Chaser (stop it, or wait for it)")
-            missing = [i["what"] for i in chk["items"] if not i["ok"]]
-            if missing and not p["simulate"]:
+            # 1. The Chaser has what the script needs (a rehearsal needs
+            # none of the hardware).
+            drv.begin_step(0)
+            checks = arm_check()
+            run.check = checks
+            if not checks["reachable"]:
+                raise Abort("the Chaser doesn't answer: %s" % checks["error"])
+            if checks["running"]:
+                raise Abort("a calibration is already running on the Chaser (stop it, or wait "
+                            "for it)")
+            missing = [i["what"] for i in checks["items"] if not i["ok"]]
+            if missing and not params["simulate"]:
                 raise Abort("the Chaser isn't ready: %s (see the checks)" % ", ".join(missing))
-            d.end_step(note="ready" if not missing else "rehearsal (%s missing)" % ", ".join(missing))
-            if not p["simulate"]:   # the platform rests while the arm moves: nothing may float it
-                self.hw.reserve(r, r.by)
+            drv.end_step(note="ready" if not missing
+                              else "rehearsal (%s missing)" % ", ".join(missing))
+
+            # The platform rests while the arm moves: nothing may float
+            # it.
+            if not params["simulate"]:
+                self.hw.reserve(run, run.by)
                 self.reserved = True
-            d.begin_step(1)
+
+            # 2. Send the script.
+            drv.begin_step(1)
             buf = io.BytesIO()
             with tarfile.open(fileobj=buf, mode="w") as tar:
                 tar.add(str(arm_script()), arcname="calibrate_arm.py")
-            rc, out, err = platform_run("RED", "arm-cal-receive", data=buf.getvalue(), timeout=30)
+            rc, out, err = platform_run("RED", "arm-cal-receive", data=buf.getvalue(),
+                                        timeout=SEND_TIMEOUT)
             if rc != 0:
                 raise Abort("could not send the script: %s" % (err or decode(out)))
-            d.end_step()
-            cmd = "arm-cal-start %s %s%s" % ("".join(str(j) for j in p["joints"]), ",".join(p["tests"]),
-                                             " simulate" if p["simulate"] else "")
-            rc, out, err = platform_run("RED", cmd, timeout=30)
+            drv.end_step()
+
+            # 3. Start it, and follow it to the end.
+            cmd = "arm-cal-start %s %s%s" % ("".join(str(j) for j in params["joints"]),
+                                             ",".join(params["tests"]),
+                                             " simulate" if params["simulate"] else "")
+            rc, out, err = platform_run("RED", cmd, timeout=SEND_TIMEOUT)
             if rc != 0 or "started" not in decode(out):
                 raise Abort("the script didn't start: %s" % (err or decode(out)))
             started = True
-            d.say("%s started on the Chaser (%s; %s)." % ("A rehearsal (simulated servos)" if p["simulate"] else "The arm calibration",
-                                                          ", ".join(JOINT_NAMES[j] for j in p["joints"]), ", ".join(p["tests"])))
+            drv.say("%s started on the Chaser (%s; %s)."
+                    % ("A rehearsal (simulated servos)" if params["simulate"]
+                       else "The arm calibration",
+                       ", ".join(JOINT_NAMES[j] for j in params["joints"]),
+                       ", ".join(params["tests"])))
             code = self.follow()
             started = False
             if code != 0:
                 raise Abort("the script stopped (exit %s): %s" % (code, self.last_words()))
-            d.begin_step(len(r.steps) - 1)
+
+            # 4. Collect: a rehearsal's result is shown, a real one's
+            # becomes the lab's.
+            drv.begin_step(len(run.steps) - 1)
             result = self.collect()
-            if p["simulate"]:
-                r.result = result
-                d.end_step(note="rehearsal: not saved")
-                d.say("Rehearsal done: the fit of the simulated servos is shown; the lab's arm calibration is unchanged.")
+            if params["simulate"]:
+                run.result = result
+                drv.end_step(note="rehearsal: not saved")
+                drv.say("Rehearsal done: the fit of the simulated servos is shown; the lab's arm "
+                        "calibration is unchanged.")
             else:
                 store.set_section("arm", result)
-                r.result = result
-                d.end_step(note="saved")
-                d.say("Done: the arm calibration is saved; projects get it with Update from Lab.")
+                run.result = result
+                drv.end_step(note="saved")
+                drv.say("Done: the arm calibration is saved; projects get it with Update from "
+                        "Lab.")
             ok = True
         except Abort as e:
             note = str(e)
@@ -1255,31 +2312,42 @@ class ArmRun:
         except Exception as e:
             note = "internal error: %s: %s" % (type(e).__name__, e)
         finally:
-            if started:   # never leave the script moving the arm when the run ends
-                platform_run("RED", "arm-cal-stop", timeout=20)
+            # Never leave the script moving the arm when the run ends.
+            if started:
+                platform_run("RED", "arm-cal-stop", timeout=AGENT_TIMEOUT)
             if self.reserved:
-                self.hw.release(r, "Arm calibration %s" % ("finished" if ok else "stopped"))
+                self.hw.release(run, "Arm calibration %s" % ("finished" if ok else "stopped"))
         self.done(ok, note)
 
     def follow(self):
-        """Follow the script until it ends (its exit code); stops it when the run is stopped, the Chaser is taken
-        back (Esc or all off on the Hardware tab), or it runs too long."""
-        r = self.run
+        """Follow the script until it ends; return its exit code.
+
+        Stops it when the run is stopped, the Chaser is taken back (Esc
+        or all off on the Hardware tab), or it runs too long.
+
+        Raises:
+            Abort: in those cases.
+        """
+        run = self.run
         t0 = time.monotonic()
         while True:
-            if r.state != "running":
-                platform_run("RED", "arm-cal-stop", timeout=20)
-                raise Abort(r.stop_reason or "stopped")
-            if self.reserved and not self.hw.owned_by(r):
-                platform_run("RED", "arm-cal-stop", timeout=20)
+            # Reasons to stop it.
+            if run.state != "running":
+                platform_run("RED", "arm-cal-stop", timeout=AGENT_TIMEOUT)
+                raise Abort(run.stop_reason or "stopped")
+            if self.reserved and not self.hw.owned_by(run):
+                platform_run("RED", "arm-cal-stop", timeout=AGENT_TIMEOUT)
                 raise Abort("the Chaser was taken back (switched off on the Hardware tab)")
             if time.monotonic() - t0 > ARM_TIMEOUT:
-                platform_run("RED", "arm-cal-stop", timeout=20)
+                platform_run("RED", "arm-cal-stop", timeout=AGENT_TIMEOUT)
                 raise Abort("it ran for more than %d minutes" % (ARM_TIMEOUT // 60))
-            rc, out, err = platform_run("RED", "arm-cal-status", timeout=20)
+
+            # Its log and state: running, or ended with an exit code
+            # (none: -1).
+            rc, out, err = platform_run("RED", "arm-cal-status", timeout=AGENT_TIMEOUT)
             if rc == 0:
                 text = decode(out)
-                lines = [l[4:] for l in text.splitlines() if l.startswith("log ")]
+                lines = [line[4:] for line in text.splitlines() if line.startswith("log ")]
                 self.progress(lines)
                 code = re.search(r"^exit (\d+)$", text, re.M)
                 running = re.search(r"^running (\d+)$", text, re.M)
@@ -1290,81 +2358,108 @@ class ArmRun:
             time.sleep(ARM_POLL)
 
     def progress(self, lines):
-        """The script's log on the page, and its PROGRESS lines as the steps."""
-        r = self.run
-        r.armlog = lines
+        """Show the script's log; its PROGRESS lines as steps."""
+        run = self.run
+        run.armlog = lines
+
+        # The last PROGRESS line: {"joint", "test", "index", "total"}.
         last = None
-        for l in lines:
-            if l.startswith("PROGRESS "):
+        for line in lines:
+            if line.startswith("PROGRESS "):
                 try:
-                    last = json.loads(l[9:])
+                    last = json.loads(line[9:])
                 except ValueError:
                     pass
+
+        # Its step runs; the steps before it are done.
         if last:
-            for k, st in enumerate(r.steps):
-                if st.get("joint") == last["joint"] and st.get("test") == last["test"]:
-                    if r.step != k:
-                        for prev in r.steps[2:k]:
+            for k, step in enumerate(run.steps):
+                if step.get("joint") == last["joint"] and step.get("test") == last["test"]:
+                    if run.step != k:
+                        for prev in run.steps[2:k]:
                             if prev["state"] in ("waiting", "running"):
                                 prev["state"] = "done"
                         self.d.begin_step(k, "%d of %d" % (last["index"], last["total"]))
-                        self.d.say("%s: %s (%d of %d)." % (JOINT_NAMES[last["joint"]], last["test"], last["index"], last["total"]),
+                        self.d.say("%s: %s (%d of %d)." % (JOINT_NAMES[last["joint"]],
+                                                          last["test"], last["index"],
+                                                          last["total"]),
                                    log=False)
-        tail = [l for l in lines if l.strip() and not l.startswith("PROGRESS ")]
+
+        # The last other line as the message.
+        tail = [line for line in lines if line.strip() and not line.startswith("PROGRESS ")]
         if tail:
-            r.message = tail[-1].strip()[:200]
+            run.message = tail[-1].strip()[:200]
         self.cal.publish(force=False)
 
     def last_words(self):
-        lines = [l for l in getattr(self.run, "armlog", []) if l.strip() and not l.startswith(("PROGRESS ", "EXIT "))]
+        """Return the script's last output line (not PROGRESS/EXIT)."""
+        lines = [line for line in getattr(self.run, "armlog", [])
+                 if line.strip() and not line.startswith(("PROGRESS ", "EXIT "))]
         return lines[-1].strip() if lines else "no output"
 
     def collect(self):
-        """The run's files from the Chaser into ~/SPOTCalibration/<stamp>_arm_RED/, and the calibration: the
-        script's fit (arm_calibration.json) with what the page draws (each joint's friction points, its
-        breakaway torques, its position steps, thinned)."""
-        r = self.run
-        rc, out, err = platform_run("RED", "arm-cal-data", timeout=120)
+        """Collect the run's files and return the calibration.
+
+        The files go into ~/SPOTCalibration/<stamp>_arm_RED/; the
+        calibration is the script's fit (arm_calibration.json) with
+        what the page draws (each joint's friction points, its
+        breakaway torques, its position steps, thinned).
+
+        Raises:
+            Abort: if nothing came back, or there is no valid
+                arm_calibration.json.
+        """
+        run = self.run
+        rc, out, err = platform_run("RED", "arm-cal-data", timeout=DATA_TIMEOUT)
         if rc != 0 or not out:
             raise Abort("could not collect the data: %s" % (err or "nothing came back"))
-        folder = RUNS_DIR / ("%s_arm_RED%s" % (r.stamp, "_rehearsal" if r.params["simulate"] else ""))
+        folder = RUNS_DIR / ("%s_arm_RED%s" % (run.stamp,
+                                               "_rehearsal" if run.params["simulate"] else ""))
         folder.mkdir(parents=True, exist_ok=True)
+
+        # The .json and .csv files (of a sane size and name).
         files = {}
         with tarfile.open(fileobj=io.BytesIO(out), mode="r") as tar:
-            for m in tar.getmembers():
-                name = m.name.rsplit("/", 1)[-1]
-                if not m.isfile() or not re.match(r"^[A-Za-z0-9_.-]+\.(json|csv)$", name) or m.size > 20 * 1024 * 1024:
+            for member in tar.getmembers():
+                name = member.name.rsplit("/", 1)[-1]
+                if (not member.isfile() or not re.match(r"^[A-Za-z0-9_.-]+\.(json|csv)$", name)
+                        or member.size > ARM_FILE_LIMIT):
                     continue
-                data = tar.extractfile(m).read()
+                data = tar.extractfile(member).read()
                 (folder / name).write_bytes(data)
                 files[name] = data.decode("utf-8", "replace")
+
+        # The script's fit, with the run's details and the plots.
         if "arm_calibration.json" not in files:
             raise Abort("the run has no arm_calibration.json (did it finish?)")
         cal = json.loads(files["arm_calibration.json"])
         if cal.get("format") != "spot-arm-calibration":
             raise Abort("arm_calibration.json isn't an arm calibration")
         cal.pop("folder", None)
-        cal.update(updated=now_iso(), by=r.by, run=r.stamp, simulated=r.params["simulate"], lab_folder=str(folder),
-                   tests=r.params["tests"], plots=arm_plots(files, cal))
+        cal.update(updated=now_iso(), by=run.by, run=run.stamp, simulated=run.params["simulate"],
+                   lab_folder=str(folder), tests=run.params["tests"], plots=arm_plots(files, cal))
         return cal
 
     def done(self, ok, note):
-        r = self.run
+        """Record how the run ended."""
+        run = self.run
         if not ok:
-            if r.step is not None and r.steps[r.step]["state"] == "running":
-                r.steps[r.step]["state"] = "failed"
-            stopped = r.state == "stopping"
-            r.error = None if stopped else note
-            r.state = "stopped" if stopped else "failed"
-            self.d.say(("Stopped: %s." if stopped else "Failed: %s.") % (r.stop_reason if stopped else note))
+            if run.step is not None and run.steps[run.step]["state"] == "running":
+                run.steps[run.step]["state"] = "failed"
+            stopped = run.state == "stopping"
+            run.error = None if stopped else note
+            run.state = "stopped" if stopped else "failed"
+            self.d.say(("Stopped: %s." if stopped else "Failed: %s.")
+                       % (run.stop_reason if stopped else note))
         else:
-            r.state = "done"
-        r.finished = time.time()
+            run.state = "done"
+        run.finished = time.time()
         self.cal.publish()
 
 
 def read_csv_text(text):
-    rows = [l.split(",") for l in text.strip().splitlines()]
+    """Return a CSV's header and its numeric rows (others skipped)."""
+    rows = [line.split(",") for line in text.strip().splitlines()]
     if not rows:
         return [], []
     head = rows[0]
@@ -1378,33 +2473,47 @@ def read_csv_text(text):
 
 
 def arm_plots(files, cal):
-    """What the page draws of an arm calibration, per joint: the friction against speed (the sweep's steady
-    points as torque, and the fitted curve's parameters are in the joint's fit), the breakaway torques, and
-    the position steps (goal and measured, thinned)."""
+    """Return what the page draws of an arm calibration, per joint.
+
+    The friction against speed (the sweep's steady points as torque;
+    the fitted curve's parameters are in the joint's fit), and the
+    position steps (goal and measured, thinned).
+    """
     kt = cal.get("kt") or {}
     plots = {}
     for j in (1, 2, 3):
-        p = {}
-        k = kt.get(str(j)) if isinstance(kt, dict) else kt
+        plot = {}
+
+        # The sweep: [velocity, torque] (current x torque constant).
+        kt_joint = kt.get(str(j)) if isinstance(kt, dict) else kt
         pts = files.get("sweep_points_j%d.json" % j)
-        if pts and k:
+        if pts and kt_joint:
             try:
-                p["sweep"] = [[round(q["velocity"], 5), round(k * q["current"], 5)] for q in json.loads(pts)]
+                plot["sweep"] = [[round(point["velocity"], 5),
+                                  round(kt_joint * point["current"], 5)]
+                                 for point in json.loads(pts)]
             except (ValueError, KeyError, TypeError):
                 pass
+
+        # The steps: [t, goal, measured].
         if "steps_j%d.csv" % j in files:
             head, rows = read_csv_text(files["steps_j%d.csv" % j])
             col = "q%d" % j
             if rows and "t" in head and "goal" in head and col in head:
                 ti, gi, qi = head.index("t"), head.index("goal"), head.index(col)
-                p["steps"] = [[round(row[ti], 3), round(row[gi], 5), round(row[qi], 5)] for row in thin(rows, 400)]
-        if p:
-            plots[str(j)] = p
+                plot["steps"] = [[round(row[ti], 3), round(row[gi], 5), round(row[qi], 5)]
+                                 for row in thin(rows, 400)]
+        if plot:
+            plots[str(j)] = plot
     return plots
 
 
 def noise_mm(samples):
-    """The cameras' noise on a resting platform: the standard deviation of its position [mm]."""
+    """Return the cameras' noise on a resting platform [mm].
+
+    The standard deviation of its position; None with fewer than 5
+    samples.
+    """
     if not samples or len(samples) < 5:
         return None
     mx = sum(s[1] for s in samples) / len(samples)

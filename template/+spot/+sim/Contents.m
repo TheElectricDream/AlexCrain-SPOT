@@ -1,8 +1,8 @@
 % SIM  Simulations: diagrams, solver, running, results for the 3D view
 %
-%   debugLog     - The platforms' debug messages recorded during a simulation (by spot.hardware.debugMessages).
+%   debugLog     - The platforms' debug messages recorded during a simulation.
 %   errorDetails - An error's root cause, the blocks involved and the full report, as plain text.
-%   liveData     - The Live Stream blocks' signals recorded during a simulation (by spot.hardware.liveStream).
+%   liveData     - The Live Stream blocks' signals recorded during a simulation.
 %   listDiagrams - Simulink diagrams (.slx) in the project folder.
 %   loadDiagram  - Load a diagram from the project folder (without opening its window).
 %   modelName    - Simulink model name of a diagram file ('Template.slx' -> 'Template').

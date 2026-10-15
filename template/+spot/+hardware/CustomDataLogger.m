@@ -1,142 +1,110 @@
 classdef CustomDataLogger < matlab.System ...
         & coder.ExternalDependency
-%CUSTOMDATALOGGER Appends each step's logged values to the platform's ExpLog text file (the diagram's
-%   Data Logger block).
-%   C/C++ code: +spot/+hardware/csrc/data_logger. (Was Custom_Library/Resources/CustomDataLogger/CustomDataLogger.m.)
+    %CUSTOMDATALOGGER Appends each step's logged values to the platform's ExpLog text file.
+    %   The diagram's Data Logger block. In generated code it creates the file at setup and
+    %   appends each step's values; in a simulation it does nothing.
+    %   C/C++ code: +spot/+hardware/csrc/data_logger (was
+    %   Custom_Library/Resources/CustomDataLogger/CustomDataLogger.m).
     %
-    % System object template for a sink block.
-    % 
-    % This template includes most, but not all, possible properties,
-    % attributes, and methods that you can implement for a System object in
-    % Simulink.
+    %   Inputs
+    %     u1  the values to log
+    %     u2  their count
     %
-    % NOTE: When renaming the class name Sink, the file name and
-    % constructor name must be updated to use the class name.
+    %   Based on a MathWorks System object template (Copyright 2016 The MathWorks, Inc.).
     %
-    
-    % Copyright 2016 The MathWorks, Inc.
+    %   See also spot.experiment.decodeData.
+
     %#codegen
     %#ok<*EMCA>
-    
-    properties
-        
-    end
-    
-    properties (Nontunable)
 
-    end
-    
-    properties (Access = private)
-   
-    end
-    
     methods
-        % Constructor
         function obj = CustomDataLogger(varargin)
-            % Support name-value pair arguments when constructing the object.
-            setProperties(obj,nargin,varargin{:});
+            % Name-value pair arguments.
+            setProperties(obj, nargin, varargin{:});
         end
     end
-    
-    methods (Access=protected)
+
+    methods (Access = protected)
         function setupImpl(obj)
-            if isempty(coder.target)
-                % Place simulation setup code here
-            else
-                % Call C-function implementing device initialization
-                 coder.cinclude('custom_data_logger.h')
-                 coder.ceval('createFile');
+            % Generated code: create the log file.
+            if ~isempty(coder.target)
+                coder.cinclude('custom_data_logger.h')
+                coder.ceval('createFile');
             end
         end
-        
-        function stepImpl(obj,u1,u2)  
-            if isempty(coder.target)
-                % Place simulation output code here 
-            else
-                % Call C-function implementing device output
-                 coder.cinclude('custom_data_logger.h')
-                 coder.ceval('appendDataToFile',u1, u2);
+
+        function stepImpl(obj, u1, u2)
+            % Generated code: append this step's values.
+            if ~isempty(coder.target)
+                coder.cinclude('custom_data_logger.h')
+                coder.ceval('appendDataToFile', u1, u2);
             end
         end
-        
+
         function releaseImpl(obj) %#ok<MANU>
-            if isempty(coder.target)
-                % Place simulation termination code here
-            else
-                % Call C-function implementing device termination
-                %coder.ceval('sink_terminate');
-            end
+            % Nothing to release.
         end
     end
-    
-    methods (Access=protected)
-        %% Define input properties
+
+    methods (Access = protected)
+        %% Simulink block interface
         function num = getNumInputsImpl(~)
             num = 2;
         end
-        
+
         function num = getNumOutputsImpl(~)
             num = 0;
         end
-        
-        function varargout = isInputFixedSizeImpl(~,~)
+
+        function varargout = isInputFixedSizeImpl(~, ~)
             varargout{1} = true;
         end
-        
-        function flag = isInputComplexityMutableImpl(~,~)
+
+        function flag = isInputComplexityMutableImpl(~, ~)
             flag = false;   % always real
         end
-              
+
         function icon = getIconImpl(~)
-            % Define a string as the icon for the System block in Simulink.
             icon = 'CustomDataLogger';
-        end  
-        
+        end
     end
-    
-    methods (Static, Access=protected)
+
+    methods (Static, Access = protected)
         function simMode = getSimulateUsingImpl(~)
             simMode = 'Interpreted execution';
         end
-        
+
         function isVisible = showSimulateUsingImpl
             isVisible = false;
         end
-        
+
         function header = getHeaderImpl
-            header = matlab.system.display.Header(mfilename('class'),'Title',...
-                'CustomDataLogger Block','Text',...
-                ['This simulink block takes an input array and the size of the array and appends the data to a text file.' newline]);
+            header = matlab.system.display.Header(mfilename('class'), ...
+                'Title', 'CustomDataLogger Block', ...
+                'Text', ['This simulink block takes an input array and the size of the array ' ...
+                         'and appends the data to a text file.' newline]);
         end
-        
     end
-    
+
     methods (Static)
+        %% coder.ExternalDependency interface
         function name = getDescriptiveName()
             name = 'CustomDataLogger';
         end
-        
+
         function b = isSupportedContext(context)
             b = context.isCodeGenTarget('rtw');
         end
-        
-        function updateBuildInfo(buildInfo, context)
-            if context.isCodeGenTarget('rtw')
-                % Update buildInfo
-                srcDir = fullfile(fileparts(mfilename('fullpath')), 'csrc', 'data_logger', 'src');
-                includeDir = fullfile(fileparts(mfilename('fullpath')), 'csrc', 'data_logger', 'include');
-                addIncludePaths(buildInfo,includeDir);
-                
-                % Add all SOURCE files for compiling robotis software
-                addSourceFiles(buildInfo,'custom_data_logger.cpp', srcDir);
-                
-                % Add all INCLUDE files for compiling robotis software
-                addIncludeFiles(buildInfo,'custom_data_logger.h',includeDir);
 
-                %addLinkFlags(buildInfo,{'-lSource'});
-                %addLinkObjects(buildInfo,'sourcelib.a',srcDir);
-                %addCompileFlags(buildInfo,{'-D_DEBUG=1'});
-                %addDefines(buildInfo,'MY_DEFINE_1')
+        function updateBuildInfo(buildInfo, context)
+            % Add the logger's C++ source and header to the build.
+            if context.isCodeGenTarget('rtw')
+                srcDir = fullfile(fileparts(mfilename('fullpath')), 'csrc', 'data_logger', 'src');
+                includeDir = fullfile(fileparts(mfilename('fullpath')), 'csrc', 'data_logger', ...
+                    'include');
+                addIncludePaths(buildInfo, includeDir);
+                addSourceFiles(buildInfo, 'custom_data_logger.cpp', srcDir);
+                addIncludeFiles(buildInfo, 'custom_data_logger.h', includeDir);
             end
         end
     end

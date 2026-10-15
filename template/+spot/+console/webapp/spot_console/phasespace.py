@@ -1,5 +1,7 @@
-"""PhaseSpace streaming on the lab console: compiling StreamData, starting and stopping it, the
-UDP monitor that decodes its packets for the 3D view, and the marker calibration file.
+"""PhaseSpace streaming on the lab console.
+
+Compiling StreamData, starting and stopping it, the UDP monitor that
+decodes its packets for the 3D view, and the marker calibration file.
 
 Part of the SPOT Console (webapp/app.py starts it).
 """
@@ -22,25 +24,31 @@ from .common import ApiError, PHASESPACE_DIR, decode, finite, quote_cmd
 from .events import hub, run_logged, run_quiet, settings
 
 
-PLATFORM_DIR = "linux-" + platform.machine()  # builds go into <output folder>/linux-x86_64, linux-aarch64, ...
+# StreamData and its packets
 
+# Builds go into <output folder>/linux-x86_64, linux-aarch64, ...
+PLATFORM_DIR = "linux-" + platform.machine()
 
 EXE_NAME = "StreamData"
 
-# UDP packet layout, see StreamData.cc. Positions arrive in mm and are sent to the browser in m.
-
-
+# UDP packet layout, see StreamData.cc. Positions arrive in mm and are
+# sent to the browser in m.
 NUM_RIGID_FIELDS = 19
 
-
+# (platform, index of its x, index of its vx) in a packet.
 CRAFTS = (("RED", 1, 10), ("BLACK", 4, 13), ("BLUE", 7, 16))
-
 
 RESERVED_PORTS = (31534, 31535)  # SPOT client port and StreamData's own port
 
+TOOL_TIMEOUT = 10          # [s] for wslinfo, cmd.exe and wslpath
+STOP_TIMEOUT = 5           # [s] for StreamData to exit after Ctrl-C
+RECEIVE_BUFFER = 1 << 20   # [bytes] about 2 s of packets at 960 Hz
+BROADCAST_RATE = 60        # [Hz] frames to the browsers, at most
+STATUS_PERIOD = 2          # [s] monitor status heartbeat
+
 
 def read_base_destinations():
-    """The fixed client_addresses list in StreamData.cc (always sent to)."""
+    """Return StreamData.cc's fixed client_addresses list."""
     try:
         src = (PHASESPACE_DIR / "StreamData.cc").read_text(encoding="utf-8-sig", errors="replace")
     except OSError:
@@ -50,7 +58,14 @@ def read_base_destinations():
 
 
 def read_led_owner():
-    """Which rigid body each LED id belongs to, read from the assignMarker calls in StreamData.cc."""
+    """Return which rigid body each LED id belongs to.
+
+    Read from the assignMarker calls in StreamData.cc (commented-out
+    lines skipped).
+
+    Returns:
+        {LED id: "RED", "BLACK" or "BLUE"}.
+    """
     try:
         src = (PHASESPACE_DIR / "StreamData.cc").read_text(encoding="utf-8-sig", errors="replace")
     except OSError:
@@ -65,22 +80,31 @@ def read_led_owner():
     return owner
 
 
-# --------------------------------------------------------------------------- compilers
+# Compilers
 
 
 def detect_wsl():
-    """None outside WSL, else {"version": 1 or 2, "networking": "nat", "mirrored", "shared" or "unknown"}."""
+    """Return whether this is WSL, and which kind.
+
+    Returns:
+        None outside WSL, else {"version": 1 or 2, "networking":
+        "nat", "mirrored", "shared" or "unknown"}.
+    """
     try:
         release = Path("/proc/sys/kernel/osrelease").read_text().lower()
     except OSError:
         return None
     if "microsoft" not in release:
         return None
+
+    # WSL 1 uses Windows' own network stack.
     if "wsl2" not in release and "microsoft-standard" not in release:
-        return {"version": 1, "networking": "shared"}  # WSL 1 uses Windows' own network stack
+        return {"version": 1, "networking": "shared"}
+
+    # WSL 2: its networking mode, if wslinfo can tell.
     mode = "unknown"
     if shutil.which("wslinfo"):
-        rc, out = run_quiet(["wslinfo", "--networking-mode"], timeout=10)
+        rc, out = run_quiet(["wslinfo", "--networking-mode"], timeout=TOOL_TIMEOUT)
         if rc == 0 and out.strip():
             mode = out.strip().splitlines()[-1].strip().lower()
     return {"version": 2, "networking": mode}
@@ -90,18 +114,30 @@ WSL_INFO = detect_wsl()
 
 
 def windows_home():
-    """The Windows user folder as a WSL path (e.g. /mnt/c/Users/name), or None."""
+    """Return the Windows user folder as a WSL path, or None.
+
+    For example /mnt/c/Users/name.
+    """
     if not WSL_INFO or not shutil.which("cmd.exe"):
         return None
-    rc, out = run_quiet(["cmd.exe", "/c", "echo %USERPROFILE%"], timeout=10, cwd="/mnt/c")
-    lines = [l.strip() for l in out.splitlines() if l.strip()]
+
+    # %USERPROFILE% from Windows, then converted by wslpath.
+    rc, out = run_quiet(["cmd.exe", "/c", "echo %USERPROFILE%"], timeout=TOOL_TIMEOUT,
+                        cwd="/mnt/c")
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
     if rc != 0 or not lines or "%" in lines[-1]:
         return None
-    rc, out = run_quiet(["wslpath", "-u", lines[-1]], timeout=10)
+    rc, out = run_quiet(["wslpath", "-u", lines[-1]], timeout=TOOL_TIMEOUT)
     return out.strip() if rc == 0 and out.strip() else None
 
 
 def detect_linux():
+    """Return whether g++ and make are installed, and their version.
+
+    Returns:
+        {"available": True, "via", "make"}, or {"available": False,
+        "reason"} with how to install them.
+    """
     cxx = shutil.which("g++")
     make = shutil.which("make")
     missing = [n for n, p in (("g++", cxx), ("make", make)) if not p]
@@ -109,27 +145,31 @@ def detect_linux():
         how = ("Install with \"sudo apt install g++ make\" in WSL"
                if WSL_INFO else "Install with \"sudo apt install g++ make\" (Ubuntu) or "
                "\"sudo dnf install gcc-c++ make\" (Fedora)")
-        return {"available": False, "reason": "Missing %s. %s, then click Re-check." % (", ".join(missing), how)}
+        return {"available": False,
+                "reason": "Missing %s. %s, then click Re-check." % (", ".join(missing), how)}
     rc, out = run_quiet([cxx, "--version"])
     version = out.splitlines()[0] if rc == 0 and out else "g++"
     return {"available": True, "via": "%s (%s)" % (version, platform.machine()), "make": make}
 
 
 class Toolchains:
-    """Compiler detection runs in the background (starting WSL can take a while)."""
+    """Compiler detection, in the background (WSL starts slowly)."""
 
     def __init__(self):
+        """Start with nothing detected yet."""
         self._lock = threading.Lock()
         self._result = None
         self._checking = False
 
     def get(self):
+        """Return the last result, or {"checking": True}."""
         with self._lock:
             if self._result is not None:
                 return dict(self._result, checking=self._checking)
         return {"checking": True}
 
     def refresh(self):
+        """Detect the compilers again, unless already doing so."""
         with self._lock:
             if self._checking:
                 return
@@ -138,6 +178,7 @@ class Toolchains:
         threading.Thread(target=self._detect, daemon=True).start()
 
     def _detect(self):
+        """Detect and publish the result."""
         result = {"linux": detect_linux()}
         with self._lock:
             self._result = result
@@ -149,16 +190,26 @@ toolchains = Toolchains()
 
 
 class Builder:
+    """Compiles StreamData with make, one build at a time."""
+
     def __init__(self):
+        """Start with no build."""
         self._lock = threading.Lock()
         self.running = False
         self.last = None
 
     def status(self):
+        """Return whether a build runs, and the last one's result."""
         with self._lock:
             return {"running": self.running, "last": self.last}
 
     def start(self):
+        """Start a build in the background.
+
+        Raises:
+            ApiError: if the compilers are still being detected or are
+                missing, or a build is already running.
+        """
         tc = toolchains.get().get("linux")
         if tc is None:
             raise ApiError("Still checking which compilers are installed; try again in a moment.")
@@ -173,38 +224,53 @@ class Builder:
         hub.publish("build_status", self.status())
 
     def _run(self, tc, out_dir):
+        """Build, log the result and publish it."""
         t0 = time.time()
         hub.log("build", "=== Compiling StreamData into %s ===" % out_dir)
+
+        # Report anything unexpected in the log instead of losing it.
         ok = False
         try:
             out_dir.mkdir(parents=True, exist_ok=True)
             ok = self._make_build(tc, out_dir)
-        except Exception as e:  # report anything unexpected in the log instead of losing it
+        except Exception as e:
             hub.log("build", "Build error: %s" % e)
+
+        # Succeeded only if the executable is there.
         exe = out_dir / EXE_NAME
         ok = ok and exe.exists()
         seconds = round(time.time() - t0, 1)
-        hub.log("build", "=== %s (%.1f s) ===" % ("Build succeeded: %s" % exe if ok else "Build FAILED", seconds))
+        hub.log("build", "=== %s (%.1f s) ==="
+                % ("Build succeeded: %s" % exe if ok else "Build FAILED", seconds))
         with self._lock:
             self.running = False
-            self.last = {"ok": ok, "finished": time.time(), "seconds": seconds, "out_dir": str(out_dir)}
+            self.last = {"ok": ok, "finished": time.time(), "seconds": seconds,
+                         "out_dir": str(out_dir)}
         hub.publish("build_status", self.status())
         hub.publish("stream_status", streamer.status())  # the executable may now exist
 
     def _make_build(self, tc, out_dir):
-        # The Makefile keeps object files in ~/.cache, so only changed files are recompiled
+        """Run make; return whether it succeeded.
+
+        The Makefile keeps object files in ~/.cache, so only changed
+        files are recompiled.
+        """
         jobs = str(os.cpu_count() or 1)
-        return run_logged([tc["make"], "-C", PHASESPACE_DIR, "-j", jobs, "OUT=" + str(out_dir)], "build") == 0
+        return run_logged([tc["make"], "-C", PHASESPACE_DIR, "-j", jobs, "OUT=" + str(out_dir)],
+                          "build") == 0
 
 
 builder = Builder()
 
 
-# --------------------------------------------------------------------------- streaming
+# Streaming
 
 
 class Streamer:
+    """Runs StreamData: start, stop, its output and live commands."""
+
     def __init__(self):
+        """Start with nothing running."""
         self._lock = threading.Lock()
         self.proc = None
         self.started = None
@@ -215,46 +281,77 @@ class Streamer:
         self.stopped_by = None
 
     def exe_path(self):
+        """Return where the build for this computer is."""
         return Path(settings.get("output_dir")) / PLATFORM_DIR / EXE_NAME
 
     def status(self):
+        """Return whether it streams, since when, how fast, by whom."""
         exe = self.exe_path()
         with self._lock:
-            return {"running": self.proc is not None, "pid": self.proc.pid if self.proc else None,
-                    "started": self.started, "frequency": self.frequency, "last_exit": self.last_exit,
-                    "started_by": self.started_by, "stopped": self.stopped, "stopped_by": self.stopped_by,
+            return {"running": self.proc is not None,
+                    "pid": self.proc.pid if self.proc else None,
+                    "started": self.started, "frequency": self.frequency,
+                    "last_exit": self.last_exit, "started_by": self.started_by,
+                    "stopped": self.stopped, "stopped_by": self.stopped_by,
                     "exe": str(exe), "exe_exists": exe.exists()}
 
     def start(self, frequency, requester):
+        """Start streaming at a rate.
+
+        A repeated start at the same rate is fine.
+
+        Args:
+            frequency: The camera rate [Hz].
+            requester: Who asked.
+
+        Raises:
+            ApiError: if there is no build, it streams at another rate
+                already, or it can't be started.
+        """
         exe = self.exe_path()
         if not exe.exists():
             raise ApiError("No build found at %s. Compile StreamData first." % exe)
+
+        # The monitor listens for StreamData's local copy of packets.
         port = settings.get("monitor_port")
         monitor.ensure(port)
-        cmd = [str(exe), str(frequency), str(port)] + (["--udp"] if settings.get("transport") == "udp" else [])
+
+        # StreamData <frequency> <monitor port> [--udp] [--dest <ip>]...
+        cmd = [str(exe), str(frequency), str(port)] + (
+            ["--udp"] if settings.get("transport") == "udp" else [])
         for ip in settings.get("extra_destinations"):
             cmd += ["--dest", ip]
+
         with self._lock:
             if self.proc is not None:
                 if self.frequency == frequency:
-                    return  # already streaming at this rate, so a repeated start is fine
-                raise ApiError("Already streaming at %s Hz; stop it first to change to %s Hz." % (self.frequency, frequency))
+                    return
+                raise ApiError("Already streaming at %s Hz; stop it first to change to %s Hz."
+                               % (self.frequency, frequency))
             hub.log("stream", "=== Start requested by %s ===" % requester)
             hub.log("stream", "=== Starting: %s (in %s) ===" % (quote_cmd(cmd), exe.parent))
+
+            # In its own folder, so tracker_positions_phasespace.txt is
+            # read from there; stdin stays open so destinations can be
+            # added or removed while streaming.
             try:
-                # Runs in its own folder, so tracker_positions_phasespace.txt is read from there
-                # stdin stays open so destinations can be added/removed while streaming
                 proc = subprocess.Popen(cmd, cwd=str(exe.parent), stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, stdin=subprocess.PIPE)
             except OSError as e:
                 raise ApiError("Could not start %s: %s" % (exe, e))
-            self.proc, self.started, self.frequency, self.last_exit = proc, time.time(), frequency, None
+            self.proc, self.started, self.frequency, self.last_exit = (
+                proc, time.time(), frequency, None)
             self.started_by, self.stopped, self.stopped_by = requester, None, None
         threading.Thread(target=self._pump, args=(proc,), daemon=True).start()
         hub.publish("stream_status", self.status())
 
     def command(self, line):
-        """Send a command line to the running StreamData (e.g. "dest add 192.168.1.43")."""
+        """Send a command line to the running StreamData.
+
+        For example "dest add 192.168.1.43". Ignored if it isn't
+        running, or is exiting (the next start uses the saved list
+        anyway).
+        """
         with self._lock:
             proc = self.proc
             if proc is None:
@@ -263,9 +360,10 @@ class Streamer:
                 proc.stdin.write((line + "\n").encode())
                 proc.stdin.flush()
             except OSError:
-                pass  # it is exiting; the next start uses the saved list anyway
+                pass
 
     def _pump(self, proc):
+        """Log StreamData's output until it exits; record the exit."""
         for raw in proc.stdout:
             hub.log("stream", decode(raw))
         rc = proc.wait()
@@ -281,6 +379,7 @@ class Streamer:
         hub.publish("stream_status", self.status())
 
     def stop(self, requester):
+        """Stop streaming: Ctrl-C, then kill after STOP_TIMEOUT."""
         with self._lock:
             proc = self.proc
             if proc is not None:
@@ -288,16 +387,20 @@ class Streamer:
         if proc is None:
             return
         hub.log("stream", "=== Stop requested by %s ===" % requester)
+
+        # SIGINT: StreamData closes the PhaseSpace connection cleanly.
         try:
-            proc.send_signal(signal.SIGINT)  # StreamData closes the PhaseSpace connection cleanly
+            proc.send_signal(signal.SIGINT)
         except OSError:
             pass
         try:
-            proc.wait(timeout=5)
+            proc.wait(timeout=STOP_TIMEOUT)
         except subprocess.TimeoutExpired:
             hub.log("stream", "StreamData did not stop within 5 s; killing it.")
             proc.kill()
-        # Wait (briefly) for the output thread to record the exit, so the reply already says "stopped"
+
+        # Wait (briefly) for the output thread to record the exit, so
+        # the reply already says "stopped".
         for _ in range(50):
             with self._lock:
                 if self.proc is not proc:
@@ -308,32 +411,48 @@ class Streamer:
 streamer = Streamer()
 
 
-# --------------------------------------------------------------------------- UDP monitor
+# UDP monitor
 
 
 def parse_packet(data):
+    """Decode one StreamData packet.
+
+    Returns:
+        {"t", "crafts": {NAME: {"tracked", "x", "y", "att", "vx", "vy",
+        "w"}} [m, rad], "leds": [[id, x, y, z]] [m], "values"}; None
+        if the packet is too short.
+    """
     n = len(data) // 4
     if n < NUM_RIGID_FIELDS:
         return None
-    p = struct.unpack("<%df" % n, data[:4 * n])
+    values = struct.unpack("<%df" % n, data[:4 * n])
+
+    # Each platform; all zero until PhaseSpace first sees it.
     crafts = {}
     for name, pos, vel in CRAFTS:
-        x, y, att = p[pos:pos + 3]
+        x, y, att = values[pos:pos + 3]
         crafts[name] = {
-            "tracked": not (x == 0 and y == 0 and att == 0),  # all zero until first seen
+            "tracked": not (x == 0 and y == 0 and att == 0),
             "x": finite(x / 1000), "y": finite(y / 1000), "att": finite(att),
-            "vx": finite(p[vel] / 1000), "vy": finite(p[vel + 1] / 1000), "w": finite(p[vel + 2]),
+            "vx": finite(values[vel] / 1000), "vy": finite(values[vel + 1] / 1000),
+            "w": finite(values[vel + 2]),
         }
-    leds = [[k, p[i] / 1000, p[i + 1] / 1000, p[i + 2] / 1000]
+
+    # The LEDs seen (finite positions), after the rigid-body fields.
+    leds = [[k, values[i] / 1000, values[i + 1] / 1000, values[i + 2] / 1000]
             for k, i in enumerate(range(NUM_RIGID_FIELDS, n - 2, 3))
-            if all(math.isfinite(v) for v in p[i:i + 3])]
-    return {"t": finite(p[0]), "crafts": crafts, "leds": leds, "values": n}
+            if all(math.isfinite(v) for v in values[i:i + 3])]
+    return {"t": finite(values[0]), "crafts": crafts, "leds": leds, "values": n}
 
 
 class Monitor:
-    """Receives StreamData's local copy of each packet on 127.0.0.1:<monitor_port>."""
+    """Receives StreamData's local copy of each packet.
+
+    On 127.0.0.1:<monitor_port>.
+    """
 
     def __init__(self):
+        """Start without listening."""
         self._lock = threading.Lock()
         self._sock = None
         self._stop = None
@@ -345,37 +464,54 @@ class Monitor:
         self.rate = 0
         self.last_time = None
         self.sender = None
-        self.listeners = []   # called with every frame, in this thread (keep them short): calibration.py
+        # Called with every frame, in this thread (keep them short):
+        # calibration.py.
+        self.listeners = []
 
     def add_listener(self, fn):
+        """Call fn(frame) for every frame."""
         with self._lock:
             self.listeners = self.listeners + [fn]
 
     def remove_listener(self, fn):
+        """Stop calling fn.
+
+        Compared with != rather than "is not": each obj.method gives a
+        new bound-method object, equal to the earlier one.
+        """
         with self._lock:
-            self.listeners = [f for f in self.listeners if f is not fn]
+            self.listeners = [f for f in self.listeners if f != fn]
 
     def status(self):
+        """Return the port, whether it listens, and the packet rate."""
         with self._lock:
             return {"port": self.port, "listening": self._sock is not None, "error": self.error,
                     "count": self.count, "rate": self.rate, "last_time": self.last_time}
 
     def ensure(self, port):
+        """Listen on a port (a no-op if already listening there).
+
+        A port that can't be bound is reported in status()["error"].
+        """
         with self._lock:
             if port == self.port and self._sock is not None:
                 return
+
+            # Stop the old listener.
             if self._stop:
                 self._stop.set()
             self._sock, self._stop, self.port, self.error = None, None, port, None
+
+            # Room for ~2 s of packets at 960 Hz, in case this thread
+            # is briefly busy.
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            # Room for ~2 s of packets at 960 Hz, in case this thread is briefly busy
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1 << 20)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, RECEIVE_BUFFER)
             try:
                 sock.bind(("127.0.0.1", port))
             except OSError as e:
                 sock.close()
-                self.error = "Cannot listen on UDP port %d (%s). Is another program (or another copy of " \
-                             "this app) using it?" % (port, e)
+                self.error = ("Cannot listen on UDP port %d (%s). Is another program (or another "
+                              "copy of this app) using it?" % (port, e))
             else:
                 sock.settimeout(0.5)
                 self._sock, self._stop = sock, threading.Event()
@@ -383,6 +519,7 @@ class Monitor:
         hub.publish("monitor", self.status())
 
     def _run(self, sock, stop):
+        """Receive and decode packets until stopped; count the rate."""
         arrivals = collections.deque()
         while not stop.is_set():
             try:
@@ -394,10 +531,14 @@ class Monitor:
             frame = parse_packet(data)
             if frame is None:
                 continue
+
+            # Packets in the last second.
             now = time.time()
             arrivals.append(now)
             while arrivals and now - arrivals[0] > 1.0:
                 arrivals.popleft()
+
+            # Keep it as the latest.
             with self._lock:
                 self.count += 1
                 self.rate = len(arrivals)
@@ -407,6 +548,8 @@ class Monitor:
                 self.latest = frame
                 self.seq += 1
                 listeners = self.listeners
+
+            # The listeners; one failing doesn't stop the others.
             for fn in listeners:
                 try:
                     fn(frame)
@@ -419,75 +562,107 @@ monitor = Monitor()
 
 
 def broadcast_loop():
-    """Send the newest frame to the browsers at up to 60 Hz, and a status heartbeat every 2 s."""
+    """Send frames to the browsers forever.
+
+    The newest frame at up to BROADCAST_RATE, and a status heartbeat
+    every STATUS_PERIOD.
+    """
     last_seq, last_status = -1, 0.0
     while True:
-        time.sleep(1 / 60)
+        time.sleep(1 / BROADCAST_RATE)
         with monitor._lock:
             seq, frame = monitor.seq, monitor.latest
         if seq != last_seq and frame is not None:
             last_seq = seq
             hub.publish("frame", frame)
-        if time.time() - last_status > 2:
+        if time.time() - last_status > STATUS_PERIOD:
             last_status = time.time()
             hub.publish("monitor", monitor.status())
 
 
-# Each platform's Teensy (teensy_pwm_control.ino) takes 37-byte packets: 0xAA, then the 8 thruster
-# duty cycles (0-100 %) and the pucks (on if >= 0.5) as little-endian float32. It switches
-# everything off when no packet has arrived for 2 s, so whatever is on is re-sent every
-# HW_SEND_PERIOD; if this app or the network stops, the platform shuts down by itself.
+# Requests
 
 
 def parse_frequency(value):
+    """Return a camera rate from a request.
+
+    Raises:
+        ApiError: if it isn't a whole number of Hz from 1 to 960.
+    """
     try:
-        f = int(value)
+        frequency = int(value)
     except (TypeError, ValueError):
         raise ApiError("Frequency must be a whole number of Hz.")
-    if not 1 <= f <= 960:
+    if not 1 <= frequency <= 960:
         raise ApiError("Frequency must be between 1 and 960 Hz.")
-    return f
+    return frequency
 
 
 def stream_summary():
-    """Short status for scripts (GET /api/stream): is it streaming, and are packets arriving?"""
-    m = monitor.status()
-    age = time.time() - m["last_time"] if m["last_time"] else None
-    return dict(streamer.status(), packets_per_second=m["rate"],
+    """Return a short status for scripts (GET /api/stream).
+
+    Whether it is streaming, and whether packets are arriving.
+    """
+    mon = monitor.status()
+    age = time.time() - mon["last_time"] if mon["last_time"] else None
+    return dict(streamer.status(), packets_per_second=mon["rate"],
                 seconds_since_last_packet=round(age, 2) if age is not None else None)
 
 
-TRACKER_FILE = "tracker_positions_phasespace.txt"  # marker calibration StreamData reads at start
+# Marker calibration
 
+TRACKER_FILE = "tracker_positions_phasespace.txt"  # read by StreamData at start
 
-TRACKER_LINE = re.compile(r"^(tracker_id_\w+_pos_string),\s*([-+0-9.eE]+),\s*([-+0-9.eE]+),\s*([-+0-9.eE]+)$")
+TRACKER_LINE = re.compile(r"^(tracker_id_\w+_pos_string),\s*([-+0-9.eE]+),\s*([-+0-9.eE]+),"
+                          r"\s*([-+0-9.eE]+)$")
 
 
 def tracker_positions_path():
-    """StreamData reads the calibration from its working folder, which is its own folder."""
+    """Return where StreamData reads the calibration: its own folder."""
     return streamer.exe_path().parent / TRACKER_FILE
 
 
 def save_tracker_positions(text, requester):
-    """Store a marker calibration file (sent by the SPOT GUI before it starts streaming)."""
+    """Store a marker calibration file.
+
+    Sent by the SPOT GUI before it starts streaming. Written only if it
+    changed; it takes effect the next time streaming starts.
+
+    Args:
+        text: The file's contents.
+        requester: Who sent it.
+
+    Returns:
+        {"path", "markers", "changed", "note"}.
+
+    Raises:
+        ApiError: if a line isn't a marker calibration line.
+    """
     if not isinstance(text, str) or not text.strip():
         raise ApiError("Send the calibration file's contents as \"text\".")
-    lines = [l.strip() for l in text.replace("\r", "").split("\n") if l.strip()]
+
+    # Every line: tracker_id_..._pos_string,x,y,z.
+    lines = [line.strip() for line in text.replace("\r", "").split("\n") if line.strip()]
     for line in lines:
         m = TRACKER_LINE.match(line)
         if not m:
-            raise ApiError("Not a marker calibration line: %r (expected tracker_id_..._pos_string,x,y,z)." % line)
+            raise ApiError("Not a marker calibration line: %r "
+                           "(expected tracker_id_..._pos_string,x,y,z)." % line)
         try:
             [float(v) for v in m.groups()[1:]]
         except ValueError:
             raise ApiError("Bad number in calibration line: %r" % line)
+
+    # Write it if it changed.
     path = tracker_positions_path()
     new = "\n".join(lines) + "\n"
     old = path.read_text(encoding="utf-8") if path.exists() else None
     if new != old:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(new, encoding="utf-8")
-        hub.log("stream", "=== Marker calibration updated by %s (%d markers) ===" % (requester, len(lines)))
+        hub.log("stream", "=== Marker calibration updated by %s (%d markers) ==="
+                % (requester, len(lines)))
     running = streamer.status()["running"]
     return {"path": str(path), "markers": len(lines), "changed": new != old,
-            "note": "takes effect the next time streaming starts" if (running and new != old) else None}
+            "note": "takes effect the next time streaming starts"
+                    if (running and new != old) else None}

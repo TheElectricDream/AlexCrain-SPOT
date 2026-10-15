@@ -38,6 +38,7 @@ current 3.36 mA, PWM 885 = 100 %. Torque = Kt x current, Kt from the datasheet (
 """
 
 import argparse
+import collections
 import csv
 import datetime
 import json
@@ -65,6 +66,10 @@ MODE_CURRENT, MODE_VELOCITY, MODE_POSITION = 0, 1, 3
 PULSES = 4096 / (2 * math.pi)        # per rad
 VEL_UNIT = 0.229 * 2 * math.pi / 60  # rad/s per unit
 CUR_UNIT = 3.36e-3                   # A per unit
+# The sweep's steadiness test: the speed averaged over this long [s], from the position (a pulse is 0.0015 rad),
+# not the servo's present velocity, which comes in whole units of 0.024 rad/s and, at the slowest speeds of a
+# few units, flickers by one unit either way (the servo's own speed loop, and a little stick-slip)
+STEADY_WINDOW = 0.5
 MODELS = {311: "MX-64(2.0)", 321: "MX-106(2.0)", 30: "MX-28(2.0)", 1020: "XM430-W350", 1120: "XM540-W270"}
 KT = {311: 6.0 / 4.1, 321: 8.4 / 5.2}  # N m/A at the joint, datasheet stall torque / stall current at 12 V
 NAMES = {1: "shoulder", 2: "elbow", 3: "wrist"}
@@ -431,16 +436,24 @@ def test_sweep(arm, i, out):
             v = sign * units * VEL_UNIT
             bus.write(i, "goal_velocity", sign * units)
             t_start, steady, samples = bus.now(), None, []
+            recent = collections.deque()   # (t, position) over the last STEADY_WINDOW s
             while True:
                 s = bus.state()[i]
                 arm.guard(i, s)
+                now = bus.now()
                 rows.append([arm.t(), sign * units, v, s[2], s[3], s[4]])
-                if (sign > 0 and s[4] >= hi) or (sign < 0 and s[4] <= lo) or bus.now() - t_start > a.pass_time:
+                if (sign > 0 and s[4] >= hi) or (sign < 0 and s[4] <= lo) or now - t_start > a.pass_time:
                     break
-                if abs(s[3] - v) <= max(0.15 * abs(v), 0.5 * VEL_UNIT):   # sliding at the speed (not stuck, not slipping)
-                    steady = steady or bus.now()
-                    if bus.now() - steady > 0.3:
-                        samples.append((s[2], s[3]))
+                recent.append((now, s[4]))
+                while now - recent[0][0] > STEADY_WINDOW:
+                    recent.popleft()
+                if now - recent[0][0] < 0.8 * STEADY_WINDOW:
+                    continue
+                speed = (s[4] - recent[0][1]) / (now - recent[0][0])   # the mean speed over the window
+                if abs(speed - v) <= max(0.15 * abs(v), 0.25 * VEL_UNIT):   # sliding at the speed (not stuck, not slipping)
+                    steady = steady or now
+                    if now - steady > 0.3:
+                        samples.append((s[2], speed))
                 else:
                     steady = None
             if len(samples) >= 10:
@@ -448,7 +461,10 @@ def test_sweep(arm, i, out):
                                    samples=len(samples)))
                 print("    %+.3f rad/s: %.0f mA over %d samples" % (v, 1e3 * points[-1]["current"], len(samples)))
             else:
-                print("    %+.3f rad/s: not steady long enough (raise --window or --pass-time)" % v)
+                # (slower than the Stribeck speed a joint stick-slips instead of sliding: expected at the slowest
+                # speeds, and the fit allows for it; at faster ones the pass may be too short for the window)
+                print("    %+.3f rad/s: not steady, left out (the joint stick-slips this slowly; at faster speeds raise "
+                      "--window or --pass-time)" % v)
             bus.write(i, "goal_velocity", 0)
             bus.sleep(0.3)
             if sign > 0:
@@ -538,6 +554,20 @@ def fit_joint(out, i, kt):
     path = os.path.join(out, "sweep_points_j%d.json" % i)
     if os.path.exists(path):
         pts = [x for x in json.load(open(path)) if abs(x["velocity"]) >= 0.5 * abs(x["command"]) > 0]   # steady sliding only
+        # Friction opposes the motion, so at a steady speed the motor pushes along it: the torque along the motion
+        # (the current's sign against the speed's, not its size alone). A point where the current opposes the
+        # motion can't be friction (the servo's current reading at speed, or something else driving the joint):
+        # left out, and counted
+        along = [(abs(x["velocity"]), kt * x["current"] * (1 if x["velocity"] > 0 else -1)) for x in pts]
+        dropped = [round(math.copysign(v, x["velocity"]), 3) for (v, t), x in zip(along, pts) if t <= 0]
+        if len(dropped) * 3 >= len(pts):
+            r.setdefault("warnings", []).append("friction against speed: " + "%d of %d speeds had the current opposing the "
+                                                "motion" % (len(dropped), len(pts)))
+        if dropped:
+            r["sweep_dropped"] = dropped
+            r["sweep_note"] = ("%d of %d speeds left out: the current there opposed the motion (%s rad/s), which friction can't "
+                               "do" % (len(dropped), len(pts), ", ".join("%+.3f" % d for d in dropped)))
+        pts = [x for (v, t), x in zip(along, pts) if t > 0]
         if len(pts) >= 3:
             v = [abs(p["velocity"]) for p in pts]
             tau = [kt * abs(p["current"]) for p in pts]
@@ -565,6 +595,12 @@ def fit_joint(out, i, kt):
                     best = (rms, tc, ts, vs, b)
             if best:
                 r.update(coulomb=best[1], stribeck=best[3], viscous=best[4], sweep_rms=best[0])
+                if best[0] > max(best[1], 0.01):
+                    r.setdefault("warnings", []).append(
+                        "friction against speed: the points scatter by %.3f N m about the fit, more than the sliding "
+                        "friction it finds (%.3f N m): too little friction for the servo's current reading to show, or "
+                        "something else loading the joint; don't rely on the Coulomb, Stribeck and viscous terms"
+                        % (best[0], best[1]))
                 if static is None:
                     r["static"] = best[2]
                 # Below the slowest steady speed the data can't tell where the drop from static to
@@ -593,8 +629,18 @@ def fit_joint(out, i, kt):
         net = torque - r["coulomb"] - r.get("viscous", 0) * vmean
         if abs(acc) > 1e-3 and net > 0:
             Js.append(net / abs(acc))
+            r["inertia_neg" if "_neg" in f else "inertia_pos"] = net / abs(acc)
     if Js:
         r["inertia"] = median(Js)
+        if len(Js) == 1 and len(files) == 2:
+            r.setdefault("warnings", []).append(
+                "inertia: from the step turning %s only (the other's push didn't exceed the fitted friction): check "
+                "it by hand, torque off" % ("-" if "inertia_neg" in r else "+"))
+        if len(Js) == 2 and max(Js) > 3 * min(Js):
+            r.setdefault("warnings", []).append(
+                "inertia: %.4g kg m^2 turning +, %.4g turning -; a joint's inertia is the same both ways, so something "
+                "loads it one way (a cable dragging or catching?): check it by hand, torque off"
+                % (r["inertia_pos"], r["inertia_neg"]))
         meta = os.path.join(out, "inertia_pose_j%d.json" % i)
         if os.path.exists(meta):
             r["pose"] = json.load(open(meta))

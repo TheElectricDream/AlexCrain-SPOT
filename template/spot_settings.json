@@ -3,7 +3,7 @@
   "diagram": "Template_v5_0_0_2026a_Jetson_PSClock.slx",
   "platforms": {
     "RED": true,
-    "BLACK": true,
+    "BLACK": false,
     "BLUE": true,
     "ARM": true
   },
@@ -48,8 +48,8 @@
   "initial": {
     "RED": {
       "initial": [
-        2.914,
-        0.412,
+        2.505,
+        1.415,
         93.9
       ],
       "home": [
@@ -150,7 +150,7 @@
       "IDIST": 0.003506,
       "IEE": 0.000106,
       "mount": {
-        "face": "+y",
+        "face": "-y",
         "side": "left"
       }
     }
@@ -164,6 +164,11 @@
     "RED": 0.2825,
     "BLACK": 0.2825,
     "BLUE": 0.2825
+  },
+  "thrusterDecay": {
+    "RED": 0.112,
+    "BLACK": 0.112,
+    "BLUE": 0.112
   },
   "control": {
     "RED": {

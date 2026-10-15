@@ -1,0 +1,19 @@
+# systemd user service: SPOT Vision (the Orin's cameras for the lab console's Vision tab) at boot on port 8090.
+# Installed by +spot/+console/deploy/deploy_orin.sh into ~/.config/systemd/user/ ("loginctl enable-linger"
+# makes it start without anyone logging in). @REALSENSE_PYTHON@ and @DVS_PYTHON@ are filled in by the deploy script.
+#   systemctl --user status spot-vision
+#   journalctl --user -u spot-vision -f      (live log, with the camera SDKs' messages)
+
+[Unit]
+Description=SPOT Vision (the Orin's cameras, port 8090)
+
+[Service]
+WorkingDirectory=%h/spot_vision
+ExecStart=/usr/bin/python3 %h/spot_vision/spot_vision.py --port 8090 --realsense-python @REALSENSE_PYTHON@ --dvs-python @DVS_PYTHON@
+Environment=PYTHONUNBUFFERED=1
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

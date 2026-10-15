@@ -2,7 +2,7 @@
 %
 %   apply             - Put the settings into the base workspace, as the Simulink diagrams expect them.
 %   defaults          - Default SPOT settings.
-%   fromLegacyState   - Convert a GUI state file saved by the old SPOT GUI (Save GUI State) to settings.
+%   fromLegacyState   - Convert the old SPOT GUI's saved state (Save GUI State) to settings.
 %   load              - Read settings from a JSON file, filling anything missing with the defaults.
 %   loadCalibration   - The project's calibration of the lab (resources/spot_calibration.json).
 %   merge             - Copy the fields of CHANGES over BASE, recursing into structs.

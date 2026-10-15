@@ -4,7 +4,7 @@
     "RED": {
       "dock": {
         "type": "arm",
-        "face": "+y",
+        "face": "-y",
         "side": "left"
       },
       "solar": {

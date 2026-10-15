@@ -1,5 +1,7 @@
-"""The local console (started by SPOT in MATLAB): the bridge to the user's MATLAB worker, the
-simulation and build runners, and the link to the lab console (TX2).
+"""The local console (started by SPOT in MATLAB).
+
+The bridge to the user's MATLAB worker, the simulation and build
+runners, and the link to the lab console (TX2).
 
 Part of the SPOT Console (webapp/app.py starts it).
 """
@@ -22,27 +24,49 @@ from .experiment import NAME_RE
 
 LOCAL = {"enabled": False, "token": "", "root": None, "ready_file": None, "server": None}
 
-# Commands the page may send, and how long each may take (seconds; None = no limit)
-
-
+# Commands the page may send, and how long each may take (seconds;
+# None = no limit).
 MATLAB_COMMANDS = {
     "ping": 10, "info": 10, "settings.get": 120, "settings.set": 120, "settings.reset": 120,
     "settings.open": 900, "settings.saveAs": 900, "diagram.open": 120, "diagram.showBlock": 120,
     "massprops.writeTracker": 30,
     "workspace.list": 60, "workspace.inspect": 60, "workspace.eval": None,
     "experiment.plan": 120, "experiment.connect": 600, "experiment.decode": 900,
-    # Results page: Saved Data, loaded datasets, plots and 3D playback (data.load may open a dialog)
-    "data.list": 120, "data.load": 900, "data.unload": 30, "data.series": 300, "data.trajectory": 300,
-    "data.saveSimulation": 120, "data.figure": 900,
+    # Results page: Saved Data, loaded datasets, plots and 3D playback
+    # (data.load may open a dialog).
+    "data.list": 120, "data.load": 900, "data.unload": 30, "data.series": 300,
+    "data.trajectory": 300, "data.saveSimulation": 120, "data.figure": 900,
 }
+
+HELLO_TIMEOUT = 10         # [s] for the worker's hello
+LOG_TAIL = 300             # build log lines kept for a page opened later
+LOG_POLL = 0.5             # [s] between reads of the build log
+LAB_EVENTS_TIMEOUT = 40    # [s] reading the lab console's event stream
+LAB_STATE_TIMEOUT = 4      # [s] for its snapshot
+LAB_RETRY = 3              # [s] between attempts to reach it
+FRAME_RATE = 30            # [Hz] lab frames passed on to the page, at most
 
 
 def check_token(value):
+    """Return whether value is the session's token (constant time)."""
     return bool(LOCAL["token"]) and hmac.compare_digest(str(value or ""), LOCAL["token"])
 
 
+# The MATLAB worker
+#
+# In local mode (app.py --local, started by SPOT.m in MATLAB) the
+# Simulation tab runs its commands in the user's MATLAB session: the
+# MATLAB worker (+spot/+worker/Worker.m) connects to 127.0.0.1:<worker
+# port>, proves it was started with this server's token, and then
+# answers one JSON command per line. MATLAB runs one command at a time,
+# so requests are sent one at a time.
+
+
 class MatlabBridge:
+    """The connection to the MATLAB worker, and its commands."""
+
     def __init__(self):
+        """Start without a connection."""
         self._lock = threading.Lock()        # one command at a time
         self._state = threading.Lock()
         self._conn = None
@@ -55,32 +79,47 @@ class MatlabBridge:
         self.port = None
 
     def status(self):
+        """Return whether MATLAB is connected and what it is doing."""
         with self._state:
-            return {"connected": self._conn is not None, "info": self.info, "since": self.connected_at,
+            return {"connected": self._conn is not None, "info": self.info,
+                    "since": self.connected_at,
                     "busy": dict(self.busy) if self.busy else None}
 
     def _publish(self):
+        """Send the status to the pages."""
         hub.publish("matlab", self.status())
 
     def listen(self, port):
+        """Listen for the worker on 127.0.0.1 (this computer only).
+
+        Args:
+            port: The port; 0 to pick a free one.
+
+        Returns:
+            The port listened on.
+        """
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind(("127.0.0.1", port))   # this computer only
+        srv.bind(("127.0.0.1", port))
         srv.listen(2)
         self.port = srv.getsockname()[1]
         threading.Thread(target=self._accept_loop, args=(srv,), daemon=True).start()
         return self.port
 
     def _accept_loop(self, srv):
+        """Serve each connection in a thread of its own, forever."""
         while True:
             conn, _ = srv.accept()
             threading.Thread(target=self._serve, args=(conn,), daemon=True).start()
 
     def _serve(self, conn):
-        f = conn.makefile("rb")
+        """Serve one worker connection until it closes."""
+        reader = conn.makefile("rb")
+
+        # The hello, with this session's token.
         try:
-            conn.settimeout(10)
-            hello = json.loads(f.readline().decode("utf-8") or "{}")
+            conn.settimeout(HELLO_TIMEOUT)
+            hello = json.loads(reader.readline().decode("utf-8") or "{}")
             if hello.get("hello") != "spot-worker" or not check_token(hello.get("token")):
                 conn.close()
                 return
@@ -88,19 +127,26 @@ class MatlabBridge:
         except (OSError, ValueError):
             conn.close()
             return
+
+        # A new MATLAB session replaces the old one.
         with self._state:
             old = self._conn
-            self._conn, self._file, self.info, self.connected_at = conn, f, hello.get("info"), time.time()
+            self._conn, self._file, self.info, self.connected_at = (conn, reader,
+                                                                     hello.get("info"),
+                                                                     time.time())
             self.busy = None
-        if old is not None:   # a new MATLAB session replaces the old one
+        if old is not None:
             try:
                 old.close()
             except OSError:
                 pass
-        hub.log("matlab", "MATLAB %s connected (%s)" % ((self.info or {}).get("release", "?"), (self.info or {}).get("root", "")))
+        hub.log("matlab", "MATLAB %s connected (%s)" % ((self.info or {}).get("release", "?"),
+                                                         (self.info or {}).get("root", "")))
         self._publish()
+
+        # Each line: an event MATLAB pushes, or a reply to a command.
         try:
-            for raw in f:
+            for raw in reader:
                 try:
                     text = raw.decode("utf-8")
                 except UnicodeDecodeError:
@@ -110,7 +156,7 @@ class MatlabBridge:
                 except ValueError:
                     hub.log("matlab", "Unreadable message from MATLAB: %s" % text[:200])
                     continue
-                if "event" in msg:   # pushed by MATLAB, e.g. simulation progress
+                if "event" in msg:   # e.g. simulation progress
                     hub.publish("matlab_event", msg)
                     continue
                 with self._state:
@@ -120,6 +166,8 @@ class MatlabBridge:
                     waiter[0].set()
         except OSError:
             pass
+
+        # Closed: fail the commands still waiting (unless replaced).
         with self._state:
             if self._conn is not conn:
                 return
@@ -132,28 +180,47 @@ class MatlabBridge:
         self._publish()
 
     def _long_running(self):
+        """Return whether MATLAB is busy with a long command."""
         busy = self.busy
-        return bool(busy) and busy.get("cmd") in ("sim.run", "experiment.build", "experiment.decode", "workspace.eval")
+        return bool(busy) and busy.get("cmd") in ("sim.run", "experiment.build",
+                                                  "experiment.decode", "workspace.eval")
 
     def request(self, cmd, args=None, timeout=60):
-        # A quick command (settings, a plot) finishes within seconds: wait for it; a simulation doesn't
+        """Run a command in MATLAB and return its result.
+
+        Args:
+            cmd: The command (see MATLAB_COMMANDS).
+            args: Its arguments, a dict.
+            timeout: Seconds to wait for the answer; None for no limit.
+
+        Raises:
+            ApiError: if MATLAB is busy, not connected, doesn't answer,
+                or reports an error (with its details).
+        """
+        # A quick command (settings, a plot) finishes within seconds:
+        # wait for it; a simulation doesn't.
         if not self._lock.acquire(timeout=0.5 if self._long_running() else 6):
             busy = self.busy or {}
             raise ApiError("MATLAB is busy (%s for %d s). Try again when it has finished."
-                           % (busy.get("label", busy.get("cmd", "working")), time.time() - busy.get("since", time.time())))
+                           % (busy.get("label", busy.get("cmd", "working")),
+                              time.time() - busy.get("since", time.time())))
         try:
+            # Register the command, then send it.
             with self._state:
                 conn = self._conn
                 if conn is None:
-                    raise ApiError("MATLAB is not connected. Run SPOT in MATLAB (in this project's folder).")
+                    raise ApiError("MATLAB is not connected. Run SPOT in MATLAB (in this "
+                                   "project's folder).")
                 rid = self._next_id
                 self._next_id += 1
                 waiter = [threading.Event(), None]
                 self._pending[rid] = waiter
-                self.busy = {"cmd": cmd, "since": time.time(), "label": BUSY_LABELS.get(cmd, cmd)}
+                self.busy = {"cmd": cmd, "since": time.time(),
+                             "label": BUSY_LABELS.get(cmd, cmd)}
             self._publish()
             try:
-                conn.sendall((json.dumps({"id": rid, "cmd": cmd, "args": args or {}}) + "\n").encode("utf-8"))
+                conn.sendall((json.dumps({"id": rid, "cmd": cmd, "args": args or {}})
+                              + "\n").encode("utf-8"))
                 if not waiter[0].wait(timeout):
                     raise ApiError("MATLAB did not answer within %d s (%s)." % (timeout, cmd))
             except OSError:
@@ -163,17 +230,26 @@ class MatlabBridge:
                     self._pending.pop(rid, None)
                     self.busy = None
                 self._publish()
+
+            # Its reply.
             reply = waiter[1] or {}
             if not reply.get("ok"):
-                raise ApiError(reply.get("error") or "MATLAB reported an error.", reply.get("details"))
+                raise ApiError(reply.get("error") or "MATLAB reported an error.",
+                               reply.get("details"))
             return reply.get("result")
         finally:
             self._lock.release()
 
-
     def interrupt(self, cmd, timeout=15):
-        """Send a command while another is running (e.g. sim.stop during sim.run). MATLAB handles
-        it when the running command lets callbacks through, as Simulink does while simulating."""
+        """Send a command while another runs (sim.stop during sim.run).
+
+        MATLAB handles it when the running command lets callbacks
+        through, as Simulink does while simulating.
+
+        Raises:
+            ApiError: if MATLAB isn't connected, doesn't respond, or
+                reports an error.
+        """
         with self._state:
             conn = self._conn
             if conn is None:
@@ -197,38 +273,70 @@ class MatlabBridge:
         return reply.get("result")
 
 
-BUSY_LABELS = {"sim.run": "running the simulation", "experiment.build": "building the experiment",
-               "experiment.connect": "connecting to the TX2", "experiment.decode": "converting the data", "workspace.eval": "running a command",
-               "settings.open": "waiting for the file dialog", "settings.saveAs": "waiting for the file dialog",
-               "diagram.open": "opening the diagram", "diagram.showBlock": "opening the diagram", "data.load": "loading results", "data.series": "reading signals",
-               "data.trajectory": "preparing the playback", "data.figure": "drawing the figure (or waiting for its file dialog)",
-               "data.saveSimulation": "saving the simulation"}
+# What the page says MATLAB is doing, by command.
+BUSY_LABELS = {
+    "sim.run": "running the simulation",
+    "experiment.build": "building the experiment",
+    "experiment.connect": "connecting to the TX2",
+    "experiment.decode": "converting the data",
+    "workspace.eval": "running a command",
+    "settings.open": "waiting for the file dialog",
+    "settings.saveAs": "waiting for the file dialog",
+    "diagram.open": "opening the diagram",
+    "diagram.showBlock": "opening the diagram",
+    "data.load": "loading results",
+    "data.series": "reading signals",
+    "data.trajectory": "preparing the playback",
+    "data.figure": "drawing the figure (or waiting for its file dialog)",
+    "data.saveSimulation": "saving the simulation",
+}
 
 
 matlab = MatlabBridge()
 
 
+# Long MATLAB jobs
+
+
 class SimRunner:
-    """Runs a long MATLAB command in the background (a simulation, or an experiment build) and
-    reports through events named after it ("sim", "build")."""
+    """Runs a long MATLAB command in the background.
+
+    A simulation, or an experiment build; it reports through events
+    named after it ("sim", "build").
+    """
 
     def __init__(self, event="sim", cmd="sim.run", what="Simulation", log_name=None):
+        """Set up a runner.
+
+        Args:
+            event: The event name for its status.
+            cmd: The MATLAB command.
+            what: Its name in the log.
+            log_name: A file in .spot_cache that MATLAB writes while
+                working (shown live), or None.
+        """
         self.event, self.cmd, self.what = event, cmd, what
-        self.log_name = log_name   # a file in .spot_cache that MATLAB writes while working (shown live)
+        self.log_name = log_name
         self._lock = threading.Lock()
-        self.state = {"running": False, "started": None, "finished": None, "ok": None, "error": None,
-                      "error_details": None, "summary": None, "result_id": 0}
+        self.state = {"running": False, "started": None, "finished": None, "ok": None,
+                      "error": None, "error_details": None, "summary": None, "result_id": 0}
 
     def status(self):
+        """Return a copy of the job's state."""
         with self._lock:
             return dict(self.state)
 
     def start(self, requester):
+        """Start the job in the background.
+
+        Raises:
+            ApiError: if it is already running.
+        """
         with self._lock:
             if self.state["running"]:
                 raise ApiError("A simulation is already running.")
-            self.state.update(running=True, started=time.time(), finished=None, ok=None, error=None,
-                              error_details=None, log_tail=[])
+            self.state.update(running=True, started=time.time(), finished=None, ok=None,
+                              error=None, error_details=None, log_tail=[])
         hub.log("matlab", "%s started (by %s)" % (self.what, requester))
         hub.publish(self.event, self.status())
         threading.Thread(target=self._run, daemon=True).start()
@@ -237,34 +345,43 @@ class SimRunner:
         return self.status()
 
     def _follow_log(self):
-        """Send what MATLAB writes to the log file while the job runs (it can't answer meanwhile)."""
+        """Send what MATLAB writes to the log file while the job runs.
+
+        MATLAB can't answer meanwhile, so this is how the page sees
+        progress. An unfinished line waits for the rest.
+        """
         path = Path(LOCAL["root"]) / ".spot_cache" / self.log_name
         started = self.status()["started"]
         pos, partial = 0, ""
         while True:
             running = self.status()["running"]
             try:
+                # New text in the file (written since this job started).
                 if path.is_file() and path.stat().st_mtime >= started - 1:
                     with open(str(path), "r", encoding="utf-8", errors="replace") as f:
                         f.seek(pos)
                         chunk = f.read()
                         pos = f.tell()
+
+                    # Whole lines, without hyperlinks and backspaces.
                     if chunk:
                         text = re.sub(r"<a [^>]*>|</a>|[\x08]", "", partial + chunk)
                         lines = text.split("\n")
-                        partial = lines.pop()   # an unfinished line waits for the rest
-                        lines = [l.rstrip() for l in lines if l.strip()]
+                        partial = lines.pop()
+                        lines = [line.rstrip() for line in lines if line.strip()]
                         if lines:
                             with self._lock:
-                                self.state["log_tail"] = ((self.state.get("log_tail") or []) + lines)[-300:]
+                                self.state["log_tail"] = (
+                                    (self.state.get("log_tail") or []) + lines)[-LOG_TAIL:]
                             hub.publish(self.event + "_log", {"lines": lines})
             except OSError:
                 pass
             if not running:
                 return
-            time.sleep(0.5)
+            time.sleep(LOG_POLL)
 
     def _run(self):
+        """Run the command in MATLAB and record how it went."""
         ok, error, details, summary = False, None, None, None
         try:
             summary = matlab.request(self.cmd, {}, timeout=None)
@@ -272,14 +389,16 @@ class SimRunner:
         except ApiError as e:
             error, details = str(e), e.details
         with self._lock:
-            self.state.update(running=False, finished=time.time(), ok=ok, error=error, error_details=details,
-                              summary=summary)
+            self.state.update(running=False, finished=time.time(), ok=ok, error=error,
+                              error_details=details, summary=summary)
             if ok:
                 self.state["result_id"] += 1
-        hub.log("matlab", "%s %s" % (self.what, "finished in %.1f s" % summary.get("seconds", 0) if ok else "failed: %s" % error))
+        hub.log("matlab", "%s %s" % (self.what, "finished in %.1f s" % summary.get("seconds", 0)
+                                     if ok else "failed: %s" % error))
         hub.publish(self.event, self.status())
 
     def result_path(self):
+        """Return MATLAB's result file if in .spot_cache, else None."""
         summary = self.status().get("summary") or {}
         path = Path(summary.get("file") or "")
         cache = (Path(LOCAL["root"]) / ".spot_cache").resolve() if LOCAL["root"] else None
@@ -294,29 +413,37 @@ class SimRunner:
 
 sim_runner = SimRunner()
 
-
 build_runner = SimRunner("build", "experiment.build", "Experiment build", log_name="build.log")
 
 
+# The lab console
+
+
 class LabLink:
-    """The local console's view of the lab console (TX2): follows its event stream and passes
-    PhaseSpace frames, hardware, stream and experiment status on to the page (as lab_* events), and
-    forwards the lab actions the Experiment tab may take. Unreachable (not on the lab network):
-    those actions are refused."""
+    """The local console's view of the lab console (TX2).
+
+    Follows its event stream and passes PhaseSpace frames, hardware,
+    stream and experiment status on to the page (as lab_* events), and
+    forwards the lab actions the Experiment tab may take. Unreachable
+    (not on the lab network): those actions are refused.
+    """
 
     RELAY = {"frame": "lab_frame", "monitor": "lab_monitor", "stream_status": "lab_stream",
-             "hardware_platform": "lab_hardware", "experiment": "lab_experiment", "live_data": "lab_live_data",
-             "design": "lab_design", "calibration": "lab_calibration"}
-    ACTIONS = ("stream/start", "stream/stop", "tracker_positions", "experiment/deploy", "experiment/start",
-               "experiment/stop", "experiment/fetch", "hardware/off", "design")
-    READS = ("experiment/build", "experiment/live", "calibration")   # GET requests the page may make through the local server
+             "hardware_platform": "lab_hardware", "experiment": "lab_experiment",
+             "live_data": "lab_live_data", "design": "lab_design",
+             "calibration": "lab_calibration"}
+    ACTIONS = ("stream/start", "stream/stop", "tracker_positions", "experiment/deploy",
+               "experiment/start", "experiment/stop", "experiment/fetch", "hardware/off", "design")
+    # GET requests the page may make through the local server.
+    READS = ("experiment/build", "experiment/live", "calibration")
 
     PORT = 8080   # the lab console's web port
 
     def __init__(self, url):
+        """Start following nothing yet (see start)."""
         self.url = url.rstrip("/")
         self._lock = threading.Lock()
-        self._response = None   # the event stream being read (closed to switch to a new address)
+        self._response = None   # the event stream being read (closed to switch address)
         self.reachable = False
         self.experiments = False   # whether its version has the experiment API
         self.error = "Connecting…"
@@ -325,11 +452,13 @@ class LabLink:
         self._last_frame = 0.0
 
     def status(self):
+        """Return whether it is reachable, why not, its last state."""
         with self._lock:
             return {"url": self.url, "reachable": self.reachable, "experiments": self.experiments,
                     "error": self.error, "since": self.since, "snapshot": dict(self.snapshot)}
 
     def _set(self, reachable, error=None):
+        """Record reachability; tell the pages if it changed."""
         with self._lock:
             changed = reachable != self.reachable or error != self.error
             self.reachable, self.error = reachable, error
@@ -339,18 +468,27 @@ class LabLink:
             hub.publish("lab", self.status())
 
     def start(self):
+        """Follow the lab console in the background."""
         threading.Thread(target=self._run, daemon=True).start()
 
     @staticmethod
     def url_for(address):
-        """The lab console's URL for an IPv4 address (the settings' labConsoleAddress)."""
+        """Return the lab console's URL for an IPv4 address.
+
+        Args:
+            address: The settings' labConsoleAddress.
+
+        Raises:
+            ApiError: if it isn't an IPv4 address.
+        """
         parts = str(address).strip().split(".")
-        if len(parts) != 4 or not all(p.isdigit() and int(p) <= 255 for p in parts):
-            raise ApiError("The lab console address must be an IPv4 address such as 192.168.1.116.")
-        return "http://%s:%d" % (".".join(str(int(p)) for p in parts), LabLink.PORT)
+        if len(parts) != 4 or not all(part.isdigit() and int(part) <= 255 for part in parts):
+            raise ApiError("The lab console address must be an IPv4 address such as "
+                           "192.168.1.116.")
+        return "http://%s:%d" % (".".join(str(int(part)) for part in parts), LabLink.PORT)
 
     def set_address(self, address):
-        """Follow the lab console at another address (from the Experiment tab)."""
+        """Follow the lab console at another address."""
         url = self.url_for(address)
         with self._lock:
             if url == self.url:
@@ -359,97 +497,145 @@ class LabLink:
             self.reachable, self.experiments, self.snapshot = False, False, {}
             self.error, self.since = "Connecting…", time.time()
             response, self._response = self._response, None
+
+        # Closing the stream makes the reading loop reconnect, to the
+        # new address.
         if response is not None:
             try:
-                response.close()   # the reading loop then reconnects, to the new address
+                response.close()
             except Exception:
                 pass
         hub.publish("lab", self.status())
         return self.status()
 
     def status_unlocked(self):
+        """Return status() without taking the lock (caller holds it)."""
         return {"url": self.url, "reachable": self.reachable, "experiments": self.experiments,
                 "error": self.error, "since": self.since, "snapshot": dict(self.snapshot)}
 
     def _run(self):
+        """Read the lab console's event stream forever, reconnecting."""
         import urllib.request
         while True:
             url = self.url
             try:
-                with urllib.request.urlopen(url + "/api/state", timeout=4) as r:
-                    st = json.loads(r.read().decode("utf-8"))
-                mode = (st.get("features") or {}).get("mode")
-                if mode == "local" or (mode is None and not ("hardware" in st and "stream" in st)):
-                    raise OSError("%s is not the lab console" % url)
-                with self._lock:
-                    if url != self.url:   # the address changed meanwhile
-                        continue
-                    # Older lab consoles (before the experiment API) still stream and drive the hardware
-                    self.experiments = "experiment" in st
-                    self.snapshot = {"stream": st.get("stream"), "monitor": st.get("monitor"),
-                                     "hardware": st.get("hardware"), "experiment": st.get("experiment"),
-                                     "led_owner": st.get("led_owner"), "design": st.get("design"),
-                                     "calibration": st.get("calibration")}
-                self._set(True)
-                with urllib.request.urlopen(url + "/api/events", timeout=40) as r:
+                # The event stream first, then the snapshot: the lab
+                # only says when something changes (a platform's status
+                # check, say), so a change between a snapshot and a
+                # later subscription would never arrive, and the page
+                # would show the old state until the next change.
+                # Events sent meanwhile wait in the stream and are
+                # applied over the snapshot.
+                with urllib.request.urlopen(url + "/api/events",
+                                            timeout=LAB_EVENTS_TIMEOUT) as events:
+                    with urllib.request.urlopen(url + "/api/state",
+                                                timeout=LAB_STATE_TIMEOUT) as snap_resp:
+                        state = json.loads(snap_resp.read().decode("utf-8"))
+
+                    # It must be a lab console, not another local one.
+                    mode = (state.get("features") or {}).get("mode")
+                    if mode == "local" or (mode is None
+                                           and not ("hardware" in state and "stream" in state)):
+                        raise OSError("%s is not the lab console" % url)
+
                     with self._lock:
-                        self._response = r
+                        if url != self.url:   # the address changed meanwhile
+                            continue
+                        # Older lab consoles (before the experiment API)
+                        # still stream and drive the hardware.
+                        self.experiments = "experiment" in state
+                        self.snapshot = {"stream": state.get("stream"),
+                                         "monitor": state.get("monitor"),
+                                         "hardware": state.get("hardware"),
+                                         "experiment": state.get("experiment"),
+                                         "led_owner": state.get("led_owner"),
+                                         "design": state.get("design"),
+                                         "calibration": state.get("calibration")}
+                        self._response = events
+                    self._set(True)
+
+                    # Pass the relayed events on.
                     event = None
-                    for raw in r:
+                    for raw in events:
                         line = raw.decode("utf-8", "replace").rstrip("\r\n")
                         if line.startswith("event: "):
                             event = line[7:]
                         elif line.startswith("data: ") and event in self.RELAY:
                             self._relay(event, line[6:])
             except (OSError, ValueError, AttributeError) as e:
-                if url != self.url:   # closed to follow a new address: try it at once
+                # Closed to follow a new address: try it at once.
+                if url != self.url:
                     continue
                 reason = getattr(e, "reason", None) or e
                 self._set(False, "Not reachable (%s)" % reason)
             if url != self.url:
                 continue
-            time.sleep(3)
+            time.sleep(LAB_RETRY)
 
     def _relay(self, event, data):
-        if event == "frame":   # at most 30 Hz to the page
+        """Update the snapshot with an event; pass it to the page."""
+        # Frames: at most FRAME_RATE to the page.
+        if event == "frame":
             now = time.time()
-            if now - self._last_frame < 1 / 30:
+            if now - self._last_frame < 1 / FRAME_RATE:
                 return
             self._last_frame = now
         try:
             payload = json.loads(data)
         except ValueError:
             return
-        key = {"monitor": "monitor", "stream_status": "stream", "experiment": "experiment", "design": "design",
-               "calibration": "calibration"}.get(event)
+
+        # The snapshot's part for this event; a platform's status
+        # replaces that platform's entry.
+        key = {"monitor": "monitor", "stream_status": "stream", "experiment": "experiment",
+               "design": "design", "calibration": "calibration"}.get(event)
         with self._lock:
             if key:
                 self.snapshot[key] = payload
             elif event == "hardware_platform" and self.snapshot.get("hardware"):
                 plats = self.snapshot["hardware"].get("platforms", [])
-                self.snapshot["hardware"]["platforms"] = [payload if p.get("name") == payload.get("name") else p for p in plats]
+                self.snapshot["hardware"]["platforms"] = [
+                    payload if plat.get("name") == payload.get("name") else plat
+                    for plat in plats]
         hub.publish(self.RELAY[event], payload)
 
     def request(self, method, path, body=None, timeout=60, raw=False):
+        """Call the lab console's API.
+
+        Args:
+            method: "GET" or "POST".
+            path: The path after /api/.
+            body: A dict to POST as JSON.
+            timeout: Seconds before giving up.
+            raw: Return the bytes instead of decoded JSON.
+
+        Raises:
+            ApiError: if it isn't reachable, too old for experiments,
+                or answers with an error.
+        """
         import urllib.request
         import urllib.error
-        st = self.status()
-        if not st["reachable"]:
-            raise ApiError("The lab console (%s) isn't reachable: experiments and calibrations need the "
-                           "lab network (SRCL Wi-Fi or wired)." % self.url)
-        if path.startswith("experiment/") and not st["experiments"]:
-            raise ApiError("The lab console (%s) runs an older version without experiments: update it "
-                           "with +spot/+console/deploy/deploy_tx2.sh." % self.url)
+        state = self.status()
+        if not state["reachable"]:
+            raise ApiError("The lab console (%s) isn't reachable: experiments and calibrations "
+                           "need the lab network (SRCL Wi-Fi or wired)." % self.url)
+        if path.startswith("experiment/") and not state["experiments"]:
+            raise ApiError("The lab console (%s) runs an older version without experiments: "
+                           "update it with +spot/+console/deploy/deploy_tx2.sh." % self.url)
+
+        # The request, saying which computer asks.
         headers = {"X-SPOT-Requester": "%s, local console" % socket.gethostname()}
         data = None
         if method == "POST":
             headers["Content-Type"] = "application/json"
             data = json.dumps(body or {}).encode("utf-8")
-        req = urllib.request.Request(self.url + "/api/" + path, data=data, headers=headers, method=method)
+        req = urllib.request.Request(self.url + "/api/" + path, data=data, headers=headers,
+                                     method=method)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                out = r.read()
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                out = response.read()
         except urllib.error.HTTPError as e:
+            # The lab console's own message, if it sent one.
             try:
                 msg = json.loads(e.read().decode("utf-8")).get("error")
             except ValueError:
@@ -464,17 +650,28 @@ lab = None   # LabLink, local mode only
 
 
 def download_run(run):
-    """Copy a run's data from the lab console into <project>/Saved Data/<run>/<PLATFORM>/ExpLog*."""
+    """Copy a run's data from the lab console into the project.
+
+    Into <project>/Saved Data/<run>/<PLATFORM>/ExpLog*.
+
+    Returns:
+        {"folder", "files"}.
+
+    Raises:
+        ApiError: if run isn't a valid run name.
+    """
     if not NAME_RE.match(run or ""):
         raise ApiError("%r is not a run name." % run)
     data = lab.request("GET", "experiment/download?run=" + run, timeout=300, raw=True)
     target = Path(LOCAL["root"]) / "Saved Data"
+
+    # Only run/PLATFORM/ExpLog... files.
     files = []
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
         for member in tar.getmembers():
-            parts = Path(member.name).parts   # run/PLATFORM/ExpLog...
-            if (member.isfile() and len(parts) == 3 and parts[0] == run and parts[1] in DEFAULT_PLATFORMS
-                    and NAME_RE.match(parts[2])):
+            parts = Path(member.name).parts
+            if (member.isfile() and len(parts) == 3 and parts[0] == run
+                    and parts[1] in DEFAULT_PLATFORMS and NAME_RE.match(parts[2])):
                 dest = target / run / parts[1] / parts[2]
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 with tar.extractfile(member) as src:
@@ -484,16 +681,17 @@ def download_run(run):
 
 
 def write_ready_file(web_port):
-    """Tell SPOT.m (spot.console.start) the ports and token: .spot_cache/console.json."""
+    """Tell SPOT.m (spot.console.start) the ports and token.
+
+    Written to .spot_cache/console.json, readable by this user only,
+    and replaced atomically.
+    """
     path = Path(LOCAL["ready_file"])
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = {"web_port": web_port, "worker_port": matlab.port, "token": LOCAL["token"], "pid": os.getpid(),
-            "root": LOCAL["root"]}
+    data = {"web_port": web_port, "worker_port": matlab.port, "token": LOCAL["token"],
+            "pid": os.getpid(), "root": LOCAL["root"]}
     tmp = path.with_suffix(".tmp")
     fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as fh:
         json.dump(data, fh)
     os.replace(str(tmp), str(path))
-
-
-# --------------------------------------------------------------------------- folder browser

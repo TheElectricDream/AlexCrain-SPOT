@@ -1,6 +1,15 @@
 function names = listDiagrams(root)
-%LISTDIAGRAMS Simulink diagrams (.slx) in the project folder.
-%   names = spot.sim.listDiagrams(projectFolder) returns a cell array of file names.
-files = dir(fullfile(root, '*.slx'));
-names = sort({files.name});
+    %LISTDIAGRAMS Simulink diagrams (.slx) in the project folder.
+    %   names = spot.sim.listDiagrams(root)
+    %
+    %   Inputs
+    %     root   project folder
+    %
+    %   Outputs
+    %     names  cell array of file names, sorted
+    %
+    %   See also spot.sim.loadDiagram.
+
+    files = dir(fullfile(root, '*.slx'));
+    names = sort({files.name});
 end
