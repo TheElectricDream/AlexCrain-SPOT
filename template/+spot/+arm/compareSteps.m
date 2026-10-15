@@ -2,9 +2,10 @@ function r = compareSteps(folder, armModel, show)
     %COMPARESTEPS The simulated servos against the real ones, on the calibration's position steps.
     %   r = spot.arm.compareSteps(folder, armModel) replays each steps_j<N>.csv in folder
     %   through the servo's position control law (spot.arm.PositionControl at the servo's
-    %   period, with back-EMF) driving spot.arm.Plant with the base fixed, and compares the
-    %   joint's motion with the measured one. A match checks the plant (motor, friction,
-    %   inertia) and the controller replica the diagram's Default Position Control (ARM) runs.
+    %   period) driving spot.arm.Plant with the base fixed, and compares the joint's motion with
+    %   the measured one. The real servo's position mode sets PWM as the replica does, so a
+    %   match checks the plant (motor, back-EMF, friction, inertia) and the controller replica
+    %   the diagram's Default Position Control (ARM) runs.
     %   r = spot.arm.compareSteps(folder, armModel, true) also plots them.
     %
     %   Inputs
@@ -27,7 +28,6 @@ function r = compareSteps(folder, armModel, show)
 
     %% Constants
     GOAL_STEP = 0.01;                   % [s] goals change every 10 ms (logs are faster, uneven)
-    POSITION_MODE_CURRENT_LIMIT = 1941; % [3.36 mA] position mode is limited by PWM, not current
     PULSES_PER_RAD = 4096 / (2*pi);     % [pulses/rad] true encoder scale, used by the script
     CMD_PULSES_PER_RAD = 651.74;        % [pulses/rad] SPOT's goal conversion (PositionControl)
 
@@ -56,18 +56,17 @@ function r = compareSteps(folder, armModel, show)
         sv = a.servo;
         a.outerStep = sv.period;
         a.x0 = [0; 0; 0; qLogged(1, :).'];
-        a.servo.currentLimit = POSITION_MODE_CURRENT_LIMIT;
         p = spot.arm.Plant('Model', a, 'FixedBase', true);
 
         % The servo's own position control, with the servo's gains.
-        c = spot.arm.PositionControl('Motor', a.motor, ...
+        c = spot.arm.PositionControl( ...
             'StepTime', sv.period, 'ServoPeriod', sv.period, ...
             'PositionP', sv.positionP, 'PositionI', sv.positionI, 'PositionD', sv.positionD, ...
             'Feedforward1', sv.feedforward1, 'Feedforward2', sv.feedforward2, ...
             'ProfileVelocity', sv.profileVelocity, ...
             'ProfileAcceleration', sv.profileAcceleration, ...
             'MinPosition', sv.minPosition, 'MaxPosition', sv.maxPosition, ...
-            'PWMLimit', sv.pwmLimit, 'BackEMF', true);
+            'PWMLimit', sv.pwmLimit);
 
         % The script sends true pulses; scale goals so the controller's conversion gives the same.
         scale = PULSES_PER_RAD / CMD_PULSES_PER_RAD;

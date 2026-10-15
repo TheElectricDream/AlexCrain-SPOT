@@ -20,7 +20,7 @@ Start with what the consoles say: most problems show up as a status with its rea
 | the run fails with a red message under Run | it is the error's root cause. **Details** prints the chain of errors and the blocks involved in the command window; **Show Block** opens the diagram at the block |
 | "Select a Simulink diagram first" | choose the diagram on the Scenario pane (a `.slx` in the project folder) |
 | warnings in the command window | Simulink's; the template gives none. Read each: a new data store read before it is written is the usual one ([Data Stores](page:data-stores)) |
-| arm warnings ("goal beyond Min/Max Position", "torque beyond the Current Limit") | your arm commands ask for something the real servos would ignore or clip (`spot.arm.checkCommands`) |
+| arm warnings ("goal beyond Min/Max Position", "PWM beyond its servo's PWM Limit") | your arm commands ask for something the real servos would ignore or clip (`spot.arm.checkCommands`) |
 | the LQR gains can't be computed | a weight is zero or negative on the Control pane |
 
 ## The lab network and the lab console

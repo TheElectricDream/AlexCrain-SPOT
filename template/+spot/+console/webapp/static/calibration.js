@@ -81,14 +81,15 @@ const sectionOf = kind => (kind === 'decay' ? 'thrusters' : kind);
 // platform's mass properties (S.assumed).
 const DEFAULT_DECAY = 0.112;
 
-// The arm calibration's four tests (calibrate_arm.py), each on one joint while the others hold:
-// [key, title, text].
+// The arm calibration's four tests (calibrate_arm.py), each on one joint while the others hold,
+// with the servos in PWM (voltage) control as SPOT drives them: [key, title, text].
 const ARM_TESTS = [
-  ['breakaway', 'Breakaway', 'The motor current creeps up from zero until the joint moves, ' +
-   'three times each way: the static friction (breakaway torque).'],
-  ['sweep', 'Speed Sweep', 'The joint turns back and forth at nine speeds; the current it needs ' +
-   'at each is the friction at that speed (Coulomb, Stribeck, viscous).'],
-  ['inertia', 'Inertia', 'A torque step from rest, each way: how fast it accelerates gives the ' +
+  ['breakaway', 'Breakaway', 'The PWM creeps up from zero until the joint moves, three times ' +
+   'each way: the static friction (breakaway torque).'],
+  ['sweep', 'Speed Sweep', 'The joint turns back and forth at fixed PWM levels about its ' +
+   'breakaway; the speed it settles at shows the friction at that speed (Coulomb, Stribeck) and ' +
+   'how the back-EMF and viscous friction brake it.'],
+  ['inertia', 'Inertia', 'A PWM step from rest, each way: how fast it gets up to speed gives the ' +
    'joint\'s inertia (link and rotor).'],
   ['steps', 'Position Steps', 'Goals of 10, 0, -10, 20, 0, -20, 5, 0° with SPOT\'s servo ' +
    'settings, for spot.arm.compareSteps to check the model.'],
@@ -96,7 +97,15 @@ const ARM_TESTS = [
 const JOINTS = { 1: 'Shoulder', 2: 'Elbow', 3: 'Wrist' };
 
 // The arm values a project can override (calibration.py's ARM_FIELDS).
-const ARM_FIELDS = ['static', 'coulomb', 'stribeck', 'viscous', 'armature'];
+const ARM_FIELDS = ['static', 'coulomb', 'stribeck', 'viscous', 'armature', 'back_emf'];
+
+/**
+ * Whether an arm calibration was measured in PWM control (calibrate_arm.py's version 2; an older
+ * one measured the motor current, which SPOT's arm model no longer uses).
+ * @param {?Object} arm An arm calibration.
+ * @return {boolean}
+ */
+const pwmArm = arm => Boolean(arm && arm.control === 'pwm' && (arm.version || 0) >= 2);
 const ARM_MINUTES = { breakaway: 1.5, sweep: 2.5, inertia: 0.5, steps: 0.5 };   // per joint, about
 
 /**
@@ -170,6 +179,9 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     if (viewEl && body.contains(viewEl)) {
       const home = S.local ? 'simulation' : 'phasespace';
       document.querySelector(`[data-slot="${home}"]`)?.prepend(viewEl);
+
+      // That page's toolbar and legend again (hidden while the view was in the card).
+      viewEl.dataset.showing = home;
     }
   }
 
@@ -355,8 +367,10 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       html = stepList(ARM_TESTS.map(([, t, text], k) => [t, text, ARM_ICONS[k]]),
         k => (now && now.test === ARM_TESTS[k][0] ? 'now' : '')) +
         `<p class="hint">For each joint in turn, the other joints hold their position. The script
-          (+spot/+arm/calibration/calibrate_arm.py) runs on the Chaser, which has the arm's U2D2; it fits each joint's friction
-          and inertia, which SPOT's arm model then uses (spot.arm.parameters). The Chaser rests on the table throughout.</p>`;
+          (+spot/+arm/calibration/calibrate_arm.py) runs on the Chaser, which has the arm's U2D2; it drives the servos with PWM,
+          as SPOT does, and measures with PWM and the encoders only (the servos' current readings are too coarse at these
+          torques). It fits each joint's friction, back-EMF and inertia, which SPOT's arm model then uses
+          (spot.arm.parameters). The Chaser rests on the table throughout.</p>`;
     }
     $('#calDetailsTitle').textContent = title;
     $('#calDetailsBody').innerHTML = html;
@@ -869,13 +883,13 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   }
 
   // No arm calibration yet: what one looks like, with SPOT's arm model defaults
-  // (spot.arm.defaults: its placeholder friction, and the rotor and gear inertia), and the
-  // position-steps test's goals (10, 0, -10, 20, 0, -20, 5, 0°, 2 s each) with a first-order
-  // response (0.25 s) for the measured angle.
+  // (spot.arm.defaults: its placeholder friction, the MX-64's datasheet back-EMF, and the rotor
+  // and gear inertia), and the position-steps test's goals (10, 0, -10, 20, 0, -20, 5, 0°, 2 s
+  // each) with a first-order response (0.25 s) for the measured angle.
   function placeholderArm() {
     const joints = [1, 2, 3].map(index => ({
       index, name: JOINTS[index], static: 0.30, static_pos: 0.30, static_neg: 0.30,
-      coulomb: 0.20, stribeck: 0.05, viscous: 0.10, inertia: 3.5e-3,
+      coulomb: 0.20, stribeck: 0.05, viscous: 0.10, back_emf: 1.819, inertia: 3.5e-3,
     }));
     const goals = [10, 0, -10, 20, 0, -20, 5, 0].map(d => d * Math.PI / 180);
     const rows = [];
@@ -900,6 +914,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     const row = j => `<tr><td>${esc(JOINTS[j.index] || j.name)}</td><td>${fmt(j.static, 3)}</td>
         <td>${j.static_pos != null ? `+${fmt(j.static_pos, 3)} / −${fmt(j.static_neg, 3)}` : '—'}</td>
         <td>${fmt(j.coulomb, 3)}</td><td>${fmt(j.stribeck, 3)}</td><td>${fmt(j.viscous, 3)}</td>
+        <td>${fmt(j.back_emf, 3)}</td>
         <td>${j.inertia != null ? j.inertia.toExponential(2) : '—'}</td></tr>`;
     const sj = joints.some(j => j.index === S.armStepsJoint)
       ? S.armStepsJoint
@@ -914,11 +929,14 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         'calibrated. The steps show the test\'s goals with an assumed response.">' +
         'Placeholder · Defaults</span>'
       : res.simulated ? '<span class="pill warn">Rehearsal · Not Saved</span>'
+      : !pwmArm(res) ? '<span class="pill warn tip" title="Measured with the motor current, ' +
+        'before the servos moved to PWM control: simulations don\'t use it, and projects ' +
+        'aren\'t offered it. Run the arm calibration again.">Current Control · Not Used</span>'
       : `<span class="pill ok">${when(res.updated)}</span>`;
     return `<section class="card"><div class="card-head"><h2>Arm</h2>${label}</div>
         <table class="cal-thr-table"><thead><tr><th>Joint</th><th title="Breakaway torque">Static [N m]</th><th>+ / − [N m]</th>
           <th title="Sliding friction">Coulomb [N m]</th><th title="How quickly friction falls from static to Coulomb with speed">Stribeck [rad/s]</th>
-          <th>Viscous [N m s/rad]</th><th title="About the joint, link and rotor">Inertia [kg m²]</th></tr></thead>
+          <th title="Besides the back-EMF">Viscous [N m s/rad]</th><th title="The motor's back-EMF at the joint: with the viscous friction, how it is braked in proportion to its speed in PWM control">Back-EMF [V s/rad]</th><th title="About the joint, link and rotor">Inertia [kg m²]</th></tr></thead>
           <tbody>${joints.map(row).join('')}</tbody></table>
         ${joints.some(j => j.warnings && j.warnings.length) ? `<ul class="cal-arm-warn">${joints.flatMap(j => (j.warnings || [])
           .map(w => `<li class="warn-text"><b>${esc(JOINTS[j.index] || j.name)}</b>: ${esc(w)}</li>`)).join('')}</ul>` : ''}
@@ -928,7 +946,9 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         </div>
         <p class="hint">${res.placeholder ? 'Not measured yet: SPOT\'s arm model defaults.' : res.simulated ? 'A rehearsal with the script\'s simulated servos: the lab\'s arm calibration is unchanged.'
           : `Measured ${when(res.updated)} by ${esc(res.by || '?')} (servos: ${esc(Object.values(res.servos || {}).join(', ') || '?')}, supply ${fmt(res.supply_voltage, 1)} V).
-             Simulations use it with the Scenario's Calibrated Arm; the raw data stays on the lab console (${esc(res.lab_folder || '')}).`}</p>
+             ${pwmArm(res) ? 'Torques from the PWM and the datasheet\'s torque per volt. Simulations use it with the Scenario\'s Calibrated Arm'
+               : 'Measured with the motor current, which SPOT no longer uses: run the calibration again'};
+             the raw data stays on the lab console (${esc(res.lab_folder || '')}).`}</p>
         ${S.local || res.simulated || res.placeholder ? '' : '<div class="cal-actions"><button type="button" class="btn btn-sm" data-cal="clear-arm" title="Remove the arm calibration from the lab console\'s file">Remove</button></div>'}
       </section>`;
   }
@@ -1075,10 +1095,11 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       }
     }
 
-    // The arm: each field of the joints it measured.
+    // The arm: each field of the joints it measured (only a calibration measured in PWM
+    // control).
     const labArm = lab.arm;
     const myArm = mine.arm;
-    if (labArm && (!myArm || (labArm.updated || '') > (myArm.updated || ''))) {
+    if (pwmArm(labArm) && (!myArm || (labArm.updated || '') > (myArm.updated || ''))) {
       const armOv = ov.arm || {};
       const joints = [].concat(labArm.joints || []).map(j => j && j.index)
         .filter(i => [1, 2, 3].includes(i));

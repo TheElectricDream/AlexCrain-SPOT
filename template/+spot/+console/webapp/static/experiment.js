@@ -375,17 +375,21 @@ export function initExperiment({
 
   // Actions
 
-  // Cameras: stop, or send the marker calibration and start at the data rate.
+  // Cameras: stop, or send the marker file (each LED from its platform's CG: MATLAB's
+  // trackerPositions, from the project's LED positions and the scales) and start at the data
+  // rate. The lab console writes the file next to StreamData, which reads it as it starts.
   $('#expCameras').onclick = () => act(async () => {
     if (S.stream.running) {
       await lab('stream/stop');
       return;
     }
     const rate = dataRate();
-    if (!rate) {
-      throw new Error('No data rate yet: the settings haven\'t come from MATLAB.');
+    const markers = (getSim().derived || {}).trackerPositions;
+    if (!rate || !markers) {
+      throw new Error('No data rate or LED positions yet: the settings haven\'t come from ' +
+        'MATLAB.');
     }
-    await lab('tracker_positions');
+    await lab('tracker_positions', { text: markers });
     await lab(`stream/start?frequency=${rate}`);
     toast(`Cameras starting at ${rate} Hz`, 'success', 3000);
   });

@@ -34,7 +34,7 @@ Every step, the [Data Logger Subsystem](page:diagram-data-logger) records the **
 | 26 | `RED_Py_Path_m` | 1 | m | `RED_Path(2)` |
 | 27 | `RED_Rz_Path_rad` | 1 | rad | `RED_Path(3)` |
 | 28 | `ARM_Control_Mode` | 1 | – | `ARM_Control_Mode`: the arm controller that ran (0 off, 1 position, 2 custom, 3 velocity) |
-| 29 | `ARM_Shoulder_Command` | 1 | N·m | `ARM_Controls(1)`: the shoulder torque command |
+| 29 | `ARM_Shoulder_Command` | 1 | PWM (885 = 100 %) | `ARM_Controls(1)`: the shoulder's PWM command |
 | 30 | `ARM_Elbow_Command` | 1 | N·m | `ARM_Controls(2)` |
 | 31 | `ARM_Wrist_Command` | 1 | N·m | `ARM_Controls(3)` |
 | 32 | `ARM_Rz_Shoulder_rad` | 1 | rad | `ARM_Measured_States(1)`: the shoulder angle (0 = straight out; 2π/4096 steps) |
@@ -43,7 +43,7 @@ Every step, the [Data Logger Subsystem](page:diagram-data-logger) records the **
 | 35 | `ARM_RzD_Shoulder_radpers` | 1 | rad/s | `ARM_Measured_States(4)`: the shoulder rate (0.229 rpm steps) |
 | 36 | `ARM_RzD_Elbow_radpers` | 1 | rad/s | `ARM_Measured_States(5)` |
 | 37 | `ARM_RzD_Wrist_radpers` | 1 | rad/s | `ARM_Measured_States(6)` |
-| 38 | `ARM_Shoulder_Path` | 1 | rad, rad/s or N·m | `ARM_Path(1)`: the arm controllers input (angle, speed or torque by mode) |
+| 38 | `ARM_Shoulder_Path` | 1 | rad, rad/s or PWM | `ARM_Path(1)`: the arm controllers input (angle, speed or PWM by mode) |
 | 39 | `ARM_Elbow_Path` | 1 | … | `ARM_Path(2)` |
 | 40 | `ARM_Wrist_Path` | 1 | … | `ARM_Path(3)` |
 | 41 | `ARM_Shoulder_Desired` | 1 | rad | `ARM_Desired_States(1)`: the phases goal |
@@ -106,9 +106,9 @@ Every step, the [Data Logger Subsystem](page:diagram-data-logger) records the **
 | 98 | `Simulation_Flag` | 1 | 0/1 | `isSim` |
 | 99 | `VIS_Measured_States` | 3 | m, m, rad | `VIS_Measured_States`: **3 columns**, the Orins pose estimate |
 | 100 | `VIS_Confidence` | 1 | – | `VIS_Confidence` |
-| 101 | `ARM_Shoulder_Torque_Nm` | 1 | N·m | `ARM_Measured_Torque(1)`: the torque the servo reports (from its current) |
-| 102 | `ARM_Elbow_Torque_Nm` | 1 | N·m | `ARM_Measured_Torque(2)` |
-| 103 | `ARM_Wrist_Torque_Nm` | 1 | N·m | `ARM_Measured_Torque(3)` |
+| 101 | `ARM_Shoulder_PWM` | 1 | PWM (885 = 100 %) | `ARM_Measured_PWM(1)`: the PWM the servo applies (its Present PWM) |
+| 102 | `ARM_Elbow_PWM` | 1 | PWM | `ARM_Measured_PWM(2)` |
+| 103 | `ARM_Wrist_PWM` | 1 | PWM | `ARM_Measured_PWM(3)` |
 | 104 | `ARM_Servos_Read` | 1 | count | `ARM_Servo_Status(1)`: servos answered this step (3 = all) |
 | 105 | `ARM_Servo_Read_ms` | 1 | ms | `ARM_Servo_Status(2)`: how long the bus read took |
 | 106 | `ARM_USB_Latency_ms` | 1 | ms | `ARM_Servo_Status(3)`: the USB adapters latency timer (1 after setup) |
@@ -119,5 +119,5 @@ Every step, the [Data Logger Subsystem](page:diagram-data-logger) records the **
 
 - **Measured, not true.** The platform states logged are the *measured* ones (camera, or the simulated camera: held at the data rate, with noise). The simulation's exact states (`X_True_States`) are not logged; read the store yourself if you need them (a Data Store Read into a Live Stream block, or another To Workspace).
 - **Zeros** are normal in `X_IMU_*` (no IMU in the template), `VIS_*` (no Orin running), and every signal of a platform that is not part of the scenario; the Results tab greys those out.
-- **The arm's `Path`** changes meaning with the controller: joint angles for position control, joint speeds for velocity control, torques for the custom (torque) controller; `ARM_Control_Mode` says which.
+- **The arm's `Path`** changes meaning with the controller: joint angles for position control, joint speeds for velocity control, PWM for the custom (PWM) controller; `ARM_Control_Mode` says which.
 - Adding a signal is described on the [Data Logger](page:diagram-data-logger) page. This list is the template diagram's; a diagram you have changed may log more.

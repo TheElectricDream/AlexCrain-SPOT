@@ -8,6 +8,7 @@
 
 import { PLATFORM_KEYS as PLATFORMS, COLORS as SWATCH, platformName, swatch } from './platforms.js';
 import { handleLockClick, isUnlocked, lockButton, onLockChange } from './ratelock.js';
+import { initLayout } from './layout.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -40,7 +41,7 @@ const TABLE_ROWS = [
 const ARM_ROWS = [
   ['static', 'Breakaway', 'N m', 1], ['coulomb', 'Coulomb', 'N m', 1],
   ['stribeck', 'Stribeck', 'rad/s', 1], ['viscous', 'Viscous', 'N m s/rad', 1],
-  ['armature', 'Armature', 'g m²', 1e3],
+  ['back_emf', 'Back-EMF', 'V s/rad', 1], ['armature', 'Armature', 'g m²', 1e3],
 ];
 
 // LQR states and inputs. Derivatives are written d·/dt: a dot over a letter is hard to see.
@@ -168,6 +169,21 @@ export function initSimulation({
   const matlab = (cmd, args = {}) => api('/api/matlab', { cmd, args }).then(r => r.result);
   const panes = $('#simPanes');
 
+  // The Thruster and LED Layout window: the scales typed there are settings; the LEDs are the
+  // project's calibration (its "markers").
+  const layout = initLayout({
+    api, act,
+    getSettings: () => S.settings,
+    getMarkers: () => (S.calFile && S.calFile.markers) || null,
+    setSetting: (path, value) => {
+      setPath(S.settings, path, value);
+      S.editSeq++;
+      fill();
+      renderSetup();
+      schedulePush(500);
+    },
+  });
+
   // Settings from MATLAB
 
   // MATLAB's answer to the settings: what follows from them, the diagrams and the file. A reply
@@ -199,18 +215,21 @@ export function initSimulation({
 
   onLockChange(() => fill());
 
-  // The project's calibration changed (Update from Lab, or a value overridden): MATLAB applies
-  // the settings again, so the Calibration pane shows what the next simulation uses.
+  // The project's calibration changed (Update from Lab, a value overridden, an LED moved):
+  // MATLAB applies the settings again, so the Calibration pane shows what the next simulation
+  // uses, and the marker file the Experiment tab sends has the LEDs where they are now.
   let calKey;
   document.addEventListener('spot-calibration', ev => {
     S.calFile = ev.detail || null;
-    const key = JSON.stringify([S.calFile && S.calFile.updated, S.calFile && S.calFile.overrides]);
+    const key = JSON.stringify(['updated', 'overrides', 'markers'].map(k =>
+      S.calFile && S.calFile[k]));
     if (calKey !== undefined && key !== calKey && S.settings && S.matlab &&
         S.matlab.connected) {
       loadSettings().catch(() => {});
     }
     calKey = key;
     renderCalibration();
+    layout.refresh();
   });
 
   // Reads the settings from MATLAB (an error, e.g. opened without the session token, is shown
@@ -365,7 +384,7 @@ export function initSimulation({
   }
 
   // A platform's cards: initial conditions, and mass properties (scales, bifilar pendulum,
-  // overrides, thrust, offsets).
+  // overrides, thrust, and the Thruster and LED Layout window).
   function platformCards(n) {
     const rows = POSE_KINDS.map(([k, label, title]) =>
       `<tr data-poserow="${k}" title="${esc(title)}"><th><button type="button" ` +
@@ -382,7 +401,7 @@ export function initSimulation({
       <section class="card">
         <div class="card-head"><h2>Mass Properties</h2>
           <label class="toggle" title="Use the mass and inertia typed below instead of the measured ones (all platforms)"><input type="checkbox" data-path="mass.override"><span></span>Override</label></div>
-        <span class="field-label tip" title="Scale readings with the platform on three scales (resources/COMConfig.png)">Scales</span>
+        <span class="field-label tip" title="Scale readings with the platform on three scales (where each one is: the Mass Properties guide, or the Thruster and LED Layout window)">Scales</span>
         <div class="fgrid cols-3">${[0, 1, 2].map(k => num(`mass.${n}.scales.${k}`, 'ABC'[k], { unit: 'kg', title: sc[k] })).join('')}</div>
         <p class="derived-row" data-derived="cg"></p>
         <span class="field-label tip sp-top" title="Bifilar pendulum: period T, string length L, string spacing D">Bifilar Pendulum</span>
@@ -395,10 +414,7 @@ export function initSimulation({
           ${num(`thrusterDecay.${n}`, 'Thrust Decay', { unit: '/valve', title: 'Thrust lost per extra valve open at once: the valves share one regulated supply, so with n open each thruster gives 1 − decay (n − 1) of its thrust alone (0.112 = 11.2 %). The mixer uses it, so the simulated plant and the platforms alike. The thruster calibration\'s Together stage replaces it when used; the default is the Obstacle\'s, measured 2026-10-14.' })}
         </div>
         <p class="hint" data-derived="calthrust"></p>
-        <details class="advanced"><summary>Thruster Offsets and LED Positions</summary>
-          <div data-derived="offsets"></div>
-          <button type="button" class="btn btn-sm sp-top" data-action="writeTracker" title="Writes resources/tracker_positions_phasespace.txt (LED positions of all three platforms from their CG), which the PhaseSpace switch uploads to the lab console">Write PhaseSpace Marker File</button>
-        </details>
+        <button type="button" class="btn btn-sm sp-top" data-action="layout" title="The platform from above, to scale: where the thrusters and the PhaseSpace LEDs are, dimensioned from the CG the scales give. The LEDs' positions are edited there (this project's spot_calibration.json); Start Cameras sends them to the lab console.">Thruster and LED Layout…</button>
       </section>`;
   }
 
@@ -430,7 +446,7 @@ export function initSimulation({
         <div class="fgrid cols-3">${['Shoulder q₁', 'Elbow q₂', 'Wrist q₃'].map((l, k) => num(`initial.ARM.initial.${k}`, l, { unit: '°' })).join('')}</div>
       </section>
       <section class="card">
-        <div class="card-head"><h2 class="tip" title="Definitions: resources/ArmConfig.png">Arm Geometry</h2></div>
+        <div class="card-head"><h2 class="tip" title="Definitions: the Arm guide (Documentation tab)">Arm Geometry</h2></div>
         <div class="fgrid cols-4">${g.map(([k, l, u]) => num(`mass.arm.${k}`, l, { unit: u })).join('')}</div>
         <span class="field-label sp-top">Link Masses</span>
         <div class="fgrid cols-3">${links.slice(0, 3).map(([k, l, u]) => num(`mass.arm.${k}`, l, { unit: u })).join('')}</div>
@@ -629,6 +645,7 @@ export function initSimulation({
       el.disabled = !s.mass.override && !el.dataset.path.startsWith('thruster');
     }
     renderDerived();
+    layout.refresh();
   }
 
   // What MATLAB computed from the settings: the timeline, the calibrations used, the mass
@@ -690,7 +707,7 @@ export function initSimulation({
       ? 'Click Initial or Home to show the poses on the table.'
       : `Drag on the table to move; Shift+drag rotates.`);
 
-    // The platform's mass properties: mass, CG, inertia (and overrides), thruster lines and LEDs.
+    // The platform's mass properties: mass, CG, inertia (and overrides).
     const n = S.platform;
     const mp = d.mass && d.mass[n];
     if (mp) {
@@ -701,19 +718,9 @@ export function initSimulation({
           ? ' · <span class="warn-text">overridden: ' +
             `${fmt(mp.mass)} kg, ${fmt(mp.inertia)} kg·m²</span>`
           : ''));
-      const thrRow = ks => `<tr>${ks.map(k => `<th>T${k}</th>`).join('')}</tr>` +
-        `<tr>${ks.map(k => `<td>${fmt(mp.thrusters[k - 1], 4)}</td>`).join('')}</tr>`;
-      const corners = ['+x +y', '+x −y', '−x −y', '−x +y'];
-      const leds = mp.leds.map((p, k) => `<tr><th>${corners[k]}</th>` +
-        `<td>${fmt(p[0] * 1000, 4)}</td><td>${fmt(p[1] * 1000, 4)}</td></tr>`).join('');
-      set('offsets', `<span class="field-label">Thruster Lines from the CG (mm)</span>
-        <table class="gain-table thr-table"><tbody>${thrRow([1, 2, 3, 4])}${thrRow([5, 6, 7, 8])}</tbody></table>
-        <span class="field-label sp-top">LEDs from the CG (mm)</span>
-        <table class="gain-table"><thead><tr><th>Corner</th><th>x</th><th>y</th></tr></thead><tbody>${leds}</tbody></table>`);
     } else {
       set('cg', '');
       set('inertia', '');
-      set('offsets', '');
     }
 
     // Each platform's LQR gain.
@@ -930,10 +937,16 @@ export function initSimulation({
       `${calFoot('thrusters', text, on ? count : 0)}</section>`;
   }
 
-  // Arm: each joint's friction and rotor inertia in use.
+  // Arm: each joint's friction, back-EMF and rotor inertia in use.
   function calArmCard(s, use, file, c, section, note) {
     const on = Boolean(s.calibration && s.calibration.arm);
-    const joints = [].concat((file.arm || {}).joints || []);
+
+    // Only a calibration measured in PWM control counts (spot.arm.loadCalibration refuses one
+    // measured with the motor current).
+    const armCal = file.arm && file.arm.control === 'pwm' && (file.arm.version || 0) >= 2
+      ? file.arm
+      : null;
+    const joints = [].concat((armCal || {}).joints || []);
     const aov = (file.overrides || {}).arm || {};
     const count = ARM_ROWS.reduce((a, [key]) => a + countSet(list(aov[key])), 0);
     const arm = use.arm || {};
@@ -952,13 +965,14 @@ export function initSimulation({
     const text = !on ? 'Off: the arm model\'s defaults (spot.arm.defaults).'
       : from ? `From ${esc(from.split(/[\\/]/).pop())}.`
       : 'Not measured: the arm model\'s defaults.';
-    const measured = file.arm
-      ? String(file.arm.updated || file.arm.created || '').slice(0, 10)
+    const measured = armCal
+      ? String(armCal.updated || armCal.created || '').slice(0, 10)
       : '';
     return calOpen('arm', section) +
-      calHead('Arm', 'The arm\'s measured friction and rotor inertia (the newer of the lab\'s ' +
-        'arm calibration and an arm_calibration.json in the project folder). Off: the arm ' +
-        'model\'s defaults.', 'calibration.arm', on, measured, count) +
+      calHead('Arm', 'The arm\'s measured friction, back-EMF and rotor inertia, measured in PWM ' +
+        'control (the newer of the lab\'s arm calibration and an arm_calibration.json in the ' +
+        'project folder). Off: the arm model\'s defaults.', 'calibration.arm', on, measured,
+        count) +
       `<table class="cal-vals cal-vals-3"><thead>${head}</thead><tbody>${rows}</tbody></table>` +
       `${note}${calFoot('arm', text, on ? count : 0)}</section>`;
   }
@@ -1200,9 +1214,8 @@ export function initSimulation({
       renderSetup();
     } else if (b.dataset.action === 'openDiagram') {
       act(() => matlab('diagram.open'));
-    } else if (b.dataset.action === 'writeTracker') {
-      act(async () =>
-        toast(`Wrote ${(await matlab('massprops.writeTracker')).file}`, 'success', 6000));
+    } else if (b.dataset.action === 'layout') {
+      layout.open(S.platform);
     }
   });
   for (const b of $$('[data-simtab]')) {

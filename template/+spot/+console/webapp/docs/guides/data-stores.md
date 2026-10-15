@@ -35,12 +35,12 @@ Units are SI: metres, radians, seconds, newtons, newton-metres. States are in th
 |---|---|---|---|---|---|
 | `ARM_Measured_States` | 6 | zeros | [Robotic Arm Code](page:diagram-arm-code) (experiment) or Simulate Plant Dynamics (simulation) | 4 - Control, Data Logger | `[θ1 θ2 θ3 θ̇1 θ̇2 θ̇3]` as the servos report them (encoder counts, 0.229 rpm units) |
 | `ARM_True_States` | 6 | zeros | Simulate Plant Dynamics | nobody | the simulated truth |
-| `ARM_Measured_Torque` | 3 | zeros | Robotic Arm Code / the plant | Data Logger | the torques the servos report, from their currents [N·m] |
+| `ARM_Measured_PWM` | 3 | zeros | Robotic Arm Code / the plant | Data Logger | the PWM each servo applies (its Present PWM) [885 = 100 %] |
 | `ARM_Servo_Status` | 5 | zeros | Robotic Arm Code | Data Logger | servos read this step, read duration [ms], USB latency [ms], reads missed, alert |
-| `ARM_Desired_States` | 3 | zeros | 1 - Experiment Logic | 3 - Guidance, Data Logger | the phase's goal: joint angles [rad] (or speeds / torques, for those controllers) |
+| `ARM_Desired_States` | 3 | zeros | 1 - Experiment Logic | 3 - Guidance, Data Logger | the phase's goal: joint angles [rad] (or speeds / PWM, for those controllers) |
 | `ARM_Path` | 3 | zeros | 3 - Guidance | 4 - Control, Data Logger | what the arm controller tracks now |
-| `ARM_Controls` | 3 | zeros | 4 - Control | [Arm Torques (After Control)](page:diagram-arm-torques), Simulate Plant Dynamics, Data Logger | the three joint torques [N·m] |
-| `ARM_Control_Law_Enabler` | 1 | 0 | 1 - Experiment Logic | 4 - Control | 0 off, 1 position, 2 custom (torque), 3 velocity |
+| `ARM_Controls` | 3 | zeros | 4 - Control | [Arm PWM (After Control)](page:diagram-arm-torques), Simulate Plant Dynamics, Data Logger | the three joints' PWM [885 = 100 % of the supply] |
+| `ARM_Control_Law_Enabler` | 1 | 0 | 1 - Experiment Logic | 4 - Control | 0 off, 1 position, 2 custom (PWM), 3 velocity |
 | `ARM_Path_Planner_Selection` | 1 | 0 | 1 - Experiment Logic | 3 - Guidance | 0 none, 2 custom |
 | `ARM_Control_Mode` | 1 | 0 | 4 - Control | Data Logger | the controller that actually ran this step |
 

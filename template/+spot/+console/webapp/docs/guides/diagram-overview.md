@@ -20,7 +20,7 @@ So "the GNC code" ([1 - Experiment Logic](page:diagram-experiment-logic), [2 - N
 
 ## How the subsystems talk: data stores
 
-The top-level subsystems have **no wires between them** (one exception: the arm's torque, below). They share **data stores**: named global variables (`RED_Measured_States`, `RED_Controls`, `Float_State`, …) that any block can read or write. The 49 of them are listed with their shapes and meanings on [Data Stores](page:data-stores). Reading the diagram is therefore a matter of knowing, for each subsystem, *which stores it reads and which it writes*; each diagram page says so.
+The top-level subsystems have **no wires between them** (one exception: the arm's PWM, below). They share **data stores**: named global variables (`RED_Measured_States`, `RED_Controls`, `Float_State`, …) that any block can read or write. The 49 of them are listed with their shapes and meanings on [Data Stores](page:data-stores). Reading the diagram is therefore a matter of knowing, for each subsystem, *which stores it reads and which it writes*; each diagram page says so.
 
 ![How the subsystems pass data, step by step](images/data-flow.svg)
 
@@ -35,7 +35,7 @@ Because the subsystems only communicate through data stores, the order in which 
 | 5 | [Simulation Status](page:diagram-status) | `isSim` |
 | 10 | [Platform Identification](page:diagram-status) | `WhoAmI` (experiments only) |
 | 20 | [PhaseSpace Camera Code](page:diagram-phasespace) | `Univ_Time`; on a platform also `RED/BLACK/BLUE_Measured_States` |
-| 21 | [Robotic Arm Code](page:diagram-arm-code) | `ARM_Measured_States`, `ARM_Measured_Torque`, `ARM_Servo_Status` (RED, experiments only) |
+| 21 | [Robotic Arm Code](page:diagram-arm-code) | `ARM_Measured_States`, `ARM_Measured_PWM`, `ARM_Servo_Status` (RED, experiments only) |
 | 22 | [Receive Data from Orin](page:diagram-orin-receive) | `VIS_Measured_States`, `VIS_Confidence` (experiments only) |
 | 24, 25 | the `isSim` read and the If that runs… | |
 | (inside the If) | [Simulate Plant Dynamics](page:diagram-plant) | `X_True_States`, `X_Measured_States`, `ARM_*` (simulations only) |
@@ -44,7 +44,7 @@ Because the subsystems only communicate through data stores, the order in which 
 | 40 | [3 - Guidance](page:diagram-guidance) | `X_Path` |
 | 50 | [4 - Control](page:diagram-control) | `X_Controls`, `ARM_Control_Mode` |
 | 60 | [Thruster & Float Control Code](page:diagram-thrusters) | `X_Saturated_Controls`, `X_Duty_Cycles`; the Teensy packet |
-| 61 | [Arm Torques (After Control)](page:diagram-arm-torques) | the torque wire into Robotic Arm Code |
+| 61 | [Arm PWM (After Control)](page:diagram-arm-torques) | the PWM wire into Robotic Arm Code |
 | 70 | [Send Data to Orin](page:diagram-outgoing) | UDP to the vision computer |
 | 71 | [Check Connection](page:diagram-outgoing) | the heartbeat UDP |
 | 72 | [Debugger](page:diagram-debugger) | the `X_Logger` texts to the console |
@@ -53,7 +53,7 @@ Because the subsystems only communicate through data stores, the order in which 
 
 The plant simulation runs where its If block does (between the hardware inputs and the experiment logic), so a simulated measurement is one step old when the controller sees it, as a camera measurement is. It also reads `Float_State` (the table's slope pulls a platform only while it floats) before 1 - Experiment Logic writes it, so it uses last step's value; that store's read-before-write and write-after-read checks are off for this reason ([Data Stores](page:data-stores)).
 
-The one wire at the top level: **Arm Torques (After Control)** outputs the `ARM_Controls` torque *after* 4 - Control has written it (priority 61) and feeds it into **Robotic Arm Code** (priority 21). Robotic Arm Code therefore uses the torque computed in the previous step, like the real servo bus would: the command computed at step k reaches the servo at k+1. In simulation the plant reads `ARM_Controls` directly, one step after it was written, so both agree ("Match the simulation").
+The one wire at the top level: **Arm PWM (After Control)** outputs the `ARM_Controls` PWM *after* 4 - Control has written it (priority 61) and feeds it into **Robotic Arm Code** (priority 21). Robotic Arm Code therefore uses the PWM computed in the previous step, like the real servo bus would: the command computed at step k reaches the servo at k+1. In simulation the plant reads `ARM_Controls` directly, one step after it was written, so both agree ("Match the simulation").
 
 ## Rates and sizes
 

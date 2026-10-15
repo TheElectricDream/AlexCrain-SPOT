@@ -3,7 +3,7 @@
   "diagram": "Template_v5_0_0_2026a_Jetson_PSClock.slx",
   "platforms": {
     "RED": true,
-    "BLACK": false,
+    "BLACK": true,
     "BLUE": true,
     "ARM": true
   },

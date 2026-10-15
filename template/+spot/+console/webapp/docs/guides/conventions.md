@@ -14,7 +14,7 @@
 
 **A platform's body frame:** the origin at its centre of gravity, +x out of its front face (the face with the Chaser's ZED2 camera; the control panel is on −x), +y to its left, +z up. The thrusters push along the body's ±x and ±y, so the thruster mixer rotates the commanded force into this frame before choosing the valves ([The Thruster Mixer](page:math-mixer)). Docking parts and solar panels are placed on the +x, +y and −y faces ([The Designer](page:tab-designer)).
 
-**The arm's joints:** each angle is 0 with the link straight out (the shoulder: straight out from its mounting face), up to ±90° either side ([The Arm](page:math-arm), `resources/ArmConfig.png`).
+**The arm's joints:** each angle is 0 with the link straight out (the shoulder: straight out from its mounting face), up to ±90° either side ([The Arm](page:math-arm)).
 
 ## Names
 

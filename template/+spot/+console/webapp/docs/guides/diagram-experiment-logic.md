@@ -78,6 +78,6 @@ Like phase 2 with `home_states_X` (the Platforms pane's **Home** pose) and the a
 
 The phases' *structure* (synchronise, float, go to the start, experiment, go home, hold, shut down) is what the lab procedure needs; keep it. What you change:
 - the sub-phases' desired states (replace the circle with your trajectory, or set `X_Path_Planner_Selection` to 1 or 2 to hand it to a [Guidance](page:diagram-guidance) path planner you write),
-- the `X_Control_Law_Enabler` values (2 or 3 select your custom controllers in [4 - Control](page:diagram-control); for the arm 1 = position, 2 = custom/torque, 3 = velocity, 0 = off),
+- the `X_Control_Law_Enabler` values (2 or 3 select your custom controllers in [4 - Control](page:diagram-control); for the arm 1 = position, 2 = custom (PWM), 3 = velocity, 0 = off),
 - the String Constants (what the Messages panel says in each phase),
 - the durations, on the Simulation tab's Timeline.

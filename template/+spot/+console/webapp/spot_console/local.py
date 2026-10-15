@@ -29,7 +29,6 @@ LOCAL = {"enabled": False, "token": "", "root": None, "ready_file": None, "serve
 MATLAB_COMMANDS = {
     "ping": 10, "info": 10, "settings.get": 120, "settings.set": 120, "settings.reset": 120,
     "settings.open": 900, "settings.saveAs": 900, "diagram.open": 120, "diagram.showBlock": 120,
-    "massprops.writeTracker": 30,
     "workspace.list": 60, "workspace.inspect": 60, "workspace.eval": None,
     "experiment.plan": 120, "experiment.connect": 600, "experiment.decode": 900,
     # Results page: Saved Data, loaded datasets, plots and 3D playback

@@ -640,8 +640,9 @@ class Handler(BaseHTTPRequestHandler):
             return {"stopping": True}, 200
 
         # A lab action from the Experiment tab, forwarded to the lab
-        # console; tracker_positions sends this project's marker
-        # calibration.
+        # console. tracker_positions carries this project's marker file
+        # (MATLAB's trackerPositions: each LED from its platform's CG),
+        # which the lab console writes next to StreamData.
         if path == "/api/lab":
             action = str(body.get("path", ""))
             if action.split("?", 1)[0] in LabLink.READS:
@@ -649,13 +650,9 @@ class Handler(BaseHTTPRequestHandler):
             if action.split("?", 1)[0] not in LabLink.ACTIONS:
                 raise ApiError("Not a lab action: %r" % action)
             payload = body.get("body") or {}
-            if action == "tracker_positions":
-                tracker_file = (Path(LOCAL["root"]) / "resources"
-                                / "tracker_positions_phasespace.txt")
-                if not tracker_file.is_file():
-                    raise ApiError("This project has no "
-                                   "resources/tracker_positions_phasespace.txt.")
-                payload = {"text": tracker_file.read_text(encoding="utf-8")}
+            if action == "tracker_positions" and not str(payload.get("text") or "").strip():
+                raise ApiError("No marker file to send yet: MATLAB hasn't worked out where "
+                               "the LEDs are from each platform's CG.")
             return {"result": local.lab.request("POST", action, payload)}, 200
 
         # The Experiment tab's lab console address (the settings'
@@ -704,6 +701,17 @@ class Handler(BaseHTTPRequestHandler):
             result = calibration_store.set_override(body.get("path"), body.get("value"))
             hub.log("matlab", "Calibration override: %s = %s"
                     % (body.get("path"), body.get("value")))
+            return result, 200
+
+        # Where a platform's PhaseSpace LEDs are (the Simulation tab's
+        # Thruster and LED Layout): {"platform": "RED", "leds": [{"id",
+        # "x", "y"}, ...]} [mm from the body centre], or "leds": null
+        # for the default layout.
+        if path == "/api/calibration/markers":
+            result = calibration_store.set_leds(body.get("platform"), body.get("leds"))
+            hub.log("matlab", "LED positions of %s: %s"
+                    % (body.get("platform"), "changed" if body.get("leds") is not None
+                       else "the default layout"))
             return result, 200
 
         if path == "/api/lab/download":

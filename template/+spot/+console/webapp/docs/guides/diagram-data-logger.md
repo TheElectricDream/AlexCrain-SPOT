@@ -4,7 +4,7 @@
 
 ![Data Logger Subsystem](images/sub_Data_Logger_Subsystem.png)
 
-**Reads:** 36 data stores: `Univ_Time`; for RED, BLACK and BLUE: `X_Controls`, `X_Saturated_Controls`, `X_Measured_States`, `X_Desired_States`, `X_IMU_Measurements`, `X_Duty_Cycle(s)`, `X_Control_Law_Enabler`, `X_Path`; for the arm: `ARM_Control_Mode`, `ARM_Controls`, `ARM_Measured_States`, `ARM_Path`, `ARM_Desired_States`, `ARM_Measured_Torque`, `ARM_Servo_Status`; and `Float_State`, `WhoAmI`, `isSim`, `VIS_Measured_States`, `VIS_Confidence`.
+**Reads:** 36 data stores: `Univ_Time`; for RED, BLACK and BLUE: `X_Controls`, `X_Saturated_Controls`, `X_Measured_States`, `X_Desired_States`, `X_IMU_Measurements`, `X_Duty_Cycle(s)`, `X_Control_Law_Enabler`, `X_Path`; for the arm: `ARM_Control_Mode`, `ARM_Controls`, `ARM_Measured_States`, `ARM_Path`, `ARM_Desired_States`, `ARM_Measured_PWM`, `ARM_Servo_Status`; and `Float_State`, `WhoAmI`, `isSim`, `VIS_Measured_States`, `VIS_Confidence`.
 
 - 36 **Data Store Read** blocks and 23 **Demux** blocks split each vector store into scalar signals (`Demux2` splits `RED_Measured_States` into its nine states, `Demux ARM Status` the status 5-vector, …). Each scalar line is **named** on the diagram (`RED_Px_m`, `RED_Fx_N`, `ARM_Rz_Shoulder_rad`, …); that name becomes the signal's name in the record, and its suffix its unit (`spot.plotting.signalLabel` reads `_m`, `_mpers`, `_rad`, `_N`, `_Nm`… for the plots' axis labels). Three stores stay as vectors: `X_Duty_Cycle` (8 columns), `VIS_Measured_States` (3).
 - **Data Logging Bus** (a Bus Creator with 108 inputs) joins them, in the order of [Logged Signals](page:logged-signals).

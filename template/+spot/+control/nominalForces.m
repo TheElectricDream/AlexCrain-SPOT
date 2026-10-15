@@ -8,8 +8,8 @@ function F = nominalForces(force)
     %
     %   Outputs
     %     F      8x1 thrusts [N]. Thrusters 1, 2, 5, 6 act along x and 3, 4, 7, 8 along y
-    %            (resources/ThrusterConfig.png), listed separately so unequal x and y thrusters
-    %            can be described.
+    %            (ThrusterConfig.png in the Mass Properties guide), listed separately so unequal
+    %            x and y thrusters can be described.
     %
     %   See also spot.control.thrusterDutyCycles.
 

@@ -16,9 +16,9 @@
 
 `CheckforInvalidTime` returns the time since the last measurement, or the data rate's period (`dataRate`) when that difference is zero or negative (the first step, or two samples at the same time), so a velocity computed from it never divides by zero.
 
-## 4 - Control/Custom Control (ARM)/Calculate Torque
+## 4 - Control/Custom Control (ARM)/Calculate PWM
 
-`PlaceholderControl` passes its input straight through: the arm's custom controller (mode 2) in the template sends the path (`ARM_Path`) to the servos as torques. Replace it with your own torque controller ([4 - Control](page:diagram-control)).
+`PlaceholderControl` passes its input straight through: the arm's custom controller (mode 2) in the template sends the path (`ARM_Path`) to the servos as PWM (885 = 100 % of the supply; at rest a PWM acts as a torque). Replace it with your own controller ([4 - Control](page:diagram-control) shows how a torque becomes PWM).
 
 ## Simulate Plant Dynamics/BLACK Dynamics/Dynamics Model for BLACK/MATLAB Function
 

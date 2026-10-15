@@ -1,15 +1,16 @@
 classdef Plant < matlab.System
     %PLANT The Chaser (RED) with its arm and Dynamixel servos, simulated at the plant's own step.
-    %   The diagram's "RED + ARM Plant" block. The servos are driven by torque only (current
-    %   control, as on the hardware); position and velocity control are controllers in the
-    %   diagram (spot.arm.PositionControl, spot.arm.VelocityControl).
+    %   The diagram's "RED + ARM Plant" block. The servos are driven by PWM only (PWM control,
+    %   as on the hardware: a share of the supply voltage across each motor); position and
+    %   velocity control are controllers in the diagram (spot.arm.PositionControl,
+    %   spot.arm.VelocityControl) whose output is PWM.
     %
-    %   Each diagram step (baseRate), the plant takes baseRate/innerStep internal steps (1 ms by
-    %   default) of:
-    %     1. Servo currents: joint torques become goal currents as spot.hardware.ArmTorque
-    %        converts them (3.36 mA units, within the Current Limit, none pushing a joint past
-    %        Min/Max Position). Each servo holds its current as far as the supply voltage allows
-    %        (back-EMF).
+    %   Each diagram step (baseRate), the commands are taken as spot.hardware.ArmPWM sends them
+    %   (whole PWM units within the PWM Limit, none pushing a joint past Min/Max Position), and
+    %   the plant takes baseRate/innerStep internal steps (1 ms by default) of:
+    %     1. Motors: each gives torquePerVolt (V - backEMF w) at its joint, V = PWM / 885 x the
+    %        supply voltage (spot.arm.defaults). The back-EMF part brakes the joint in
+    %        proportion to its speed, and is taken implicitly with the viscous friction.
     %     2. Dynamics: base (x, y, theta; thruster forces, table slope and air-bearing drag) and
     %        the three joints, coupled (spot.arm.inertiaMatrix, spot.arm.coriolisMatrix), with
     %        each joint's reflected rotor inertia.
@@ -25,20 +26,21 @@ classdef Plant < matlab.System
     %
     %   Inputs
     %     F           3x1 thruster forces on the base [N, N, N m] (F_RED)
-    %     tau         3x1 joint torques [N m] (ARM_Controls)
+    %     pwm         3x1 joint commands [PWM, 885 = 100 %] (ARM_Controls)
     %     floatState  air bearings on (with FloatInput)
     %
     %   Outputs
     %     pos         6x1 [x y theta q1 q2 q3]
     %     vel         6x1 velocities
-    %     torque      3x1 torque each servo reports (Present Current x torque constant) [N m]
+    %     applied     3x1 PWM each servo applies (its Present PWM): the command within the
+    %                 limits
     %
     %   Example
     %     p = spot.arm.Plant('Model', armModel);
-    %     [pos, vel, torque] = p(F_RED, jointTorques);   % one diagram step
-    %   p.MotorTorque, p.FrictionTorque, p.Current and p.Stuck describe the last internal step.
+    %     [pos, vel, applied] = p(F_RED, pwm);   % one diagram step
+    %   p.MotorTorque, p.FrictionTorque, p.Voltage and p.Stuck describe the last internal step.
     %
-    %   See also spot.arm.parameters, spot.hardware.ArmTorque, spot.arm.withinLimits.
+    %   See also spot.arm.parameters, spot.hardware.ArmPWM, spot.arm.withinLimits.
 
     %#codegen
 
@@ -49,26 +51,25 @@ classdef Plant < matlab.System
     end
 
     properties (SetAccess = private)
-        MotorTorque = zeros(3, 1)           % [N m] at each joint
+        MotorTorque = zeros(3, 1)           % [N m] at each joint (back-EMF included)
         FrictionTorque = zeros(3, 1)        % [N m] at each joint (dry + viscous), signed
-        Current = zeros(3, 1)               % [A] each motor's current
+        Voltage = zeros(3, 1)               % [V] across each motor
         Stuck = false(3, 1)                 % joint held by its friction
     end
 
     properties (Access = private)
         q = zeros(6, 1)                     % [x y theta q1 q2 q3]
         v = zeros(6, 1)                     % velocities
-        iGoal = zeros(3, 1)                 % [A] goal currents
+        volts = zeros(3, 1)                 % [V] across each motor this diagram step
         nSub = 1                            % internal steps per diagram step
         h = 1e-3                            % [s] internal step
-        Kt = zeros(3, 1)                    % [N m/A] torque constant at the joint
-        R = zeros(3, 1)                     % [ohm] winding resistance
-        Ke = zeros(3, 1)                    % [V s/rad] back-EMF constant at the joint
+        g = zeros(3, 1)                     % [N m/V] torque per volt at the joint
+        Ke = zeros(3, 1)                    % [V s/rad] back-EMF at the joint
         floating = 1                        % air bearings on (the table's pull acts)
     end
 
     properties (Constant, Access = private)
-        CUR_UNIT = 3.36e-3                  % [A] per current unit
+        PWM_FULL = 885                      % PWM at 100 % of the supply
         PULSES_PER_REV = 4096               % [pulses/rev] encoder resolution
         CENTER_PULSE = 2048                 % [pulses] joint straight out
     end
@@ -87,47 +88,44 @@ classdef Plant < matlab.System
             obj.nSub = max(1, round(m.outerStep / m.innerStep));
             obj.h = m.outerStep / obj.nSub;
 
-            % Motor constants from the datasheet's stall and no-load values.
-            motor = m.motor;
-            obj.Kt = motor.stallTorque(:) ./ motor.stallCurrent(:);
-            obj.R = motor.voltage ./ motor.stallCurrent(:);
-            obj.Ke = motor.voltage ./ motor.noLoadSpeed(:);
+            % Motor constants at the joints.
+            obj.g = m.motor.torquePerVolt(:);
+            obj.Ke = m.motor.backEMF(:);
         end
 
         function resetImpl(obj)
             obj.q = obj.Model.x0(:);
             obj.v = zeros(6, 1);
-            obj.iGoal = zeros(3, 1);
+            obj.volts = zeros(3, 1);
             obj.MotorTorque = zeros(3, 1);
             obj.FrictionTorque = zeros(3, 1);
-            obj.Current = zeros(3, 1);
+            obj.Voltage = zeros(3, 1);
             obj.Stuck = false(3, 1);
             obj.floating = 1;
         end
 
-        function [pos, vel, torque] = stepImpl(obj, F, tau, varargin)
+        function [pos, vel, applied] = stepImpl(obj, F, pwm, varargin)
             if obj.FloatInput
                 obj.floating = double(varargin{1}(1) ~= 0);
             end
 
-            % Goal currents, as spot.hardware.ArmTorque sends them: no torque pushing a joint
-            % past its position limits, rounded to current units within the Current Limit.
+            % Goal PWM, as spot.hardware.ArmPWM sends it: none pushing a joint past its position
+            % limits, in whole units within the PWM Limit.
             servo = obj.Model.servo;
             pulses = round(obj.q(4:6) * obj.PULSES_PER_REV / (2*pi)) + obj.CENTER_PULSE;
-            tau = spot.arm.withinLimits(tau(:), pulses, servo.minPosition, servo.maxPosition);
-            lim = servo.currentLimit;
-            units = min(max(round(tau ./ obj.Kt / obj.CUR_UNIT), -lim), lim);
-            obj.iGoal = units * obj.CUR_UNIT;
+            pwm = spot.arm.withinLimits(pwm(:), pulses, servo.minPosition, servo.maxPosition);
+            lim = servo.pwmLimit;
+            applied = min(max(round(pwm), -lim), lim);
+            obj.volts = applied / obj.PWM_FULL * obj.Model.motor.voltage;
 
             % Internal steps.
             for k = 1:obj.nSub
                 innerStep(obj, F(:));
             end
 
-            % Outputs; the reported torque is the current in whole units, as the servo reports it.
+            % Outputs.
             pos = obj.q;
             vel = obj.v;
-            torque = round(obj.Current / obj.CUR_UNIT) * obj.CUR_UNIT .* obj.Kt;
         end
 
         %% Simulink block interface
@@ -169,7 +167,7 @@ classdef Plant < matlab.System
 
     methods (Access = private)
         function innerStep(obj, F)
-            % One internal step: servo currents, dynamics and friction.
+            % One internal step: motors, dynamics and friction.
             STUCK_SPEED = 1e-9;             % [rad/s] below this a joint counts as still
             BOUND_REL_TOL = 1e-9;           % friction strictly inside its bound: stuck
 
@@ -179,12 +177,11 @@ classdef Plant < matlab.System
             q = obj.q;
             v = obj.v;
 
-            % Each servo holds its goal current, as far as the supply voltage allows.
-            supplyV = m.motor.voltage;
+            % Each motor's torque at rest for its voltage; its back-EMF brakes the joint in
+            % proportion to its speed, taken implicitly with the viscous friction below.
             jointVel = v(4:6);
-            current = min(max(obj.iGoal, (-supplyV - obj.Ke .* jointVel) ./ obj.R), ...
-                          (supplyV - obj.Ke .* jointVel) ./ obj.R);
-            tau0 = obj.Kt .* current;
+            tau0 = obj.g .* obj.volts;
+            backEMF = obj.g .* obj.Ke;              % [N m s/rad]
 
             % Mass matrix (with rotor inertia) and Coriolis torques. The shoulder angle is
             % measured from its face; the model's from the base frame.
@@ -194,9 +191,9 @@ classdef Plant < matlab.System
             M(4:6, 4:6) = M(4:6, 4:6) + diag(m.armature(:));
             Cv = spot.arm.coriolisMatrix(m, x) * v;
 
-            % Friction: viscous taken implicitly; dry friction bounded by the Stribeck curve at
-            % this speed.
-            b = fr.viscous(:);
+            % Friction: viscous (and the back-EMF) taken implicitly; dry friction bounded by the
+            % Stribeck curve at this speed.
+            b = fr.viscous(:) + backEMF;
             Ts = fr.static(:);
             Tc = fr.coulomb(:);
             dryLimit = Tc + (Ts - Tc) .* exp(-(jointVel ./ fr.stribeck(:)).^2);
@@ -220,8 +217,8 @@ classdef Plant < matlab.System
             % Semi-implicit Euler, and the step's diagnostics.
             obj.v = vNew;
             obj.q = q + h * vNew;
-            obj.Current = current;
-            obj.MotorTorque = tau0;
+            obj.Voltage = obj.volts;
+            obj.MotorTorque = tau0 - backEMF .* vNew(4:6);
             obj.FrictionTorque = impulse / h - fr.viscous(:) .* vNew(4:6);
             obj.Stuck = abs(vNew(4:6)) < STUCK_SPEED ...
                       & abs(impulse) < h * dryLimit * (1 - BOUND_REL_TOL);

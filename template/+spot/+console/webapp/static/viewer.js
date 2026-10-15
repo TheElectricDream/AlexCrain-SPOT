@@ -55,7 +55,7 @@ const ZED_BOX = [0.043, 0.1753, 0.0303];   // the housing [m]: depth, width, hei
 const ZED_INTRINSICS = { width: 1280, height: 720, fx: 528, fy: 528, cx: 640, cy: 360 };
 const ZED_VFOV = 2 * Math.atan(ZED_INTRINSICS.cy / ZED_INTRINSICS.fy) * 180 / Math.PI;   // 68.6 deg
 
-// The 8 thrusters in the body frame (resources/ThrusterConfig.png; the mixer's H matrix in
+// The 8 thrusters in the body frame (docs/images/ThrusterConfig.png; the mixer's H matrix in
 // spot.control.thrusterDutyCycles): nozzle [x, y] [m], 81 mm in from the edges, and the
 // direction the gas leaves in (the platform is pushed the other way).
 const THRUSTER_NOZZLES = [

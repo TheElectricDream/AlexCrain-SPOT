@@ -666,30 +666,30 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
 const D = Math.PI / 180;
 const STEP_DEG = [10, 0, -10, 20, 0, -20, 5, 0];
 export const ARM_TEST_MOTION = {
-  // The current creeps up until the joint breaks away, then it is held and ramped the other way.
+  // The PWM creeps up until the joint breaks away, then it is ramped the other way.
   breakaway: t => {
     const u = t % 6;
     const s = u < 3 ? 1 : -1;
     const v = u % 3;
     return [
       v < 2.2 ? 0 : s * Math.min(8, (v - 2.2) * 30) * D,
-      v < 2.2 ? 'current rising' : 'breakaway',
+      v < 2.2 ? 'PWM rising' : 'breakaway',
     ];
   },
-  // Constant speeds back and forth, faster each pass.
+  // Fixed PWM levels back and forth, faster each pass.
   sweep: t => {
     const u = t % 6;
     const pass = Math.floor(u / 1.5);
     const f = (u % 1.5) / 1.5;
     const dir = pass % 2 ? -1 : 1;
-    return [dir * (-25 + 50 * f) * D, `speed ${pass + 1}`];
+    return [dir * (-25 + 50 * f) * D, `level ${pass + 1}`];
   },
-  // A torque step from rest: it accelerates, then it is caught.
+  // A PWM step from rest: it gets up to speed, then it is caught.
   inertia: t => {
     const u = t % 3;
     return [
       u < 1 ? 0 : Math.min(15, 15 * ((u - 1) / 0.6) ** 2) * D,
-      u < 1 ? 'at rest' : 'torque step',
+      u < 1 ? 'at rest' : 'PWM step',
     ];
   },
   // Position goals 10, 0, -10, 20, 0, -20, 5, 0 deg, as the servo follows them.
@@ -738,7 +738,8 @@ export function armFigure(test, joint, t) {
 
 /**
  * Friction against speed for each joint: the sweep's points (torque [N m] at each steady speed
- * [rad/s]) and the fitted curve, coulomb + (static - coulomb) exp(-(v/stribeck)^2) + viscous v.
+ * [rad/s]: what the motor gave there, its PWM's torque less the back-EMF's braking) and the fitted
+ * curve, coulomb + (static - coulomb) exp(-(v/stribeck)^2) + viscous v.
  * @param {!Array<!Object>} joints Each {index, name, coulomb, static, stribeck, viscous}.
  * @param {!Object} plots By joint index: {sweep: [[speed, torque], ...]}.
  * @return {string} SVG and its key.

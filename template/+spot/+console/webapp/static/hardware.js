@@ -6,7 +6,7 @@ import { COLORS, platformName } from './platforms.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 
-// Thruster positions on the top view (+x up, +y left), as in resources/ThrusterConfig.png:
+// Thruster positions on the top view (+x up, +y left), as in docs/images/ThrusterConfig.png:
 // [side the nozzle is on, x %, y %] of the drawing (the Calibration tab's thruster map too).
 export const THRUSTERS = {
   1: ['top', 32, 14], 2: ['top', 68, 14], 3: ['right', 86, 33], 4: ['right', 86, 67],

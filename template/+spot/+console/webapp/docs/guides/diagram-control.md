@@ -1,6 +1,6 @@
 # 4 - Control
 
-**Priority 50.** The controllers: for each platform, pick a control law by `X_Control_Law_Enabler`, compute the force and torque (or the arm's joint torques) that drive the measured state to the path, and write it to `X_Controls`.
+**Priority 50.** The controllers: for each platform, pick a control law by `X_Control_Law_Enabler`, compute the force and torque (or the arm's joint PWM) that drive the measured state to the path, and write it to `X_Controls`.
 
 ![4 - Control](images/sub_4_Control.png)
 
@@ -48,26 +48,26 @@ Placeholders: a **Mux** of three **Zero** constants, i.e. `[0 0 0]`. Replace the
 
 ## The arm's controllers
 
-The servos run in current (torque) control throughout ([Robotic Arm Code](page:diagram-arm-code)); position and velocity control are controllers **here** that output torques, replicas of the servos' own control laws retuned for the diagram's 20 Hz step ([The Arm](page:math-arm)). Each branch also writes its number to `ARM_Control_Mode` (logged), so the record says which law produced each torque.
+The servos run in PWM (voltage) control throughout ([Robotic Arm Code](page:diagram-arm-code)); position and velocity control are controllers **here** that output each joint's PWM (`ARM_Controls`, 885 = 100 % of the supply), replicas of the servos' own control laws (whose output is PWM too) retuned for the diagram's 20 Hz step ([The Arm](page:math-arm)). Each branch also writes its number to `ARM_Control_Mode` (logged), so the record says which law produced each command.
 
 ### Default Position Control (ARM): mode 1
 
 ![Default Position Control (ARM)](images/sub_4_Control_Default_Position_Control_ARM.png)
 
-**Dynamixel Position Control**, the MATLAB System block `spot.arm.PositionControl`, with inputs `ARM_Measured_States` (Data Store Read1) and `ARM_Path` (Data Store Read2; the goal joint angles in rad). Inside: the servo's profile (the desired position moves towards the goal at Profile Velocity), a PID on the position error with the servo's structure (P/I/D 25 56 21 / 10 / 1545 230 236 for the shoulder/elbow/wrist at 20 Hz), the PWM limit, and the conversion of the PWM to the torque the motor would give. Its gains, profile and PWM limit come from the settings (the Control pane's arm cards, `armControl.position.*` on the block); the step time is `baseRate`. Output: three torques.
+**Dynamixel Position Control**, the MATLAB System block `spot.arm.PositionControl`, with inputs `ARM_Measured_States` (Data Store Read1) and `ARM_Path` (Data Store Read2; the goal joint angles in rad). Inside: the servo's profile (the desired position moves towards the goal at Profile Velocity), a PID on the position error with the servo's structure (P/I/D 25 56 21 / 10 / 1545 230 236 for the shoulder/elbow/wrist at 20 Hz), and the PWM limit. Its gains, profile and PWM limit come from the settings (the Control pane's arm cards, `armControl.position.*` on the block); the step time is `baseRate`. Output: three PWM values.
 
 ### Default Velocity Control (ARM): mode 3
 
 ![Default Velocity Control (ARM)](images/sub_4_Control_Default_Velocity_Control_ARM.png)
 
-**Dynamixel Velocity Control**, `spot.arm.VelocityControl`, with `ARM_Path` as goal joint **speeds** (rad/s) and `ARM_Measured_States`: a PI on the speed error (P 160 70 30, I 220 1500 300), to torques. Its gains, profile acceleration and PWM limit are `armControl.velocity.*` (the Control pane).
+**Dynamixel Velocity Control**, `spot.arm.VelocityControl`, with `ARM_Path` as goal joint **speeds** (rad/s) and `ARM_Measured_States`: a PI on the speed error (P 160 70 30, I 220 1500 300), to PWM. Its gains, profile acceleration and PWM limit are `armControl.velocity.*` (the Control pane).
 
 ### Custom Control (ARM): mode 2
 
 ![Custom Control (ARM)](images/sub_4_Control_Custom_Control_ARM.png)
 
-**Torque control**, an example: **Calculate Torque** is the one-line MATLAB Function `y = u`: the three values in `ARM_Path` are sent straight to the servos as joint torques in N·m. Put your own control law here (a computed-torque controller using `spot.arm.inertiaMatrix`, an impedance controller, …), reading `ARM_Measured_States`, `ARM_Measured_Torque` and the base's states as you need. Torques beyond what the servos' Current Limit allows are clipped by the hardware block and the plant, and listed after a simulation by `spot.arm.checkCommands`.
+**PWM control**, an example: **Calculate PWM** is the one-line MATLAB Function `y = u`: the three values in `ARM_Path` are sent straight to the servos as joint PWM (885 = 100 % of the supply). Put your own control law here (a computed-torque controller using `spot.arm.inertiaMatrix`, an impedance controller, …), reading `ARM_Measured_States`, `ARM_Measured_PWM` and the base's states as you need. A torque $\tau$ becomes PWM as $u = \frac{885}{V_s}\left(\frac{\tau}{g} + K_e\,\omega\right)$ with $g$ = `armModel.motor.torquePerVolt` and $K_e$ = `armModel.motor.backEMF` ([The Arm](page:math-arm)): at rest about 147 units per N m at 12 V, plus the back-EMF's share when turning. PWM beyond the PWM Limit is clipped by the hardware block and the plant, and listed after a simulation by `spot.arm.checkCommands`.
 
 ### Disable Control (ARM): mode 0
 
-`[0 0 0]` N·m: the joints are free, held only by their friction.
+`[0 0 0]` PWM: no voltage across the motors, so the joints are held only by their friction and the back-EMF's braking.

@@ -1,7 +1,9 @@
 # Arm friction calibration
 
-`calibrate_arm.py` measures the friction (and inertia) of the arm's three Dynamixel joints, for SPOT's
-simulated arm (`spot.arm.Plant`; see the tutorial, "The Arm: Servos, Friction and Calibration").
+`calibrate_arm.py` measures the friction, back-EMF and inertia of the arm's three Dynamixel joints, for
+SPOT's simulated arm (`spot.arm.Plant`; the Documentation tab's "The Arm" page). It drives the servos
+the way SPOT does, in PWM (voltage) control, and measures only with PWM and the encoders: the servos'
+current readings are too coarse and noisy at the arm's small torques to be used.
 
 The easiest way to run it is from the lab console's **Calibration tab** (Arm): it checks what the Chaser
 needs, sends this script, runs it (`--yes`), shows its progress and keeps the result in the lab's
@@ -22,29 +24,40 @@ folder). Below is how to run it by hand.
    ```
 
    Other options: `--joints 3` (one joint), `--tests breakaway sweep` (some tests), `--window 15` (a
-   smaller range), `--port /dev/ttyUSB1`, `--help` for the rest. `--simulate` rehearses without hardware; `--yes` starts
-   without asking for Enter.
+   smaller range), `--max-pwm 200` (a lower cap), `--port /dev/ttyUSB1`, `--help` for the rest.
+   `--simulate` rehearses without hardware; `--yes` starts without asking for Enter.
 5. Copy `runs/<date_time>/arm_calibration.json` to the SPOT project's folder (next to
-   `spot_settings.json`). The next simulation uses it (the newer of it and the Calibration tab's). Keep the whole `runs/<date_time>` folder with the raw data.
+   `spot_settings.json`). The next simulation uses it (the newer of it and the Calibration tab's). Keep
+   the whole `runs/<date_time>` folder with the raw data.
 
 ## Afterwards, in MATLAB
 
 ```matlab
 armModel = evalin('base', 'armModel');               % after any simulation (it includes the calibration)
-spot.arm.compareSteps('runs/20261011_101500', armModel)  % simulated vs measured position steps
+spot.arm.compareSteps('runs/20261016_101500', armModel)  % simulated vs measured position steps
 ```
 
-`python3 calibrate_arm.py --fit runs/<date_time>` fits saved data again (e.g. with another `--kt`).
+`python3 calibrate_arm.py --fit runs/<date_time>` fits saved data again (e.g. with another
+`--back-emf`).
 
 ## What it measures
 
+At the joint, a servo in PWM control gives `torque_per_volt (V - back_emf w)`, with V = PWM / 885 x the
+supply. At rest a voltage is a torque; turning, the back-EMF brakes the joint like viscous friction.
+
 | Test | Mode | Gives |
 | --- | --- | --- |
-| breakaway | current ramps from zero, 3 each way | breakaway torque (`static`) |
-| sweep | constant speeds back and forth | `coulomb`, `stribeck`, `viscous` |
-| inertia | a torque step from rest | the joint's inertia; SPOT subtracts the links' part (`armature`) |
+| breakaway | PWM ramps from zero, 3 each way | breakaway torque (`static`): the PWM where the joint first moves |
+| sweep | fixed PWM levels about the breakaway, back and forth, each after a short kick | the steady speed at each: `coulomb`, `stribeck`, and the speed coefficient (`back_emf` and `viscous`) |
+| inertia | a PWM step from rest, each way | the joint's inertia (its step simulated with the fitted friction); SPOT subtracts the links' part (`armature`) |
 | steps | position steps with SPOT's servo settings | data for `spot.arm.compareSteps` |
 
-Torque is the measured motor current times the torque constant from the datasheet (MX-64(2.0):
-6.0 N m / 4.1 A = 1.46 N m/A; MX-106(2.0): 8.4 / 5.2). MX-28 servos don't measure current and can't
-be calibrated this way. Speeds below about 0.07 rad/s often stick-slip; those are left out of the fit.
+Torques come from the datasheet's torque per volt (MX-64(2.0): 6.0 N m / 12 V = 0.5 N m/V). The
+back-EMF and viscous friction both brake in proportion to speed, so PWM control measures only their sum
+(the speed coefficient); the datasheet's back-EMF (MX-64(2.0): 12 V at 63 rev/min, 1.82 V s/rad) is
+taken as the back-EMF, the rest as viscous friction. Below the breakaway a joint stick-slips at the
+slowest speeds; those levels are left out of the fit. The wrist settles within a few milliseconds of a
+PWM step, close to the time between reads, so its inertia is only roughly known (the result says so).
+
+Calibrations from before (version 1) measured the motor current under current control; SPOT no longer
+uses them, and simulations warn until the arm is calibrated again.

@@ -15,7 +15,13 @@ lab's file is newer, its page offers to update the project's copy
 A project's copy can also override single values ("overrides", set on
 the Simulation tab's Calibration pane). Updating from the lab keeps
 them, and a part of the lab's calibration whose every value is
-overridden is not offered as newer (sections_newer).
+overridden is not offered as newer (sections_newer). It also holds
+where each platform's PhaseSpace LEDs are ("markers", set in the
+Simulation tab's Thruster and LED Layout window; the default layout
+until then), which updating from the lab keeps too: MATLAB works out
+each LED's position from the platform's CG (spot.massprops.compute),
+and the Experiment tab sends that marker file to the lab console
+before the cameras start.
 
     {"format": "spot-calibration", "version": 1,
      "updated": "2026-10-13T15:02:11Z",  (the newest section's; UTC,
@@ -34,7 +40,11 @@ overridden is not offered as newer (sections_newer).
        "thrusters": {"RED": {"thrust": [8 x number or null],
                              "decay": d}, ...},
        "arm": {"static": [3 x number or null], "coulomb", "stribeck",
-               "viscous", "armature"}}}
+               "viscous", "armature", "back_emf"}},
+     "markers": {                              (a project's copy only)
+       "RED": [{"id": 5, "x": 137.0, "y": 137.0}, ...  4 LEDs, [mm]
+               ...], ...}}                             from the body
+                                                       centre
 
 The table slope calibration (TableRun), with PhaseSpace streaming and
 the platform resting on the table:
@@ -85,9 +95,11 @@ TX2 next to the console) on the Chaser, through its agent
 Dynamixel SDK, the U2D2 and access to it, nothing else holding it),
 keeps the Chaser resting (nothing can float it meanwhile), sends the
 script, starts it, follows its progress, and collects its data and
-fit. A rehearsal runs the script's simulated servos instead: it needs
-none of that hardware, and its result is shown but never becomes the
-lab's.
+fit. The script drives the servos in PWM (voltage) control, as SPOT
+does, and measures with PWM and the encoders alone (version 2 of its
+file, "control": "pwm"). A rehearsal runs the script's simulated
+servos instead: it needs none of that hardware, and its result is
+shown but never becomes the lab's.
 
 A calibration drives one platform at a time, through the hardware
 driver (hardware.py: claim, drive, release), as Interactive Mode does:
@@ -173,15 +185,25 @@ MAX_THRUST = 2.0             # [N]
 # units, as in the file): the table's height coefficients [a1 a2: m/m;
 # a3 a4 a5: 1/m] and air-bearing drag [1/s], each thruster's thrust [N]
 # and the thrust decay per extra valve, and each arm joint's friction
-# [N m, rad/s, N m s/rad] and armature [kg m^2].
+# [N m, rad/s, N m s/rad], armature [kg m^2] and back-EMF [V s/rad].
 NUM_HEIGHT = 5
 NUM_JOINTS = 3
 MAX_HEIGHT = 1.0
 MAX_DAMPING = 10.0           # [1/s]
 MAX_DECAY = 0.5              # as spot.params.loadCalibration
 ARM_FIELDS = {"static": (0.0, 10.0), "coulomb": (0.0, 10.0), "stribeck": (1e-4, 10.0),
-              "viscous": (0.0, 10.0), "armature": (1e-6, 1.0)}
+              "viscous": (0.0, 10.0), "armature": (1e-6, 1.0), "back_emf": (0.0, 20.0)}
 PUBLISH_PERIOD = 0.2         # [s] run status to the pages, at most this often
+
+# Each platform's PhaseSpace LEDs (spot.massprops.markerLayout): their
+# ids, which StreamData knows them by, in the corner order (+x,+y),
+# (+x,-y), (-x,-y), (-x,+y); where they sit until the project says
+# otherwise (13 mm in from the corners of the 0.3 m body); and how far
+# from the body centre one can be.
+LED_IDS = {"RED": (5, 3, 7, 4), "BLACK": (13, 11, 9, 15), "BLUE": (8, 14, 12, 10)}
+LED_CORNERS = ((1, 1), (1, -1), (-1, -1), (-1, 1))
+LED_DEFAULT = 137.0          # [mm]
+MAX_LED = 300.0              # [mm] as spot.params.loadCalibration
 
 
 def now_iso():
@@ -308,7 +330,7 @@ def check_overrides(ov):
     if checked:
         out["thrusters"] = checked
 
-    # Each arm joint's friction and armature.
+    # Each arm joint's friction, armature and back-EMF.
     arm = ov.get("arm") or {}
     if not isinstance(arm, dict) or any(k not in ARM_FIELDS for k in arm):
         raise ApiError("overrides.arm may only hold %s." % ", ".join(sorted(ARM_FIELDS)))
@@ -320,6 +342,66 @@ def check_overrides(ov):
     if checked:
         out["arm"] = checked
     return out
+
+
+def default_leds(platform):
+    """Return a platform's LEDs where they sit by default.
+
+    Returns:
+        [{"id", "x", "y"}] [mm from the body centre], in LED_IDS order.
+    """
+    return [{"id": i, "x": sx * LED_DEFAULT, "y": sy * LED_DEFAULT}
+            for i, (sx, sy) in zip(LED_IDS[platform], LED_CORNERS)]
+
+
+def check_leds(platform, leds):
+    """Return a platform's LEDs, checked, in LED_IDS order.
+
+    Args:
+        platform: "RED", "BLACK" or "BLUE".
+        leds: Its four LEDs, [{"id", "x", "y"}] [mm from the body
+            centre], in any order.
+
+    Raises:
+        ApiError: if they aren't the platform's four ids, each with a
+            position within MAX_LED of the body centre.
+    """
+    what = "markers.%s" % platform
+    ids = LED_IDS[platform]
+    if not isinstance(leds, list) or not all(isinstance(led, dict) for led in leds):
+        raise ApiError("%s must be a list of LEDs, each {id, x, y}." % what)
+    by_id = dict((led.get("id"), led) for led in leds)
+    if len(leds) != len(ids) or set(by_id) != set(ids):
+        raise ApiError("%s must be LEDs %s, once each." % (what, ", ".join(map(str, ids))))
+    out = []
+    for i in ids:
+        led = {"id": i}
+        for axis in ("x", "y"):
+            v = _finite(by_id[i].get(axis), "%s LED %d %s" % (what, i, axis))
+            if abs(v) > MAX_LED:
+                raise ApiError("%s LED %d is %g mm from the body centre in %s; at most %g."
+                               % (what, i, v, axis, MAX_LED))
+            led[axis] = v
+        out.append(led)
+    return out
+
+
+def check_markers(markers):
+    """Return a project's LEDs, checked: each platform's four.
+
+    Args:
+        markers: The "markers" object (or None); a platform left out
+            gets the default layout.
+
+    Raises:
+        ApiError: if a platform's LEDs aren't valid (check_leds).
+    """
+    if markers is None:
+        markers = {}
+    if not isinstance(markers, dict) or any(k not in PLATFORMS for k in markers):
+        raise ApiError("calibration.markers must map RED, BLACK, BLUE to their LEDs.")
+    return dict((name, check_leds(name, markers[name]) if markers.get(name) is not None
+                 else default_leds(name)) for name in PLATFORMS)
 
 
 def parse_override(path):
@@ -369,7 +451,8 @@ def validate(cal, local=False):
 
     Args:
         cal: The calibration.
-        local: A project's copy (it keeps "sync" and "overrides").
+        local: A project's copy (it keeps "sync", "overrides" and
+            "markers").
 
     Raises:
         ApiError: if it isn't a SPOT calibration, or a value the
@@ -423,8 +506,8 @@ def validate(cal, local=False):
             raise ApiError("calibration.arm must be an arm calibration (calibrate_arm.py's).")
         out["arm"] = copy.deepcopy(arm)
 
-    # The newest section's time, and a project copy's "sync" and
-    # "overrides".
+    # The newest section's time, and a project copy's "sync",
+    # "overrides" and "markers".
     out["updated"] = newest(out)
     if local:
         sync = cal.get("sync") or {}
@@ -432,7 +515,19 @@ def validate(cal, local=False):
                        "declined": sync.get("declined")
                                    if isinstance(sync.get("declined"), str) else None}
         out["overrides"] = check_overrides(cal.get("overrides"))
+        out["markers"] = check_markers(cal.get("markers"))
     return out
+
+
+def pwm_arm(arm):
+    """Return whether an arm calibration was measured in PWM control.
+
+    Version 2 of calibrate_arm.py's file ("control": "pwm"); an older
+    one measured the motor current, which SPOT's arm model no longer
+    uses (spot.arm.loadCalibration refuses it).
+    """
+    return (isinstance(arm, dict) and arm.get("control") == "pwm"
+            and isinstance(arm.get("version"), (int, float)) and arm["version"] >= 2)
 
 
 def thruster_updated(c):
@@ -491,9 +586,10 @@ def sections_newer(lab, mine):
                 and my_ov.get("decay") is None):
             out.append("decay " + name)
 
-    # The arm: each field of the joints it measured.
+    # The arm: each field of the joints it measured (only a calibration
+    # measured in PWM control).
     lab_arm, my_arm = lab.get("arm"), mine.get("arm")
-    if lab_arm and (not my_arm or lab_arm.get("updated", "") > my_arm.get("updated", "")):
+    if pwm_arm(lab_arm) and (not my_arm or lab_arm.get("updated", "") > my_arm.get("updated", "")):
         arm_ov = ov.get("arm") or {}
         joints = [j.get("index") for j in (lab_arm.get("joints") or [])
                   if isinstance(j, dict) and j.get("index") in (1, 2, 3)]
@@ -527,7 +623,8 @@ class CalibrationStore:
 
         Args:
             path: The file.
-            local: A project's copy (it keeps "sync").
+            local: A project's copy (it keeps "sync", "overrides" and
+                "markers").
         """
         self.path, self.local = Path(path), local
         self.cal = validate({}, local)
@@ -599,13 +696,42 @@ class CalibrationStore:
     def take(self, lab_cal):
         """Make a project's copy the lab's.
 
-        The copy keeps its own "sync" and "overrides".
+        The copy keeps its own "sync", "overrides" and "markers". An
+        arm calibration measured with the motor current (not pwm_arm) is
+        not taken: the copy keeps its own arm calibration, if any.
         """
         with self._changing:
             with self._lock:
                 sync = copy.deepcopy(self.cal.get("sync"))
                 overrides = copy.deepcopy(self.cal.get("overrides"))
-            cal = dict(validate(lab_cal), sync=sync, overrides=overrides)
+                markers = copy.deepcopy(self.cal.get("markers"))
+                my_arm = copy.deepcopy(self.cal.get("arm"))
+            cal = dict(validate(lab_cal), sync=sync, overrides=overrides, markers=markers)
+            if not pwm_arm(cal.get("arm")):
+                cal.pop("arm", None)
+                if my_arm:
+                    cal["arm"] = my_arm
+            return self._write(cal)
+
+    def set_leds(self, platform, leds):
+        """Set where a platform's LEDs are, in a project's copy.
+
+        Args:
+            platform: "RED", "BLACK" or "BLUE".
+            leds: Its four LEDs, [{"id", "x", "y"}] [mm from the body
+                centre]; None for the default layout.
+
+        Raises:
+            ApiError: on the lab console, or if they aren't valid.
+        """
+        with self._changing:
+            if not self.local:
+                raise ApiError("Only a project's calibration holds its LED positions.")
+            platform = parse_platform(platform)
+            leds = default_leds(platform) if leds is None else check_leds(platform, leds)
+            with self._lock:
+                cal = copy.deepcopy(self.cal)
+            cal["markers"] = dict(cal.get("markers") or {}, **{platform: leds})
             return self._write(cal)
 
     def set_override(self, path, value):
@@ -2345,6 +2471,7 @@ class DecayRun(ThrusterRun):
 # The arm
 
 ARM_TESTS = ("breakaway", "sweep", "inertia", "steps")
+PWM_FULL = 885               # the servos' PWM at 100 % of the supply
 JOINT_NAMES = {1: "Shoulder", 2: "Elbow", 3: "Wrist"}
 ARM_POLL = 2.0               # [s] between status checks while the script runs
 # [s] the longest a run may take (three joints, every test: about 15
@@ -2744,19 +2871,26 @@ def arm_plots(files, cal):
     The friction against speed (the sweep's steady points as torque;
     the fitted curve's parameters are in the joint's fit), and the
     position steps (goal and measured, thinned).
+
+    Each steady point's friction is what the motor gave at that speed:
+    torque_per_volt (V - back_emf w), V = PWM / 885 x the supply.
     """
-    kt = cal.get("kt") or {}
+    supply = cal.get("supply_voltage") or 0
+    fits = dict((joint.get("index"), joint) for joint in cal.get("joints") or []
+                if isinstance(joint, dict))
     plots = {}
     for j in (1, 2, 3):
         plot = {}
 
-        # The sweep: [velocity, torque] (current x torque constant).
-        kt_joint = kt.get(str(j)) if isinstance(kt, dict) else kt
+        # The sweep: [velocity, friction torque].
+        fit = fits.get(j) or {}
+        g, back_emf = fit.get("torque_per_volt"), fit.get("back_emf")
         pts = files.get("sweep_points_j%d.json" % j)
-        if pts and kt_joint:
+        if pts and supply and g and back_emf is not None:
             try:
                 plot["sweep"] = [[round(point["velocity"], 5),
-                                  round(kt_joint * point["current"], 5)]
+                                  round(g * (point["pwm"] / PWM_FULL * supply
+                                             - back_emf * point["velocity"]), 5)]
                                  for point in json.loads(pts)]
             except (ValueError, KeyError, TypeError):
                 pass

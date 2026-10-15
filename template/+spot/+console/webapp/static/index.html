@@ -794,6 +794,28 @@
     </form>
   </dialog>
 
+  <dialog id="layoutDialog" class="dialog layout-dialog">
+    <div class="dialog-inner">
+      <div class="dialog-head">
+        <h2 class="hw-name">Thruster and LED Layout</h2>
+        <button type="button" data-lclose class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
+      </div>
+      <div class="ly-body">
+        <figure class="ly-figure">
+          <svg id="layoutSvg" class="ly-svg" role="img" aria-label="The platform from above, with the thrusters, the LEDs and the centre of gravity, dimensioned from the CG"></svg>
+          <figcaption class="ly-legend">
+            <span><i class="ly-key thr"></i>Thrusters' lines of action</span>
+            <span><i class="ly-key led"></i>LEDs</span>
+            <span><i class="ly-key cg"></i>Centre of gravity</span>
+            <span><i class="ly-key scale"></i>Scales</span>
+            <span class="muted">Top view, to scale; dimensions in mm from the CG</span>
+          </figcaption>
+        </figure>
+        <div id="layoutSide" class="ly-side"></div>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="calSyncDialog" class="dialog reset-dialog">
     <form method="dialog" class="dialog-inner">
       <div class="dialog-head">

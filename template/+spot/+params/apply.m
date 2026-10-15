@@ -6,17 +6,18 @@ function d = apply(s, root)
     %   d = spot.params.apply(s, root) also uses the project's calibration of the lab
     %   (spot.params.loadCalibration), each part when its s.calibration switch is on: the
     %   table's slope, each thruster's thrust and decay, and the arm's friction and inertia,
-    %   with the values the project overrides. It then runs root/SPOT_User_Parameters.m, where
-    %   users define their own variables or override these.
+    %   with the values the project overrides; and where the project's LEDs are. It then runs
+    %   root/SPOT_User_Parameters.m, where users define their own variables or override these.
     %
     %   Inputs
     %     s     settings
     %     root  project folder (optional)
     %
     %   Outputs
-    %     d     derived values for display: tsim, timing, rates, mass properties, arm geometry,
-    %           calibration used (d.calibration.inUse: the calibrated values in the workspace,
-    %           after SPOT_User_Parameters.m), LQR gains, warnings, the variables assigned
+    %     d     derived values for display: tsim, timing, rates, mass properties, the PhaseSpace
+    %           marker file (trackerPositions), arm geometry, calibration used
+    %           (d.calibration.inUse: the calibrated values in the workspace, after
+    %           SPOT_User_Parameters.m), LQR gains, warnings, the variables assigned
     %
     %   Example (no GUI needed)
     %     s = spot.params.load('spot_settings.json');
@@ -90,9 +91,22 @@ function d = apply(s, root)
     ws.xLength = TABLE_X;
     ws.yLength = TABLE_Y;
 
+    %% The project's calibration
+    % The lab's calibration as the project copied it, with the project's own values: the
+    % values it overrides and where its LEDs are. Without the project folder: none, and the
+    % default LED layout.
+    if nargin > 1
+        cal = spot.params.loadCalibration(root);
+    else
+        cal = spot.params.loadCalibration();
+    end
+
     %% Mass properties
-    massProps = spot.massprops.compute(s.mass);
+    % The LEDs from each platform's CG are the lab console's marker file (trackerPositions),
+    % which the Experiment tab sends it before the cameras start.
+    massProps = spot.massprops.compute(s.mass, cal.markers);
     d.mass = massProps;
+    d.trackerPositions = spot.massprops.trackerPositions(massProps);
     for name = {'RED', 'BLACK', 'BLUE'}
         key = name{1};
         ws.(['m' key]) = massProps.(key).mass;
@@ -118,12 +132,6 @@ function d = apply(s, root)
         ws.(['tableDamping_' name{1}]) = 0;
     end
 
-    % No calibration (and no overrides), unless the project has one.
-    if nargin > 1
-        cal = spot.params.loadCalibration(root);
-    else
-        cal = spot.params.loadCalibration();
-    end
     ov = cal.overrides;
     d.calibration = struct('file', cal.file, 'updated', cal.updated, 'table', cal.table, ...
         'tableUsed', false, 'thrusters', cal.thrusters, 'thrustersUsed', {{}}, ...
@@ -175,6 +183,15 @@ function d = apply(s, root)
         ws.armModel = spot.arm.parameters(ws);
     end
     d.calibration.armUsed = ws.armModel.calibration;   % the file it came from, or ''
+    if isempty(ws.armModel.calibration) && ~isempty(ws.armModel.calibrationIgnored)
+        armWarning = sprintf( ...
+            ['The arm calibration in %s was measured with the motor current, which SPOT no ' ...
+             'longer uses (the servos run in PWM control), so the simulated arm has its ' ...
+             'default friction: run the arm calibration again (lab console, Calibration tab).'], ...
+            ws.armModel.calibrationIgnored);
+    else
+        armWarning = '';
+    end
 
     % Gains and limits of the diagram's Default Position/Velocity Control (ARM).
     ws.armControl = armGains(s.control.ARM);
@@ -217,7 +234,7 @@ function d = apply(s, root)
     rNames = {'RFx', 'RFy', 'RTz'};
     d.lqr = struct();
 
-    % Warnings so far: the calibration's, then the PWM frequency's.
+    % Warnings so far: the calibration's, the PWM frequency's, then the arm calibration's.
     d.warnings = {};
     if isfield(d, 'warnings0')
         d.warnings = d.warnings0;
@@ -225,6 +242,9 @@ function d = apply(s, root)
     end
     if ~isempty(pwmWarning)
         d.warnings{end + 1} = pwmWarning;
+    end
+    if ~isempty(armWarning)
+        d.warnings{end + 1} = armWarning;
     end
 
     % Weights for each platform; models and gains only with the Control System Toolbox.
@@ -273,11 +293,6 @@ function d = apply(s, root)
         end
     end
 
-    % The arm controllers' motor, after the user's changes to armModel. The controller blocks
-    % take it on its own: sharing armModel would make it a tunable parameter in the generated
-    % code, which its field friction.static (a C++ keyword) prevents.
-    evalin('base', 'if exist(''armModel'', ''var''), armMotor = armModel.motor; end');
-
     % The calibrated values the simulation will use, as the workspace has them now.
     d.calibration.inUse = inUse(ws);
 end
@@ -317,7 +332,7 @@ function u = inUse(ws)
     m = values.armModel;
     u.arm = struct('static', m.friction.static, 'coulomb', m.friction.coulomb, ...
                    'stribeck', m.friction.stribeck, 'viscous', m.friction.viscous, ...
-                   'armature', m.armature);
+                   'armature', m.armature, 'back_emf', m.motor.backEMF);
 end
 
 function gains = armGains(arm)

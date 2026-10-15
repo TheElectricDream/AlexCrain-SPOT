@@ -12,8 +12,8 @@ function servo = servoFromDiagram(model, servo)
     %     servo  with the blocks' values:
     %              spot.arm.PositionControl   Min/Max Position (checked by checkCommands)
     %              spot.arm.VelocityControl   Velocity Limit (checked by checkCommands)
-    %              spot.hardware.ArmTorque    Current Limit, Min/Max Position (what the real
-    %                                         servos get and the plant holds torques within)
+    %              spot.hardware.ArmPWM       PWM Limit, Min/Max Position (what the real
+    %                                         servos get and the plant holds commands within)
     %
     %   See also spot.arm.checkCommands, spot.sim.run.
 
@@ -21,7 +21,7 @@ function servo = servoFromDiagram(model, servo)
     maps = {'spot.arm.PositionControl', {'MinPosition', 'minPosition'; ...
                                          'MaxPosition', 'maxPosition'};
             'spot.arm.VelocityControl', {'VelocityLimit', 'velocityLimit'};
-            'spot.hardware.ArmTorque',  {'CurrentLimit', 'currentLimit'; ...
+            'spot.hardware.ArmPWM',     {'PWMLimit', 'pwmLimit'; ...
                                          'MinPosition', 'minPosition'; ...
                                          'MaxPosition', 'maxPosition'}};
 

@@ -62,7 +62,7 @@ Three switches, all `true` by default, that decide which parts of the project's 
 
 `calibration.thrusters`: whether the diagram's thruster mixer, in simulations and in the experiments built from it, uses each thruster's measured thrust and the platform's measured thrust decay (`F_thrusters_*` and `thrust_decay_*` in the workspace). With `false`, or for a platform the project has no thruster calibration for, `thrusterForce` is used for all eight and `thrusterDecay` for the decay.
 
-`calibration.arm`: whether the simulated arm (`armModel`, `spot.arm.parameters`) uses its joints' measured friction and inertia, from the arm calibration in the same file or from a `resources/arm_calibration.json` copied by hand from [calibrate_arm.py](file:calibrate_arm.py), whichever was measured last. With `false`, or without an arm calibration in the project, the arm model's defaults.
+`calibration.arm`: whether the simulated arm (`armModel`, `spot.arm.parameters`) uses its joints' measured friction and inertia, from the arm calibration in the same file or from an `arm_calibration.json` copied by hand into the project folder from [calibrate_arm.py](file:calibrate_arm.py), whichever was measured last. With `false`, or without an arm calibration in the project, the arm model's defaults.
 
 Values you override on the Calibration pane are not settings: they are kept in `spot_calibration.json` itself (its `overrides`), and apply while the part's switch is on.
 

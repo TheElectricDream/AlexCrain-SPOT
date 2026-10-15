@@ -77,11 +77,11 @@ Every run's raw data is kept on the lab console, so a table, thruster or Togethe
 
 ## Arm
 
-The arm calibration runs [calibrate_arm.py](file:calibrate_arm.py) on the Chaser, which has the arm's U2D2, from this tab. Each joint in turn, while the others hold:
+The arm calibration runs [calibrate_arm.py](file:calibrate_arm.py) on the Chaser, which has the arm's U2D2, from this tab. It drives the servos as SPOT does, in **PWM (voltage) control**, and measures with PWM and the encoders only: the servos' current readings are too coarse and noisy at the arm's small torques ([The Arm](page:math-arm)). Torques come from the PWM through the datasheet's torque per volt (0.5 N m/V for an MX-64). Each joint in turn, while the others hold:
 
-1. **Breakaway.** The motor current creeps up from zero until the joint moves, three times each way: the static friction (breakaway torque).
-2. **Speed Sweep.** The joint turns back and forth at nine speeds; the current it needs at each is the friction at that speed (Coulomb, Stribeck, viscous).
-3. **Inertia.** A torque step from rest, each way: how fast it accelerates gives the joint's inertia (link and rotor).
+1. **Breakaway.** The PWM creeps up from zero until the joint moves, three times each way: the static friction (breakaway torque).
+2. **Speed Sweep.** The joint turns back and forth at fixed PWM levels about its breakaway, each started with a short kick; the speed it settles at shows the friction at that speed (Coulomb, Stribeck) and the speed coefficient: the back-EMF and viscous friction, which brake it alike and so can't be told apart; the datasheet's back-EMF splits them.
+3. **Inertia.** A PWM step from rest, each way: how fast it gets up to speed gives the joint's inertia (link and rotor), from a simulation of the step with the friction just fitted. The wrist gets up to speed within a few milliseconds, close to the time between reads, so its inertia is only roughly known (the result says so).
 4. **Position Steps.** Goals of 10, 0, −10, 20, 0, −20, 5, 0° with SPOT's servo settings, for `spot.arm.compareSteps` to check the model against.
 
 The figure at the top of How It Works shows what the test picked (click one) does to a joint; during a run, the test under way.
@@ -92,10 +92,10 @@ The figure at the top of How It Works shows what the test picked (click one) doe
 
 **Rehearse (Simulated Servos)** runs the same script with its simulated servos instead: it needs none of the hardware, moves nothing, takes under a minute, and its result is shown (marked *Rehearsal · Not Saved*) but never becomes the lab's.
 
-**The result.** Each joint's static friction (and each way), Coulomb friction, Stribeck speed, viscous friction and inertia; the friction against speed for every joint (the measured points and the fitted curve); and each joint's position steps (goal and measured). The script warns about unreliable speed sweeps and one-sided inertia results, and its setup check scans the bus for the servos. The run's raw data stays on the lab console (`~/SPOTCalibration/<stamp>_arm_RED/`). Projects take it with **Update from Lab**, and the simulated arm uses it when the Arm card's **Use** switch is on (the newer of it and a hand-copied `resources/arm_calibration.json`).
+**The result.** Each joint's static friction (and each way), Coulomb friction, Stribeck speed, viscous friction, back-EMF and inertia; the friction against speed for every joint (the measured points, what the motor gave at each steady speed, and the fitted curve); and each joint's position steps (goal and measured). The script warns about unreliable speed sweeps and one-sided inertia results, and its setup check scans the bus for the servos. The run's raw data stays on the lab console (`~/SPOTCalibration/<stamp>_arm_RED/`). Projects take it with **Update from Lab**, and the simulated arm uses it when the Arm card's **Use** switch is on (the newer of it and an `arm_calibration.json` copied by hand into the project folder).
 
-> [!WARNING]
-> As of October 2026, the wrist servo (ID 3) measures its current wrongly, and differently in each direction. Under torque control it would push harder one way than the other, so it needs replacing before the arm is calibrated or flown. Until then the arm's friction values are placeholders.
+> [!NOTE]
+> Until October 2026 the servos ran in current (torque) control, and the calibration measured the friction from their current readings. Those readings proved unusable at the arm's torques (the wrist servo, ID 3, even read differently in each direction), so SPOT moved to PWM control. A calibration from before (version 1) is marked *Current Control · Not Used*: simulations ignore it (and warn), and projects aren't offered it. Until the arm is calibrated again, its friction values are placeholders.
 
 ## The 3D view
 

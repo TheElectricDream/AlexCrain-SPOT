@@ -7,7 +7,7 @@ SPOT/
 ├── New_SPOT_Project.m     makes projects
 ├── template/              what is copied
 └── projects/              where new projects go (not published)
-    └── MyProject/         SPOT.m, SPOT_User_Parameters.m, +spot/, resources/, MyProject.slx, Saved Data/, ...
+    └── MyProject/         SPOT.m, SPOT_User_Parameters.m, +spot/, MyProject.slx, Saved Data/, ...
 ```
 
 ## How to call it

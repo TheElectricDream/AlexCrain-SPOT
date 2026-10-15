@@ -1,19 +1,19 @@
 function msgs = checkCommands(dataClass, armModel)
-    %CHECKCOMMANDS Arm goals and torques the servos would ignore or clip, from a run's log.
+    %CHECKCOMMANDS Arm goals and PWM commands the servos would ignore or clip, from a run's log.
     %   msgs = spot.arm.checkCommands(dataClass, armModel) checks a run's logged arm signals for
     %   commands the Dynamixel servos would ignore or clip. spot.sim.run adds the messages to the
     %   simulation's warnings.
     %
     %   Inputs
     %     dataClass  logged signals (simOut.dataPacket), as timeseries. Required:
-    %                  ARM_Control_Mode      0 off, 1 position, 2 custom (torque), 3 velocity
-    %                  ARM_<Joint>_Command   torque sent [N m]
+    %                  ARM_Control_Mode      0 off, 1 position, 2 custom (PWM), 3 velocity
+    %                  ARM_<Joint>_Command   PWM sent [885 = 100 %]
     %                  ARM_<Joint>_Path      goal: angle [rad] (position) or speed [rad/s]
     %                                        (velocity)
     %                Optional (needed for check 3):
     %                  ARM_Rz_<Joint>_rad    measured joint angle [rad]
     %                <Joint> is Shoulder, Elbow or Wrist.
-    %     armModel   arm model (spot.arm.parameters): .servo limits and .motor datasheet values
+    %     armModel   arm model (spot.arm.parameters): its .servo limits
     %
     %   Outputs
     %     msgs       1xN cell array of messages, one per joint and problem; {} if none. Each
@@ -24,12 +24,12 @@ function msgs = checkCommands(dataClass, armModel)
     %     For each joint:
     %     1. Position goal beyond Min/Max Position: ignored, the joint holds its last goal.
     %     2. Velocity goal beyond the Velocity Limit: ignored, the joint keeps its last goal.
-    %     3. Torque pushing a joint further past its position limit: replaced by zero
+    %     3. PWM pushing a joint further past its position limit: replaced by zero
     %        (spot.arm.withinLimits).
-    %     4. Torque beyond the Current Limit: the servo gets the limit.
+    %     4. PWM beyond the PWM Limit: the servo gets the limit.
     %
     %   See also spot.sim.run, spot.arm.withinLimits, spot.arm.PositionControl,
-    %   spot.arm.VelocityControl, spot.arm.Plant, spot.hardware.ArmTorque.
+    %   spot.arm.VelocityControl, spot.arm.Plant, spot.hardware.ArmPWM.
 
     %% Constants
     % Dynamixel MX unit conversions, as used by the controllers and blocks being checked.
@@ -40,8 +40,7 @@ function msgs = checkCommands(dataClass, armModel)
     RADPS_TO_RPM = 9.549296585513702;       % [rev/min per rad/s] = 60/(2*pi)
     RPM_TO_VEL_UNITS = 4.366756307;         % [units per rev/min] = 1/0.229 (VelocityControl)
     VEL_UNIT_RPM = 0.229;                   % [rev/min] per velocity unit
-    CURRENT_UNIT_A = 3.36e-3;               % [A] per current unit
-    TORQUE_REL_TOL = 1e-9;                  % floating-point slack for check 4
+    PWM_ROUNDING = 0.5;                     % [PWM] commands are sent in whole units
 
     % ARM_Control_Mode values
     MODE_OFF = 0;
@@ -54,7 +53,7 @@ function msgs = checkCommands(dataClass, armModel)
     msgs = {};
 
     %% Logged signals
-    % Nothing to check without the mode, torques and goals.
+    % Nothing to check without the mode, commands and goals.
     requiredSignals = {'ARM_Control_Mode', ...
                        'ARM_Shoulder_Command', 'ARM_Elbow_Command', 'ARM_Wrist_Command', ...
                        'ARM_Shoulder_Path', 'ARM_Elbow_Path', 'ARM_Wrist_Path'};
@@ -62,16 +61,16 @@ function msgs = checkCommands(dataClass, armModel)
         return
     end
 
-    % Mode (logged as double), and torques and goals with one column per joint.
+    % Mode (logged as double), and commands and goals with one column per joint.
     sampleTime = dataClass.ARM_Control_Mode.Time;
     ctrlMode = round(dataClass.ARM_Control_Mode.Data(:));
-    torqueCmd = [dataClass.ARM_Shoulder_Command.Data(:), ...
-                 dataClass.ARM_Elbow_Command.Data(:), ...
-                 dataClass.ARM_Wrist_Command.Data(:)];
+    pwmCmd = [dataClass.ARM_Shoulder_Command.Data(:), ...
+              dataClass.ARM_Elbow_Command.Data(:), ...
+              dataClass.ARM_Wrist_Command.Data(:)];
     goal = [dataClass.ARM_Shoulder_Path.Data(:), ...
             dataClass.ARM_Elbow_Path.Data(:), ...
             dataClass.ARM_Wrist_Path.Data(:)];
-    nSamples = min([numel(ctrlMode), size(torqueCmd, 1), size(goal, 1)]);
+    nSamples = min([numel(ctrlMode), size(pwmCmd, 1), size(goal, 1)]);
 
     % Measured joint angles, if logged. Left as NaN otherwise, so check 3 never fires.
     jointAngle = nan(nSamples, 3);
@@ -85,17 +84,12 @@ function msgs = checkCommands(dataClass, armModel)
 
     % Trim all signals to a common length.
     ctrlMode = ctrlMode(1:nSamples);
-    torqueCmd = torqueCmd(1:nSamples, :);
+    pwmCmd = pwmCmd(1:nSamples, :);
     goal = goal(1:nSamples, :);
     sampleTime = sampleTime(1:nSamples);
 
     %% Servo limits
     servo = armModel.servo;
-    motor = armModel.motor;
-
-    % Maximum torque per joint [N m]: Current Limit times torque constant Kt [N m/A].
-    Kt = motor.stallTorque(:).' ./ motor.stallCurrent(:).';
-    tauMax = servo.currentLimit * CURRENT_UNIT_A * Kt;
 
     % Position limits [deg] and Velocity Limit [rad/s], for the messages.
     minAngleDeg = (servo.minPosition - CENTER_PULSE) / CMD_PULSES_PER_RAD * 180/pi;
@@ -108,7 +102,7 @@ function msgs = checkCommands(dataClass, armModel)
         k = find(badMode, 1);
         msgs{end + 1} = sprintf( ...
             ['ARM_Control_Mode was %g at %.1f s (%d steps): SPOT''s arm controllers write 0 ' ...
-             '(off), 1 (position), 2 (custom, torque) or 3 (velocity).'], ...
+             '(off), 1 (position), 2 (custom, PWM) or 3 (velocity).'], ...
             ctrlMode(k), sampleTime(k), nnz(badMode));
     end
 
@@ -147,34 +141,31 @@ function msgs = checkCommands(dataClass, armModel)
                 servo.velocityLimit, maxSpeed);
         end
 
-        % Check 3: torque pushing a joint further past its position limit (any mode).
+        % Check 3: PWM pushing a joint further past its position limit (any mode).
         anglePulses = round(jointAngle(:, j) * PULSES_PER_REV / (2*pi)) + CENTER_PULSE;
-        pushedPastLimit = (anglePulses >= servo.maxPosition & torqueCmd(:, j) > 0) ...
-                        | (anglePulses <= servo.minPosition & torqueCmd(:, j) < 0);
+        pushedPastLimit = (anglePulses >= servo.maxPosition & pwmCmd(:, j) > 0) ...
+                        | (anglePulses <= servo.minPosition & pwmCmd(:, j) < 0);
         if any(pushedPastLimit)
             k = find(pushedPastLimit, 1);
             msgs{end + 1} = sprintf( ...
-                ['The arm''s %s was at its position limit (%.0f deg) with a torque of ' ...
-                 '%.2f N m pushing it further at %.1f s (%d steps): it got none (Min/Max ' ...
-                 'Position on the Dynamixel Arm (Torque) block).'], ...
-                JOINT_NAMES{j}, jointAngle(k, j) * 180/pi, torqueCmd(k, j), sampleTime(k), ...
+                ['The arm''s %s was at its position limit (%.0f deg) with a PWM of %.0f ' ...
+                 'pushing it further at %.1f s (%d steps): it got none (Min/Max Position on ' ...
+                 'the Dynamixel Arm (PWM) block).'], ...
+                JOINT_NAMES{j}, jointAngle(k, j) * 180/pi, pwmCmd(k, j), sampleTime(k), ...
                 nnz(pushedPastLimit));
         end
 
-        % Check 4: torque beyond the Current Limit (any mode but off).
-        % Torque is rounded to whole current units before clamping, so allow half a unit
-        % over. Samples zeroed by check 3 are skipped.
-        overCurrent = ctrlMode ~= MODE_OFF & ~pushedPastLimit ...
-                    & abs(torqueCmd(:, j)) > tauMax(j) * (1 + TORQUE_REL_TOL) ...
-                                             + CURRENT_UNIT_A * Kt(j) / 2;
-        if any(overCurrent)
-            k = find(overCurrent, 1);
+        % Check 4: PWM beyond the PWM Limit (any mode but off). Commands are sent in whole
+        % units, so allow half a unit over. Samples zeroed by check 3 are skipped.
+        overLimit = ctrlMode ~= MODE_OFF & ~pushedPastLimit ...
+                  & abs(pwmCmd(:, j)) > servo.pwmLimit + PWM_ROUNDING;
+        if any(overLimit)
+            k = find(overLimit, 1);
             msgs{end + 1} = sprintf( ...
-                ['The arm''s %s torque of %.2f N m at %.1f s (%d steps) is beyond what its ' ...
-                 'servo''s Current Limit allows (%d x 3.36 mA = %.2f N m, on the Dynamixel ' ...
-                 'Arm (Torque) block): the servo gets the limit.'], ...
-                JOINT_NAMES{j}, torqueCmd(k, j), sampleTime(k), nnz(overCurrent), ...
-                servo.currentLimit, tauMax(j));
+                ['The arm''s %s PWM of %.0f at %.1f s (%d steps) is beyond its servo''s PWM ' ...
+                 'Limit (%d of 885, on the Dynamixel Arm (PWM) block): the servo gets the ' ...
+                 'limit.'], ...
+                JOINT_NAMES{j}, pwmCmd(k, j), sampleTime(k), nnz(overLimit), servo.pwmLimit);
         end
     end
 end

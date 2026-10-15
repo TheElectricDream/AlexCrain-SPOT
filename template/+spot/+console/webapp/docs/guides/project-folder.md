@@ -9,9 +9,8 @@ What is in a SPOT project, and what each part is for. Paths are relative to the 
 ├── <Project>.slx              the Simulink diagram, named after the project
 ├── spot_settings.json         the console's settings (created on the first start)
 ├── spot_design.json           the Spacecraft Designer's choices (created on the first change)
-├── spot_calibration.json      this project's copy of the lab's calibration, and your overrides
+├── spot_calibration.json      this project's copy of the lab's calibration, your overrides, the LEDs' positions
 ├── +spot/                     all of SPOT's code, as MATLAB packages (below)
-├── resources/                 pictures the guides use, and the PhaseSpace marker file
 ├── Saved Data/                saved simulations and collected experiments (one folder per run)
 └── .spot_cache/               the console's state on this computer (safe to delete)
 ```
@@ -46,16 +45,8 @@ Everything SPOT does is a function in one of these packages. The console only ca
 | `+spot/+console/webapp/app.py` | starts the console's web server |
 | `+spot/+console/webapp/spot_console/` | the server, one Python module per area |
 | `+spot/+console/webapp/static/` | the page: HTML, CSS and one JavaScript module per tab |
-| `+spot/+console/webapp/docs/` | this documentation: the guides, the notes on functions, their pictures |
+| `+spot/+console/webapp/docs/` | this documentation: the guides, the notes on functions, their pictures (`docs/images/`: among them `ArmConfig.png`, `COMConfig.png` and `ThrusterConfig.png`, the arm's geometry, where the scales go and the thruster numbering) |
 | `+spot/+console/webapp/static/vendor/` | third-party libraries the page uses (three.js, CodeMirror, ESLint, marked, KaTeX) |
-
-## `resources/`
-
-| File | Used for |
-|---|---|
-| `ArmConfig.png`, `COMConfig.png`, `ThrusterConfig.png` | the arm's geometry, where the scales go for the centre of gravity, and the thruster numbering ([Mass Properties](page:math-mass-properties)) |
-| `SRL_logo.png` | the lab's logo |
-| `tracker_positions_phasespace.txt` | the PhaseSpace marker file: each LED's offset from its platform's centre of gravity. The Platforms pane's **Write PhaseSpace Marker File** writes it (`spot.massprops.writeTrackerPositions`); the Experiment tab sends it to the lab console before the cameras start |
 
 ## `.spot_cache/`
 
@@ -71,7 +62,11 @@ Per-computer state the console keeps; nothing in it needs to be kept or committe
 
 ## `spot_calibration.json`
 
-The lab measures the table's slope, each thruster's thrust and thrust decay, and the arm's friction on the lab console's [Calibration Tab](page:tab-calibration). The local console offers to copy a newer calibration into this file when it can see the lab console, and the Simulation tab's Calibration pane shows what simulations will use. Any value you override there is kept in the same file (`overrides`), so updating from the lab doesn't lose it. `spot.params.loadCalibration` reads it. A project made before this file moved to the top of the project kept it in `resources/`; the console moves it across the first time it starts.
+The lab measures the table's slope, each thruster's thrust and thrust decay, and the arm's friction on the lab console's [Calibration Tab](page:tab-calibration). The local console offers to copy a newer calibration into this file when it can see the lab console, and the Simulation tab's Calibration pane shows what simulations will use. Any value you override there is kept in the same file (`overrides`), so updating from the lab doesn't lose it.
+
+The file also holds where each platform's PhaseSpace LEDs are (`markers`: each LED's id and its x and y in millimetres from the body centre), set in the Platforms pane's **Thruster and LED Layout** window; until then, the default layout (13 mm in from each corner). Updating from the lab keeps them too. MATLAB works out each LED's position from the platform's centre of gravity, and the Experiment tab's **Start Cameras** sends that marker file to the lab console, which writes it next to StreamData.
+
+`spot.params.loadCalibration` reads the file. A project made before the file moved to the top of the project kept it in a `resources/` folder; the console moves it across the first time it starts.
 
 ## What is not here
 

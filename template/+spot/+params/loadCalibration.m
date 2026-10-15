@@ -4,10 +4,12 @@ function c = loadCalibration(root)
     %   Calibration tab), as the local console copied it into the project, with the values the
     %   project overrides. spot.params.apply uses it; a file that can't be read is reported and
     %   ignored, so simulations still run on a level table.
-    %   c = spot.params.loadCalibration() returns no calibration (and no overrides).
+    %   c = spot.params.loadCalibration() returns no calibration (and no overrides), with the
+    %   LEDs where spot.massprops.markerLayout puts them.
     %
-    %   The file sits in the project folder, next to spot_settings.json. A project made before
-    %   it moved keeps it in resources/, where it is still read (the console moves it across).
+    %   The file sits in the project folder, next to spot_settings.json. (A project made before
+    %   it moved there kept it in a resources folder, where it is still read; the console moves
+    %   it across.)
     %
     %   Inputs
     %     root  project folder (optional)
@@ -31,27 +33,35 @@ function c = loadCalibration(root)
     %                          torqueRatio (8x1)
     %             arm        the arm calibration (calibrate_arm.py's), or []: joints' friction
     %                        and inertia, created, updated (spot.arm.parameters applies it)
+    %             markers    RED, BLACK, BLUE: the platform's PhaseSpace LEDs, as
+    %                        spot.massprops.markerLayout returns them (ids, leds 4x2 [m] from the
+    %                        body centre): where the project has them (the Simulation tab's
+    %                        Thruster and LED Layout), else the default layout
     %             overrides  the values the project overrides (the Simulation tab's Calibration
     %                        pane), NaN where not overridden; SI units:
     %                          table.height     1x5 [a1 a2 (m/m) a3 a4 a5 (1/m)]
     %                          table.damping    RED, BLACK, BLUE [1/s]
     %                          thrusters.RED    thrust (8x1 [N]), decay (per extra valve)
-    %                          arm              static, coulomb, stribeck, viscous, armature
-    %                                           (1x3, per joint)
+    %                          arm              static, coulomb, stribeck, viscous, armature,
+    %                                           back_emf [V s/rad] (1x3, per joint)
     %             error      why the file couldn't be used ('' if it could)
     %
-    %   See also spot.params.apply, spot.sim.tableSlope, spot.arm.loadCalibration.
+    %   See also spot.params.apply, spot.sim.tableSlope, spot.arm.loadCalibration,
+    %   spot.massprops.markerLayout.
 
     %% Constants
     TABLE_CENTRE = [1.75 1.2];   % [m] default centre of the height surface
     MIN_THRUST = 0.01;           % [N] plausible thrust range
     MAX_THRUST = 2;
     MAX_DECAY = 0.5;             % plausible thrust decay per extra valve
+    MAX_LED = 0.3;               % [m] an LED this far from the body centre at most
+    M_PER_MM = 1e-3;
 
     %% The file
     c = struct('file', '', 'updated', '', 'table', [], ...
                'thrusters', struct('RED', [], 'BLACK', [], 'BLUE', []), 'arm', [], ...
-               'overrides', noOverrides(), 'error', '');
+               'markers', spot.massprops.markerLayout(), 'overrides', noOverrides(), ...
+               'error', '');
     if nargin < 1 || isempty(root)
         return
     end
@@ -148,6 +158,34 @@ function c = loadCalibration(root)
                 'joints', {field(saved.arm, 'joints', [])});
         end
 
+        %% LEDs
+        % Each platform's four LEDs, {id, x, y} [mm] from the body centre, in any order.
+        if isfield(saved, 'markers') && isstruct(saved.markers)
+            for name = {'RED', 'BLACK', 'BLUE'}
+                if ~isfield(saved.markers, name{1})
+                    continue
+                end
+                given = saved.markers.(name{1});
+                platform = c.markers.(name{1});
+                if ~isstruct(given) || ~all(isfield(given, {'id', 'x', 'y'})) ...
+                        || numel(given) ~= numel(platform.ids)
+                    error('spot:params:loadCalibration', ...
+                        'markers.%s must be its 4 LEDs, each {id, x, y}', name{1});
+                end
+                for k = 1:numel(platform.ids)
+                    led = given([given.id] == platform.ids(k));
+                    xy = double([led.x led.y]) * M_PER_MM;
+                    if numel(xy) ~= 2 || ~all(isfinite(xy)) || any(abs(xy) > MAX_LED)
+                        error('spot:params:loadCalibration', ...
+                            'markers.%s must give LED %d one position within 300 mm', ...
+                            name{1}, platform.ids(k));
+                    end
+                    platform.leds(k, :) = xy;
+                end
+                c.markers.(name{1}) = platform;
+            end
+        end
+
         %% Overrides
         % NaN (JSON null) where a value isn't overridden; the console checked the ranges.
         if isfield(saved, 'overrides') && isstruct(saved.overrides)
@@ -182,7 +220,7 @@ function c = loadCalibration(root)
         % Unusable: report why, and use none of it.
         c = struct('file', file, 'updated', '', 'table', [], ...
             'thrusters', struct('RED', [], 'BLACK', [], 'BLUE', []), 'arm', [], ...
-            'overrides', noOverrides(), ...
+            'markers', spot.massprops.markerLayout(), 'overrides', noOverrides(), ...
             'error', sprintf('%s could not be used (%s); the simulation ignores it.', ...
                              file, err.message));
     end
@@ -196,7 +234,7 @@ function ov = noOverrides()
     ov.thrusters = struct('RED', platform, 'BLACK', platform, 'BLUE', platform);
     joints = nan(1, 3);
     ov.arm = struct('static', joints, 'coulomb', joints, 'stribeck', joints, 'viscous', joints, ...
-                    'armature', joints);
+                    'armature', joints, 'back_emf', joints);
 end
 
 function v = vector(x, n)

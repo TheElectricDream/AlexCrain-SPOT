@@ -1,21 +1,21 @@
 classdef VelocityControl < matlab.System
-    %VELOCITYCONTROL The Dynamixel servos' velocity control, as a controller giving joint torques.
+    %VELOCITYCONTROL The Dynamixel servos' velocity control, as a controller giving joint PWM.
     %   The diagram's "Default Velocity Control (ARM)" block. It runs the MX-64(2.0) velocity
     %   control law (operating mode 1) with the servo's settings and units, but in the diagram
-    %   every StepTime, and outputs torque: the servos stay in current control.
+    %   every StepTime, and outputs the PWM the servo would set: the servos stay in PWM control
+    %   (spot.hardware.ArmPWM), so they apply it as the servo's own law would.
     %
     %   Each step, per joint:
     %     1. Goal: [rad/s] to velocity units [0.229 rev/min] as the old hardware code did. A goal
     %        beyond Velocity Limit is ignored, as the servo ignores it.
     %     2. Profile: the desired velocity moves to the goal at Profile Acceleration (0 = none).
     %     3. PI in the servo's units, per ServoPeriod (integral scaled to StepTime), within PWM
-    %        Limit [885 = 100 %]:
+    %        Limit [885 = 100 %], in whole units:
     %          PWM = P/128 e + I/65536 sum(e),  e in velocity units
-    %     4. PWM to torque as spot.arm.PositionControl.pwmTorque.
     %
-    %   At StepTime = ServoPeriod = 1 ms with BackEMF on, this is the servo's own velocity
-    %   control. The defaults are retuned for the diagram's 20 Hz; a joint with stiction well
-    %   above the default friction can take a second or more to break away.
+    %   At StepTime = ServoPeriod = 1 ms this is the servo's own velocity control. The
+    %   defaults are retuned for the diagram's 20 Hz; a joint with stiction well above the
+    %   default friction can take a second or more to break away.
     %
     %   Each gain is one value for all three servos, or [shoulder elbow wrist].
     %
@@ -24,21 +24,17 @@ classdef VelocityControl < matlab.System
     %     meas      6x1 [q1 q2 q3 w1 w2 w3] [rad, rad/s] (ARM_Measured_States)
     %
     %   Outputs
-    %     tau       3x1 joint torques [N m] (ARM_Controls)
+    %     pwm       3x1 joint commands [PWM, 885 = 100 %] (ARM_Controls)
     %
     %   Example
-    %     c = spot.arm.VelocityControl('Motor', armModel.motor, 'StepTime', 0.05);
-    %     tau = c(goalSpeeds, [q; w]);
+    %     c = spot.arm.VelocityControl('StepTime', 0.05);
+    %     pwm = c(goalSpeeds, [q; w]);
     %
     %   See also spot.arm.PositionControl, spot.arm.Plant, spot.arm.checkCommands.
 
     %#codegen
 
     properties (Nontunable)
-        Motor = struct('stallTorque', [6 6 6], ...
-                       'stallCurrent', [4.1 4.1 4.1], ...
-                       'noLoadSpeed', [63 63 63] * 2*pi/60, ...
-                       'voltage', 12)   % armModel.motor (spot.arm.defaults)
         StepTime = 0.05                 % [s] controller period (the diagram's baseRate)
         ServoPeriod = 1e-3              % [s] servo's control period, which its gains are per
         VelocityP = [160 70 30]         % Velocity P Gain [shoulder elbow wrist] (servo had 100)
@@ -46,21 +42,12 @@ classdef VelocityControl < matlab.System
         ProfileAcceleration = 0         % [214.577 rev/min^2], 0 = none
         VelocityLimit = 1023            % Velocity Limit [0.229 rev/min]
         PWMLimit = 885                  % PWM Limit
-        BackEMF (1,1) logical = false   % include the motor's back-EMF in the PWM's torque
-    end
-
-    properties (SetAccess = private)
-        PWM = zeros(3, 1)               % last step's PWM, as the servo would set it
     end
 
     properties (Access = private)
         vGoal = zeros(3, 1)             % [rad/s] goal velocity
         vDes = zeros(3, 1)              % [rad/s] profile's desired velocity
         vInt = zeros(3, 1)              % [units * servo periods] velocity error integral
-        Kt = zeros(3, 1)                % [N m/A] torque constant at the joint
-        R = zeros(3, 1)                 % [ohm] winding resistance
-        Ke = zeros(3, 1)                % [V s/rad] back-EMF constant at the joint
-        V = 12                          % [V] supply voltage
     end
 
     properties (Constant, Access = private)
@@ -79,23 +66,13 @@ classdef VelocityControl < matlab.System
     end
 
     methods (Access = protected)
-        function setupImpl(obj)
-            % Motor constants from the datasheet's stall and no-load values.
-            motor = obj.Motor;
-            obj.Kt = motor.stallTorque(:) ./ motor.stallCurrent(:);
-            obj.R = motor.voltage ./ motor.stallCurrent(:);
-            obj.Ke = motor.voltage ./ motor.noLoadSpeed(:);
-            obj.V = motor.voltage;
-        end
-
         function resetImpl(obj)
             obj.vGoal = zeros(3, 1);
             obj.vDes = zeros(3, 1);
             obj.vInt = zeros(3, 1);
-            obj.PWM = zeros(3, 1);
         end
 
-        function tau = stepImpl(obj, goal, meas)
+        function pwm = stepImpl(obj, goal, meas)
             h = obj.StepTime;
 
             % New goals, in whole velocity units; a goal beyond the limit is ignored.
@@ -107,8 +84,7 @@ classdef VelocityControl < matlab.System
             end
 
             % Present velocity as the servo sees it (whole velocity units).
-            jointVel = meas(4:6);
-            presUnits = round(jointVel(:) / obj.VEL_UNIT);
+            presUnits = round(meas(4:6) / obj.VEL_UNIT);
 
             % Profile acceleration [rad/s^2], 0 = none.
             profileAcc = obj.ProfileAcceleration * obj.ACC_UNIT;
@@ -135,13 +111,8 @@ classdef VelocityControl < matlab.System
                 if abs(pwmJ) < obj.PWMLimit || sign(pwmJ) ~= sign(velErr)
                     obj.vInt(j) = errIntNew;
                 end
-                pwm(j) = min(max(pwmJ, -obj.PWMLimit), obj.PWMLimit);
+                pwm(j) = round(min(max(pwmJ, -obj.PWMLimit), obj.PWMLimit));
             end
-
-            % Torque from the PWM.
-            obj.PWM = pwm;
-            tau = spot.arm.PositionControl.pwmTorque(pwm, jointVel(:), obj.Kt, obj.R, obj.Ke, ...
-                obj.V, obj.BackEMF);
         end
 
         %% Simulink block interface
@@ -159,7 +130,7 @@ classdef VelocityControl < matlab.System
         end
 
         function a = getOutputNamesImpl(~)
-            a = 'Torque';
+            a = 'PWM';
         end
 
         function a = getOutputSizeImpl(~)
@@ -179,7 +150,7 @@ classdef VelocityControl < matlab.System
         end
 
         function icon = getIconImpl(~)
-            icon = sprintf('Dynamixel velocity\ncontrol -> torque');
+            icon = sprintf('Dynamixel velocity\ncontrol -> PWM');
         end
     end
 
@@ -188,10 +159,10 @@ classdef VelocityControl < matlab.System
             header = matlab.system.display.Header('spot.arm.VelocityControl', ...
                 'Title', 'Dynamixel Velocity Control', ...
                 'Text', ['The MX-64(2.0)''s velocity control law (acceleration profile, PI), ' ...
-                         'in its own units, run in the diagram: its output is the joint ' ...
-                         'torque [N m] the servo''s PWM would give, for the servos in current ' ...
-                         'control. Inputs: goal joint speeds [rad/s] and ARM_Measured_States. ' ...
-                         'The gains are retuned for the diagram''s 20 Hz. See help ' ...
+                         'in its own units, run in the diagram: its output is the PWM the ' ...
+                         'servo would set [885 = 100 %], for the servos in PWM control. ' ...
+                         'Inputs: goal joint speeds [rad/s] and ARM_Measured_States. The gains ' ...
+                         'are retuned for the diagram''s 20 Hz. See help ' ...
                          'spot.arm.VelocityControl.']);
         end
     end

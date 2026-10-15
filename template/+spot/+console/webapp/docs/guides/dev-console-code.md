@@ -37,7 +37,7 @@ One Python module per area. `server.py` serves the page and the JSON API, routes
 | Module | Tab or part |
 |---|---|
 | [app.js](file:app.js) | the shell: state, the API call, events, the PhaseSpace tab's cards, switching tabs |
-| [sim.js](file:sim.js), [data.js](file:data.js) | the Simulation tab; loaded results |
+| [sim.js](file:sim.js), [layout.js](file:layout.js), [data.js](file:data.js) | the Simulation tab, its Thruster and LED Layout window; loaded results |
 | [experiment.js](file:experiment.js), [results.js](file:results.js) | the Experiment and Results tabs |
 | [viewer.js](file:viewer.js), [cad.js](file:cad.js) | the 3D view (three.js) and the CAD models |
 | [designer.js](file:designer.js), [hardware.js](file:hardware.js), [interactive.js](file:interactive.js) | the Designer, Hardware and Interactive Mode |
@@ -46,6 +46,7 @@ One Python module per area. `server.py` serves the page and the JSON API, routes
 | [liveplot.js](file:liveplot.js), [messages.js](file:messages.js) | the Live Plot, the Messages panel |
 | [docs.js](file:docs.js) | this tab |
 | `platforms.js`, `ratelock.js` | the platforms' names and colours; the padlocks on the rates |
+| `srl_logo.png`, `srl_logo_full.png` | the lab's logo: the page's 128 px copy (top bar and tab icon), and the full-size original it is made from |
 
 Third-party code is in `static/vendor/`: three.js for the 3D view, and CodeMirror, ESLint, marked and KaTeX for this tab (rebuilt with `webapp/tools/editor-bundle/`).
 

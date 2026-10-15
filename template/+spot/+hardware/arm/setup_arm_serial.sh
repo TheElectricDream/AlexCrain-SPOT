@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sets up the arm's U2D2 (FTDI FT232H, /dev/ttyUSB0) on RED for spot.hardware.ArmTorque:
+# Sets up the arm's U2D2 (FTDI FT232H, /dev/ttyUSB0) on RED for spot.hardware.ArmPWM:
 #   - udev rule /etc/udev/rules.d/00-spot-arm.rules: every FTDI serial adapter gets a 1 ms latency
 #     timer (the kernel's default is 16 ms: the adapter then holds the servos' replies up to 16 ms,
 #     which is what made the old encoder reads miss), the U2D2's port is read/write for everyone,

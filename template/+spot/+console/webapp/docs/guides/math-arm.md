@@ -1,8 +1,8 @@
 # The Arm: Dynamics, Friction, Servos
 
-The model inside `spot.arm.Plant`, and the servo control laws in `spot.arm.PositionControl` / `spot.arm.VelocityControl`.
+The model inside `spot.arm.Plant`, the servos in PWM control, and the servo control laws in `spot.arm.PositionControl` / `spot.arm.VelocityControl`.
 
-![resources/ArmConfig.png](images/ArmConfig.png)
+![ArmConfig.png](images/ArmConfig.png)
 
 ## Geometry
 
@@ -14,29 +14,29 @@ The Chaser with its arm is a free-floating planar system with generalised coordi
 
 $$M(\mathbf{q})\,\ddot{\mathbf{q}} + C(\mathbf{q}, \dot{\mathbf{q}})\,\dot{\mathbf{q}} = \begin{bmatrix} F_x \\ F_y \\ T_z \\ \tau_1 - f_1 \\ \tau_2 - f_2 \\ \tau_3 - f_3 \end{bmatrix}$$
 
-where $F$ is the thruster force/torque on the base, $\tau_i$ the motor torque at joint $i$ and $f_i$ its friction. $M$ (`spot.arm.inertiaMatrix`) and $C$ (`spot.arm.coriolisMatrix`) were derived symbolically in 2017 (Lagrange's equations for the four bodies) and generated as code; each joint's reflected rotor inertia $J_{a,i}$ (`armature`, rotor inertia × gear ratio²) is added to $M_{3+i,3+i}$. Because the base floats, moving the arm moves the base: $M$ couples all six coordinates.
+where $F$ is the thruster force/torque on the base, $\tau_i$ the motor torque at joint $i$ (back-EMF included) and $f_i$ its friction. $M$ (`spot.arm.inertiaMatrix`) and $C$ (`spot.arm.coriolisMatrix`) were derived symbolically in 2017 (Lagrange's equations for the four bodies) and generated as code; each joint's reflected rotor inertia $J_{a,i}$ (`armature`, rotor inertia × gear ratio²) is added to $M_{3+i,3+i}$. Because the base floats, moving the arm moves the base: $M$ couples all six coordinates.
 
 ## The servos
 
-Each MX-64 is a DC motor through a 200:1 gearbox, in **current control**: the servo's own loop holds the commanded current $i^*$. The model keeps three constants from the datasheet (at 12 V): stall torque $\tau_s = 6.0$ N m, stall current $i_s = 4.1$ A, no-load speed $\omega_0 = 63$ rpm, giving at the joint
+Each MX-64 is a DC motor through a 200:1 gearbox, in **PWM control** (operating mode 16, also called voltage control): the command $u$ (`ARM_Controls`, in the servo's units, 885 = 100 %) is the share of the supply voltage $V_s$ put across the motor, $V = \frac{u}{885} V_s$. With the winding's inductance neglected, the motor then gives at the joint
 
-$$K_t = \frac{\tau_s}{i_s}\ [\text{N m/A}], \qquad R = \frac{V}{i_s}\ [\Omega], \qquad K_e = \frac{V}{\omega_0}\ [\text{V s/rad}].$$
+$$\tau = g\,(V - K_e\,\omega), \qquad g = \frac{\tau_s}{V_0}\ [\text{N m/V}], \qquad K_e = \frac{V_0}{\omega_0}\ [\text{V s/rad}],$$
 
-The commanded torque $\tau^*$ becomes a goal current $i^* = \tau^*/K_t$, quantised to the servo's 3.36 mA unit and clipped to the Current Limit (850 units ≈ 2.86 A), with no torque that pushes a joint further past its position limits (`spot.arm.withinLimits`). The servo can only hold that current as far as its supply voltage allows against the motor's back-EMF:
+from the datasheet at $V_0 = 12$ V: stall torque $\tau_s = 6.0$ N m and no-load speed $\omega_0 = 63$ rpm, so $g = 0.5$ N m/V and $K_e \approx 1.82$ V s/rad (`armModel.motor.torquePerVolt`, `.backEMF`; the arm calibration measures the back-EMF). At rest PWM *is* a torque, about 0.0068 N m per unit at 12 V, which is why it stands in for torque control. Turning, the back-EMF brakes the joint like a viscous friction of $g K_e \approx 0.9$ N m s/rad, far more than the joints' own; it is what makes the arm well damped. The plant takes it implicitly with the viscous friction below, so it is stable at any step.
 
-$$i = \operatorname{clip}\!\left(i^*,\ \frac{-V - K_e\omega}{R},\ \frac{V - K_e\omega}{R}\right), \qquad \tau = K_t\, i .$$
+The command is sent in whole units, within the PWM Limit, with none pushing a joint further past its position limits (`spot.arm.withinLimits`), as `spot.hardware.ArmPWM` sends it; the plant's third output is that applied PWM (`ARM_Measured_PWM`).
 
-So a joint spinning fast can't be pushed harder in the same direction; that is the motor's torque-speed curve.
+Why PWM rather than current (torque) control: the servos measure their current in 3.36 mA units, and at the arm's small torques (a few tenths of a N m, a few dozen mA) that reading is too coarse and noisy to control with, or to calibrate from; one wrist servo even read differently each way. PWM needs no measurement at all: it is what the servo applies.
 
 ## Friction with stiction
 
-Per joint, four parameters (`spot.arm.defaults`, or the measured ones: the lab's arm calibration from the [Calibration Tab](page:tab-calibration), or a `resources/arm_calibration.json` from [calibrate_arm.py](file:calibrate_arm.py), whichever is newer; `spot.arm.parameters`): breakaway torque $T_s$, Coulomb torque $T_c$, Stribeck velocity $v_s$, viscous coefficient $b$. Moving at speed $\omega$, the friction is
+Per joint, four parameters (`spot.arm.defaults`, or the ones measured in PWM control: the lab's arm calibration from the [Calibration Tab](page:tab-calibration), or an `arm_calibration.json` in the project folder from [calibrate_arm.py](file:calibrate_arm.py), whichever is newer; `spot.arm.parameters`): breakaway torque $T_s$, Coulomb torque $T_c$, Stribeck velocity $v_s$, viscous coefficient $b$. Moving at speed $\omega$, the friction is
 
 $$f(\omega) = \left[T_c + (T_s - T_c)\, e^{-(\omega/v_s)^2}\right] \operatorname{sign}(\omega) + b\,\omega ,$$
 
 and at rest the joint stays at rest as long as the torque on it is below $T_s$. Simulating that with an explicit integrator chatters (the sign flips every step). The plant solves it **implicitly** each inner step $h$: the velocity update is written as
 
-$$A\, v^{+} = r + \sum_j e_j\, p_j, \qquad A = M + h\,\mathrm{diag}(0,0,0,b), \quad r = M v + h\,([F; \tau] - C v),$$
+$$A\, v^{+} = r + \sum_j e_j\, p_j, \qquad A = M + h\,\mathrm{diag}(0,0,0,b + g K_e), \quad r = M v + h\,([F; g V] - C v),$$
 
 where $p_j$ is the friction *impulse* at joint $j$ over the step, bounded by $|p_j| \le h\,\mu_j(\omega)$ with $\mu_j = T_c + (T_s - T_c)e^{-(\omega/v_s)^2}$. Each $p_j$ is chosen to bring joint $j$ to rest if that is within its bound, otherwise it sits at the bound against the motion. That is a small box-constrained linear complementarity problem, solved by projected Gauss-Seidel (`dryFriction`, up to 60 sweeps); positions then advance with the new velocities (semi-implicit Euler, $q^+ = q + h v^+$). The result sticks and slips without chattering, at a 1 ms step, however stiff the friction.
 
@@ -48,14 +48,13 @@ In the servo's units (pulses, 0.229 rpm velocity units, PWM 885 = 100 %), per co
 2. **Profile**: the desired position $p_d$ moves towards $g$ at Profile Velocity $V_p$ (and, if set, Profile Acceleration $A_p$ with the usual $\sqrt{2 A_p\, d}$ slow-down); 0 means "jump to the goal".
 3. **PID + feedforward**:
 $$u = \frac{P}{128}\, e + \frac{I}{65536} \sum e\,\frac{h}{T_p} + \frac{D}{16}\, \Delta e\,\frac{T_p}{h} + \frac{FF_1}{4} v_d + \frac{FF_2}{4} a_d, \qquad e = p_d - p \ [\text{pulses}]$$
-clipped to ±PWM Limit, with anti-windup (the integral holds while the output is saturated in the direction of the error).
-4. **PWM to torque**: $\tau = \dfrac{K_t}{R}\left(\dfrac{u}{885} V - [K_e\,\omega]\right)$, the back-EMF term optional (on for the servo's own 1 ms loop, off at 20 Hz).
+clipped to ±PWM Limit, with anti-windup (the integral holds while the output is saturated in the direction of the error), in whole units.
 
-Run at 1 ms with the servo's gains (400 / 0 / 200) and back-EMF, this *is* the servo's position mode. At the diagram's 20 Hz those gains are far too stiff and the arm goes unstable, so the block's defaults are retuned for 20 Hz: P = [25 56 21], I = 10, D = [1545 230 236] — about 1 N m/rad of stiffness, a twentieth of the servo's own, with the integral doing the last few degrees against stiction.
+The output is that PWM ($u$), which the servos in PWM control apply as they would their own position law's: run at 1 ms with the servo's gains (400 / 0 / 200), this *is* the servo's position mode (`spot.arm.compareSteps` checks the model so). At the diagram's 20 Hz those gains are far too stiff and the arm goes unstable, so the block's defaults are retuned for 20 Hz: P = [25 56 21], I = 10, D = [1545 230 236] — about 1 N m/rad of stiffness at rest, a twentieth of the servo's own, with the integral doing the last few degrees against stiction. The motors' back-EMF adds its damping to the D gain's (the elbow then takes about 3 s to reach a 20° step, against under a second without it).
 
 ## The velocity control law (mode 1, replicated)
 
-Goal in 0.229 rpm units (ignored beyond Velocity Limit), an optional acceleration profile, then PI: $u = \frac{P}{128} e + \frac{I}{65536} \sum e\, \frac{h}{T_p}$ with $e$ in velocity units, clipped and anti-wound-up as above, and the same PWM-to-torque. Retuned for 20 Hz: P = [160 70 30], I = [220 1500 300].
+Goal in 0.229 rpm units (ignored beyond Velocity Limit), an optional acceleration profile, then PI: $u = \frac{P}{128} e + \frac{I}{65536} \sum e\, \frac{h}{T_p}$ with $e$ in velocity units, clipped and anti-wound-up as above; the output is the PWM $u$. Retuned for 20 Hz: P = [160 70 30], I = [220 1500 300]. In PWM control a joint's speed follows its voltage closely ($\omega \approx (V - f/g)/K_e$ once moving), which helps this loop.
 
 ## Units cheat-sheet
 

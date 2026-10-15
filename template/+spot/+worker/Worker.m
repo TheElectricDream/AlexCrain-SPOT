@@ -323,11 +323,6 @@ classdef Worker < handle
                         result = struct('figure', fig.Number);
                     end
 
-                %% Mass properties
-                case 'massprops.writeTracker'
-                    props = spot.massprops.compute(obj.Settings.mass);
-                    result = struct('file', spot.massprops.writeTrackerPositions(props, obj.Root));
-
                 %% Workspace panel and Command Window
                 case 'workspace.list'
                     result = spot.workspace.list();

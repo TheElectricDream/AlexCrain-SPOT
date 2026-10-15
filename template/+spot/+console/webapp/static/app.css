@@ -1348,3 +1348,48 @@ a.btn { text-decoration: none; }
 .cal-sub { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 16px 0 6px; }
 .cal-arm-plots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
 @media (max-width: 1100px) { .cal-arm-plots { grid-template-columns: 1fr; } }
+
+/* ---------- thruster and LED layout (Simulation tab, Platforms pane) ---------- */
+.layout-dialog { width: min(1040px, calc(100vw - 32px)); }
+.ly-body { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; padding: 16px; overflow-y: auto; min-height: 0; }
+.ly-figure { margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ly-svg { width: 100%; max-height: calc(100vh - 210px); aspect-ratio: 1; display: block; }
+.ly-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #c3c9d4; }
+.ly-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.ly-key { display: inline-block; width: 16px; height: 0; border-top: 2px dashed; }
+.ly-key.thr { color: #f5a524; }
+.ly-key.led { width: 9px; height: 9px; border: 2px solid #3bc9db; border-radius: 50%; }
+.ly-key.cg { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #4c8dff; background: conic-gradient(#4c8dff 0 25%, transparent 0 50%, #4c8dff 0 75%, transparent 0); }
+.ly-key.scale { width: 7px; height: 7px; border: 1.5px solid #8b93a3; transform: rotate(45deg); }
+.ly-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ly-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ly-sec-head .field-label { margin: 0; }
+.ly-table td .input { width: 100%; }
+.ly-table td[data-cgx], .ly-table td[data-cgy] { color: var(--muted); }
+.ly-svg text { font: 600 12px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.ly-hull { fill: url(#lyHatch); stroke: #343a47; stroke-width: 1.5; }
+.ly-centre { stroke: #5d6575; stroke-width: 1.2; }
+.ly-action { stroke: #f5a524; stroke-width: 1; stroke-dasharray: 5 4; opacity: .45; }
+.ly-cgline { stroke: #4c8dff; stroke-width: 1; stroke-dasharray: 7 4; opacity: .6; }
+.ly-ext { stroke-width: .8; opacity: .55; }
+.ly-dim { stroke-width: 1.1; }
+.ly-ext.thr, .ly-dim.thr { stroke: #f5a524; }
+.ly-ext.led, .ly-dim.led { stroke: #3bc9db; }
+.ly-val { paint-order: stroke; stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; }
+.ly-val.thr { fill: #ffc95c; }
+.ly-val.led { fill: #7fe3ef; }
+.ly-nozzle { fill: #c3c9d4; }
+.ly-name { fill: #c3c9d4; font-size: 11px; }
+.ly-led { fill: #0b0d11; stroke: #3bc9db; stroke-width: 2; }
+.ly-led-core { fill: #3bc9db; }
+.ly-scale { fill: none; stroke: #8b93a3; stroke-width: 1.3; }
+.ly-scale-name { fill: #8b93a3; font-size: 11px; }
+.ly-cg-ring { fill: var(--panel); stroke: #4c8dff; stroke-width: 1.5; }
+.ly-cg-fill { fill: #4c8dff; }
+.ly-cg-name { fill: #8fb5ff; font-size: 11px; }
+.ly-axis { stroke: #8b93a3; stroke-width: 1.3; }
+.ly-axis-name { fill: #8b93a3; font-size: 11px; }
+@media (max-width: 860px) {
+  .ly-body { grid-template-columns: 1fr; }
+  .ly-svg { max-height: none; }
+}

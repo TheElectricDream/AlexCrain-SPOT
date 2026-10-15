@@ -15,11 +15,16 @@ function a = parameters(v, root)
     %           Simulation tab's Calibration pane, spot.params.loadCalibration).
     %
     %   Outputs
-    %     a     the arm model; a.calibration names the calibration applied, '' if none
+    %     a     the arm model; a.calibration names the calibration applied, '' if none;
+    %           a.calibrationIgnored names one left out because it was measured with the
+    %           motor current (calibration version 1), '' if none
     %
     %   Change it in SPOT_User_Parameters.m, e.g. armModel.friction.static = [0.4 0.3 0.2];
     %
     %   See also spot.arm.defaults, spot.arm.loadCalibration, spot.params.apply.
+
+    %% Constants
+    PWM_FORMAT = 2;   % first arm calibration version measured in PWM control
 
     %% Model from the workspace
     a = spot.arm.defaults();
@@ -51,6 +56,7 @@ function a = parameters(v, root)
 
     a.outerStep = v.baseRate;
     a.calibration = '';
+    a.calibrationIgnored = '';
 
     %% Calibration
     if nargin > 1 && ~isempty(root)
@@ -65,7 +71,8 @@ function a = parameters(v, root)
         end
         files = {lab.file, script};
 
-        % When each calibration was measured ('' if missing or not an arm calibration).
+        % When each calibration was measured ('' if missing, not an arm calibration, or
+        % measured with the motor current, which the PWM-driven model can't use).
         created = {'', ''};
         for k = 1:2
             try
@@ -74,7 +81,12 @@ function a = parameters(v, root)
                     c = c.arm;
                 end
                 if strcmp(c.format, 'spot-arm-calibration')
-                    created{k} = char(c.created);
+                    if isfield(c, 'version') && c.version >= PWM_FORMAT ...
+                            && isfield(c, 'control') && strcmp(c.control, 'pwm')
+                        created{k} = char(c.created);
+                    else
+                        a.calibrationIgnored = files{k};
+                    end
                 end
             catch
             end
@@ -95,5 +107,7 @@ function a = parameters(v, root)
         end
         given = isfinite(ov.armature);
         a.armature(given) = ov.armature(given);
+        given = isfinite(ov.back_emf);
+        a.motor.backEMF(given) = ov.back_emf(given);
     end
 end
