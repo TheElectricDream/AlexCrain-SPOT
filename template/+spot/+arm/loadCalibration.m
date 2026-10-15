@@ -4,15 +4,15 @@ function a = loadCalibration(file, a)
     %   when measured, its armature. A value the file lacks (or has as null) keeps the model's.
     %
     %   Inputs
-    %     file  the calibration script's JSON file, the lab's calibration
-    %           (resources/spot_calibration.json, its arm section), or the calibration as a struct
+    %     file  the calibration script's JSON file, the lab's calibration (the project's
+    %           spot_calibration.json, its arm section), or the calibration as a struct
     %     a     arm model (spot.arm.defaults or spot.arm.parameters)
     %
     %   Outputs
     %     a     the model with the calibration; a.calibration names the source
     %
     %   Example
-    %     armModel = spot.arm.loadCalibration('resources/arm_calibration.json', armModel);
+    %     armModel = spot.arm.loadCalibration('arm_calibration.json', armModel);
     %
     %   See also spot.arm.parameters, spot.arm.compareSteps.
 

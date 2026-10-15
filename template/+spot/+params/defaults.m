@@ -88,7 +88,7 @@ function s = defaults()
         'mount', struct('face', '+y', 'side', 'left'));
 
     %% Calibration
-    % Which parts of the lab's calibration (Calibration tab, resources/spot_calibration.json)
+    % Which parts of the lab's calibration (the project's spot_calibration.json)
     % simulations use: the table's slope (off: level), each thruster's thrust (off:
     % thrusterForce for all eight), the arm's friction and inertia (off: its defaults).
     s.calibration = struct('tableSlope', true, 'thrusters', true, 'arm', true);

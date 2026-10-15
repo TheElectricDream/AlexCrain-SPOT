@@ -48,6 +48,7 @@ In the last pre-release we said we would be moving towards a more version-contro
     \item \textbf{Change 2:} Replaced Setup\_Experiment.m with the MATLAB function New\_SPOT\_\allowbreak Project, which copies the template into projects/ and renames the diagram after the project. It checks the name first, so it can always be used as the diagram's name.
     \item \textbf{Change 3:} Simulations can now be run without the GUI at all, straight from the Command Window or a script (e.g. s = spot.params.load('spot\_settings.json'); spot.sim.run(s, pwd)). This makes parameter sweeps and optimization loops much simpler than manipulating the GUI handle.
     \item \textbf{Change 4:} The PhaseSpace data rate, the thruster PWM frequency and the lab console's address are now settings in the console rather than variables in the initializer. The arm's old gain and friction variables (Kp\_sharm, Gamma, Tz\_lim and friends) have been removed, as the arm model and its controllers now set these themselves.
+    \item \textbf{Change 5:} The project's calibration moved from resources/spot\_calibration.json to spot\_calibration.json, next to spot\_settings.json and spot\_design.json. Older projects are moved across the first time the console starts, and MATLAB still reads the old location until then. The arm calibration script moved from resources/arm\_calibration to +spot/+arm/calibration.
 \end{itemize}
 
 % GUI Changes Section
@@ -71,6 +72,8 @@ In the last pre-release we said we would be moving towards a more version-contro
     \item \textbf{Change 16:} Added a Thrust Decay field for each platform on the Platforms tab (the thrust lost per extra valve open at once). The Calibration tab shows each platform's measured decay next to its thrusts, and the Calibrated Thrust switch now applies both.
     \item \textbf{Change 17:} Added a Lab Setup button next to Lab Console, which runs the deployment scripts from the page instead of a terminal: the lab console (TX2), SPOT Vision (Orin) and the platforms' links, with each script's output shown as it runs. It only works on the lab network. The platform script's power-saving step still needs a terminal, as it asks for a password.
     \item \textbf{Change 18:} Moved the 3D view's switches into a Viewing Options menu, and locked the solver settings behind a padlock, like the data rate and PWM frequency (they are read from the diagram). Longer explanations moved into tooltips to keep the sidebars short.
+    \item \textbf{Change 19:} Moved the local console's Calibration tab into the Simulation tab's Calibration pane. The sidebar stays, and the main area shows the calibrations in place of the 3D view, the command window and the messages. Each calibration (Table Slope, Thrusters, Arm) has its own card in the sidebar, with its switch and the values the next simulation will use, read back from MATLAB after SPOT\_User\_Parameters.m. With a switch off, the card shows what is used instead: a level table, the Platforms tab's thrust and decay, or the arm model's defaults.
+    \item \textbf{Change 20:} Any calibrated value can now be overridden from its card. Overridden values are marked, with a button to go back to the measured value, and are kept in the project's calibration file, so Update from Lab keeps them. The console still offers the lab's newer calibration for any part that has values which are not overridden.
 \end{itemize}
 
 % Lab Console Changes Section
@@ -141,6 +144,7 @@ In the last pre-release we said we would be moving towards a more version-contro
     \item \textbf{Bug 12:} Fixed spot.console.openBrowser reporting that no browser could be opened when MATLAB's web() had opened one (it asked web() for an output it doesn't return).
     \item \textbf{Bug 13:} Fixed the Identify Platform block, which called itself Source.
     \item \textbf{Bug 14:} Fixed the local console sometimes showing the lab console's old state after connecting, until something on the lab console changed.
+    \item \textbf{Bug 15:} Fixed two changes to the calibration file made at the same moment (an update and a run's result, say) losing one of them.
 \end{itemize}
 
 \section*{\textcolor{primaryColor}{Ongoing Issues}}

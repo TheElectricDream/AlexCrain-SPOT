@@ -29,6 +29,20 @@ const VARIABLE_SOLVERS = [
   'ode23t', 'ode23tb', 'odeN', 'daessc',
 ];
 
+// The Calibration pane's values: [override key, label, unit, scale from the file's SI value to
+// the one shown]. The table's height surface h = a1 u + a2 v + a3 u² + a4 uv + a5 v² [m], with
+// (u, v) from its centre [m]; each arm joint's friction and rotor (armature) inertia.
+const TABLE_ROWS = [
+  ['height.0', 'a₁ · Slope x', 'mm/m', 1e3], ['height.1', 'a₂ · Slope y', 'mm/m', 1e3],
+  ['height.2', 'a₃ · x²', 'mm/m²', 1e3], ['height.3', 'a₄ · xy', 'mm/m²', 1e3],
+  ['height.4', 'a₅ · y²', 'mm/m²', 1e3],
+];
+const ARM_ROWS = [
+  ['static', 'Breakaway', 'N m', 1], ['coulomb', 'Coulomb', 'N m', 1],
+  ['stribeck', 'Stribeck', 'rad/s', 1], ['viscous', 'Viscous', 'N m s/rad', 1],
+  ['armature', 'Armature', 'g m²', 1e3],
+];
+
 // LQR states and inputs. Derivatives are written d·/dt: a dot over a letter is hard to see.
 const STATES = ['x', 'y', 'θ', 'dx/dt', 'dy/dt', 'dθ/dt'];
 const INPUTS = ['Fx', 'Fy', 'Tz'];
@@ -62,6 +76,8 @@ function setPath(obj, path, value) {
   keys.reduce((o, k) => o[k], obj)[last] = value;
 }
 const list = x => (Array.isArray(x) ? x : x == null ? [] : [x]);
+// A number from MATLAB's JSON (NaN is null there; [] and missing values too): null if none.
+const numOrNull = v => (typeof v === 'number' && isFinite(v) ? v : null);
 const kindTag = k => ({ simulation: 'SIM', experiment: 'EXP' }[k] || 'MAT');
 const esc = s => String(s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -122,14 +138,18 @@ function cells(path, n) {
  * @param {{api: function(string, !Object=): !Promise, act: function(function(): !Promise),
  *     toast: function(string, string, number),
  *     storage: {get: function(string, *): *, set: function(string, *)}, viewer: ?Object,
- *     store: !Object, messages: ?Object, livePlot: ?Object}} deps The page's API call, its
- *     action wrapper (reports errors), its toast and settings storage, the 3D view, the data
- *     store (data.js), and the Messages and Live Plot panels.
+ *     store: !Object, messages: ?Object, livePlot: ?Object,
+ *     onCalibrationView: ?function(boolean)}} deps The page's API call, its action wrapper
+ *     (reports errors), its toast and settings storage, the 3D view, the data store (data.js),
+ *     the Messages and Live Plot panels, and what shows (true) or hides the calibrations in
+ *     the main area (calibration.js) when the Calibration tab is chosen.
  * @return {!Object} What the page and the other tabs call: printError, onState, onMatlab, onSim,
  *     onMatlabEvent, show, hide, hasResult, getState, setPlatform, setArm, setSetting,
  *     renderSetup.
  */
-export function initSimulation({ api, act, toast, storage, viewer, store, messages, livePlot }) {
+export function initSimulation({
+  api, act, toast, storage, viewer, store, messages, livePlot, onCalibrationView = null,
+}) {
   const S = {
     settings: null, derived: null, error: '', diagrams: [], file: '',
     matlab: { connected: false }, sim: {}, progress: null, result: null, resultId: 0,
@@ -179,16 +199,18 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
 
   onLockChange(() => fill());
 
-  // The project's calibration changed (the Calibration tab's Update from Lab): MATLAB applies
-  // the settings again, so the Scenario tab says what the next simulation uses.
-  let calUpdated;
+  // The project's calibration changed (Update from Lab, or a value overridden): MATLAB applies
+  // the settings again, so the Calibration pane shows what the next simulation uses.
+  let calKey;
   document.addEventListener('spot-calibration', ev => {
-    const u = ev.detail && ev.detail.updated;
-    if (calUpdated !== undefined && u !== calUpdated && S.settings && S.matlab &&
+    S.calFile = ev.detail || null;
+    const key = JSON.stringify([S.calFile && S.calFile.updated, S.calFile && S.calFile.overrides]);
+    if (calKey !== undefined && key !== calKey && S.settings && S.matlab &&
         S.matlab.connected) {
       loadSettings().catch(() => {});
     }
-    calUpdated = u;
+    calKey = key;
+    renderCalibration();
   });
 
   // Reads the settings from MATLAB (an error, e.g. opened without the session token, is shown
@@ -247,11 +269,18 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
     S.panesBuilt = true;
     const s = S.settings;
     const on = s.platforms;
+
+    // The sync card (calibration.js keeps it up to date) goes back into the new Calibration
+    // pane: the same element, kept while the panes are drawn again.
+    const syncCard = document.getElementById('calSync');
     panes.innerHTML = `
       <div data-simpane="scenario">${scenarioPane(s)}${solverPane(s)}</div>
       <div data-simpane="platforms">${platformsPane(s, on)}</div>
       <div data-simpane="calibration">${calibrationPane()}</div>
       <div data-simpane="control">${controlPane(on)}</div>`;
+    if (syncCard) {
+      $('[data-calsync]', panes).append(syncCard);
+    }
     showTab(S.tab);
   }
 
@@ -314,21 +343,12 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
     });
   }
 
-  // What the simulation takes from the lab's calibration (this project's
-  // resources/spot_calibration.json).
+  // What the simulation takes from the lab's calibration (this project's spot_calibration.json):
+  // this project's calibration against the lab's (calibration.js's sync card, moved here by
+  // renderPanes), then a card per calibration (renderCalibration); the main area shows the
+  // calibrations.
   function calibrationPane() {
-    const row = (path, label, key, title) => `<div class="cal-scenario" title="${esc(title)}">
-        <label class="toggle"><input type="checkbox" data-path="${path}"><span></span>${label}</label>
-        <span class="hint" data-derived="${key}"></span></div>`;
-    return `
-      <section class="card">
-        <div class="card-head"><h2 class="tip" title="From this project's resources/spot_calibration.json: the lab console's calibration (Calibration tab: Update from Lab).">Calibration</h2></div>
-        <div class="cal-rows">
-          ${row('calibration.thrusters', 'Calibrated Thrust', 'calthrusters', 'Each thruster\'s measured thrust in the mixer and the simulated plant, as in experiments. Off: the Thrust on the Platforms tab for all eight.')}
-          ${row('calibration.arm', 'Calibrated Arm', 'calarm', 'The arm\'s measured friction and inertia (the lab\'s arm calibration, or a resources/arm_calibration.json: the newer). Off: the arm model\'s defaults.')}
-          ${row('calibration.tableSlope', 'Table Slope', 'calslope', 'The floating platforms slide downhill on the measured slope, with their air bearings\' drag. Off: a level table.')}
-        </div>
-      </section>`;
+    return '<div data-calsync></div><div class="cal-cards" data-calcards></div>';
   }
 
   // Platforms: a picker, then the platform's (or the arm's) cards.
@@ -532,6 +552,34 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
     if (tab === 'workspace') {
       refreshWorkspace();
     }
+
+    // The Calibration tab shows the calibrations in the main area; leaving it, the 3D view.
+    if (S.shown) {
+      setCalibrationView(tab === 'calibration');
+    }
+  }
+
+  // The calibrations (calibration.js) in place of the 3D view, the command window and the
+  // messages, or not.
+  function setCalibrationView(on) {
+    const page = $('#pageSimulation');
+    const was = page.classList.contains('cal-mode');
+    page.classList.toggle('cal-mode', on);
+    if (on || was) {
+      onCalibrationView?.(on);
+    }
+    if (!on && was) {
+      layers();
+      renderSetup();
+      if (hasPlayback()) {
+        viewer?.setSimTime(S.t);
+      }
+    }
+  }
+
+  // Whether this tab's 3D view is showing (not the Calibration tab's main area).
+  function viewShown() {
+    return S.shown && S.tab !== 'calibration';
   }
 
   // Filling in values
@@ -629,51 +677,15 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
       : 'Skipped');
     set('p3total', `${fmt(tm.Phase3_Duration, 5)} s`);
 
-    // The table slope calibration this project has (and whether the simulation uses it);
-    // MATLAB's [] for none.
-    const cal = d.calibration || {};
-    const t = cal.table && !Array.isArray(cal.table) ? cal.table : null;
-    set('calslope', cal.error ? `<span class="bad">${esc(cal.error)}</span>`
-      : !t ? 'None in this project: a level table.'
-      : `${s.calibration && s.calibration.tableSlope ? 'Used' : 'Not used'}: ` +
-        `${fmt(t.tilt_centre_mrad, 3)} mrad · ${esc(String(t.updated).slice(0, 10))}`);
-
-    // The arm calibration the simulation uses (the file it came from), or the one the project
-    // has.
-    const armFrom = String(cal.armUsed || '');
-    const armCal = cal.arm && !Array.isArray(cal.arm) ? cal.arm : null;
-    set('calarm', armFrom
-      ? `Used: ${esc(armFrom.split(/[\\/]/).pop())}${armCal && armFrom.includes('spot_calibration')
-        ? `, measured ${esc(String(armCal.created).slice(0, 10))}` : ''}.`
-      : armCal ? `Not used (measured ${esc(String(armCal.created).slice(0, 10))}).`
-      : s.calibration && s.calibration.arm ? 'None in this project: defaults.'
-      : 'Not used: defaults.');
-
-    // The thruster calibrations this project has (and which the simulation uses); MATLAB's []
-    // for no decay.
-    const th = cal.thrusters && !Array.isArray(cal.thrusters) ? cal.thrusters : {};
-    const have = ['RED', 'BLACK', 'BLUE'].filter(k => th[k] && !Array.isArray(th[k]));
-    const using = s.calibration && s.calibration.thrusters;
-    const decayed = have.filter(k => typeof th[k].decay === 'number');
-    set('calthrusters', !have.length ? 'None in this project: nominal.'
-      : `${using ? 'Used' : 'Not used'}: ${have.map(k => platformName(k)).join(', ')}` +
-        `${decayed.length ? ` · decay: ${decayed.map(k => platformName(k)).join(', ')}` : ''}`);
-
-    // The platform's thrust, and the decay the simulation uses: its Together calibration (when
-    // used), else the setting.
-    const mine = th[S.platform] && !Array.isArray(th[S.platform]) ? th[S.platform] : null;
-    const F = mine ? [].concat(mine.thrust) : null;
-    const own = using && mine && typeof mine.decay === 'number';
-    const decay = own ? mine.decay : (s.thrusterDecay || {})[S.platform];
-    const decayText = decay == null ? ''
-      : `decay ${fmt(100 * decay, 3)} % per extra valve (${own ? 'calibrated' : 'setting'})`;
-    set('calthrust', [
-      mine
-        ? `Calibrated${using ? '' : ' (not used)'}: ` +
-          `${Math.min(...F).toFixed(3)}–${Math.max(...F).toFixed(3)} N`
-        : '',
-      decayText,
-    ].filter(Boolean).join(' · '));
+    // The platform's thrusts and thrust decay in use (the Calibration pane has where they come
+    // from).
+    const use = (d.calibration || {}).inUse;
+    const thrusts = use ? list((use.thrust || {})[S.platform]) : [];
+    const decayUsed = use ? numOrNull((use.decay || {})[S.platform]) : null;
+    set('calthrust', thrusts.length
+      ? `In use: ${Math.min(...thrusts).toFixed(3)}–${Math.max(...thrusts).toFixed(3)} N, ` +
+        `decay ${fmt(100 * decayUsed, 3)} % per extra valve (the Calibration tab shows each).`
+      : '');
     set('posehint', S.pose === 'off'
       ? 'Click Initial or Home to show the poses on the table.'
       : `Drag on the table to move; Shift+drag rotates.`);
@@ -721,6 +733,262 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
     const warnings = [S.error, ...((d && d.warnings) || [])].filter(Boolean);
     notice.hidden = !warnings.length;
     notice.textContent = warnings.join(' ');
+    renderCalibration();
+  }
+
+  // The Calibration pane
+
+  // The cards: what the simulation uses of each calibration. Not while a value typed is not sent
+  // yet (S.calEditing), nor while a mouse button is down on a card (a switch or button being
+  // clicked would be replaced under the click): drawn afterwards (flushCalibration). FORCE draws
+  // even an unchanged card, putting back what was typed. The value that had the focus keeps it.
+  function renderCalibration(force = false) {
+    const box = $('[data-calcards]', panes);
+    if (!box) {
+      return;
+    }
+    const editing = S.calEditing && S.calEditing.isConnected &&
+      S.calEditing === document.activeElement;
+    if (!force && (editing || S.calPointer)) {
+      S.calPending = true;
+      return;
+    }
+    S.calPending = false;
+    S.calEditing = null;
+    const html = calibrationCards();
+    if (force || box.dataset.html !== html) {
+      const active = document.activeElement;
+      const focused = box.contains(active) ? active.dataset.ovr : null;
+      box.dataset.html = html;
+      box.innerHTML = html;
+      const again = focused ? $(`[data-ovr="${focused}"]`, box) : null;
+      if (again && !again.disabled) {
+        again.focus();
+      }
+    }
+  }
+
+  // A card drawing held back is done now (after the click under way, if any).
+  function flushCalibration() {
+    if (S.calPending) {
+      setTimeout(() => renderCalibration(), 0);
+    }
+  }
+
+  // The three cards, from the settings' switches, the project's file (what was measured, what is
+  // overridden) and MATLAB's values in use (after SPOT_User_Parameters.m).
+  function calibrationCards() {
+    const s = S.settings;
+    const c = (S.derived || {}).calibration || {};
+    const file = S.calFile || {};
+    const use = c.inUse || null;
+    const section = storage.get('spot.calibration.section', 'table');
+    if (!s || !use) {
+      return '<p class="hint">Waiting for MATLAB: the values come from the settings applied.</p>';
+    }
+
+    // The variables SPOT_User_Parameters.m changes, among a card's.
+    const changed = list(use.changedBy);
+    const scriptNote = names => {
+      const mine = changed.filter(n => names.some(p => n.startsWith(p)));
+      return mine.length
+        ? `<p class="hint warn-text">SPOT_User_Parameters.m changes ${esc(mine.join(', '))}: ` +
+          'these are the values it leaves.</p>'
+        : '';
+    };
+    return calTableCard(s, use, file, section, scriptNote(['tableSlope', 'tableDamping_'])) +
+      calThrustersCard(s, use, file, section, scriptNote(['F_thrusters_', 'thrust_decay_'])) +
+      calArmCard(s, use, file, c, section, scriptNote(['armModel']));
+  }
+
+  // A card's start: the main area shows its part when it is clicked (calibration.js), and it is
+  // marked while shown.
+  const calOpen = (part, section) =>
+    `<section class="card cal-card${section === part ? ' active' : ''}" data-calsec="${part}">`;
+
+  // A card's head: the calibration's name and its switch, and whether it was measured and how
+  // many of its values are overridden (used only when it is on).
+  function calHead(title, tip, path, on, measured, count) {
+    const used = on ? 'Used instead of the measured values' : 'Used when it is on';
+    return `<div class="card-head"><h2 class="tip" title="${esc(tip)}">${title}</h2>` +
+      `<label class="toggle" title="Use it in simulations"><input type="checkbox" ` +
+      `data-path="${path}"${on ? ' checked' : ''}><span></span>Use</label></div>` +
+      '<p class="cal-status">' +
+      `<span class="pill${measured ? ' ok' : ''}">` +
+      `${measured ? `Measured ${esc(measured)}` : 'Not Measured'}</span>` +
+      (count ? `<span class="pill warn" title="${used}">${count} Overridden</span>` : '') +
+      '</p>';
+  }
+
+  // A card's foot: what is in use, and resetting its overrides.
+  function calFoot(part, text, count) {
+    return `<div class="cal-foot"><span class="hint">${text}</span>` +
+      (count
+        ? `<button type="button" class="btn btn-sm btn-ghost" data-ovr-clear="${part}" ` +
+          'title="Use the measured values again">Reset Overrides</button>'
+        : '') + '</div>';
+  }
+
+  // One value: an input with the value in use (editable while the calibration is on), marked
+  // and with a reset button when overridden; its tooltip says where the value comes from.
+  function calCell(path, value, scale, { on, overridden, measured, fallback }) {
+    const round = v => String(Number((v * scale).toPrecision(5)));
+    const shown = value == null ? '' : round(value);
+    const tip = overridden
+      ? `Overridden${measured == null ? '' : ` (measured: ${round(measured)})`}`
+      : measured != null && on ? 'Measured' : fallback;
+    return `<td class="${overridden ? 'ovr' : ''}"><span class="cal-in" title="${esc(tip)}">` +
+      `<input class="input" type="number" step="any" data-ovr="${path}" data-scale="${scale}" ` +
+      `value="${shown}" aria-label="${esc(path)}"${on ? '' : ' disabled'}>` +
+      (overridden
+        ? `<button type="button" class="cal-reset" data-ovr-reset="${path}" ` +
+          'title="Use the measured value again">↺</button>'
+        : '') + '</span></td>';
+  }
+
+  // The count of values a part overrides (null: not overridden).
+  const countSet = values => values.filter(v => v != null).length;
+
+  // Table Slope: the height coefficients and each platform's air-bearing drag in use, and the
+  // tilt at the centre they give.
+  function calTableCard(s, use, file, section, note) {
+    const on = Boolean(s.calibration && s.calibration.tableSlope);
+    const t = file.table || null;
+    const tov = (file.overrides || {}).table || {};
+    const height = list(tov.height);
+    const damping = tov.damping || {};
+    const count = countSet(height) + countSet(Object.values(damping));
+    const slope = list(use.tableSlope);
+    const fallback = on ? 'Not measured: a level table' : 'Off: a level table';
+    const rows = TABLE_ROWS.map(([key, label, unit, scale], i) =>
+      `<tr><th>${label} <i>${unit}</i></th>` +
+      calCell(`table.${key}`, numOrNull(slope[i]), scale, {
+        on, overridden: on && numOrNull(height[i]) != null,
+        measured: t ? numOrNull(list(t.height)[i]) : null, fallback,
+      }) + '</tr>').join('') +
+      PLATFORMS.map(n => `<tr><th>${platformName(n)} Drag <i>1/s</i></th>` +
+        calCell(`table.damping.${n}`, numOrNull((use.tableDamping || {})[n]), 1, {
+          on, overridden: on && numOrNull(damping[n]) != null,
+          measured: t ? numOrNull((t.damping || {})[n]) : null,
+          fallback: on ? 'Not measured: no drag' : 'Off: no drag',
+        }) + '</tr>').join('');
+
+    // The tilt and the downhill direction at the centre, from a1 and a2.
+    const a1 = numOrNull(slope[0]) || 0;
+    const a2 = numOrNull(slope[1]) || 0;
+    const tilt = 1000 * Math.hypot(a1, a2);
+    const downhill = Math.atan2(-a2, -a1) * 180 / Math.PI;
+    const text = !on ? 'Off: a level table.'
+      : tilt > 0
+        ? `Tilt at the centre ${fmt(tilt, 3)} mrad, downhill ${fmt(downhill, 3)}° from +x.`
+        : 'A level table.';
+    return calOpen('table', section) +
+      calHead('Table Slope', 'The floating platforms slide downhill on the measured slope, and ' +
+        'their air bearings drag them. Off: a level table.', 'calibration.tableSlope', on,
+        t && String(t.updated || '').slice(0, 10), count) +
+      `<table class="cal-vals"><tbody>${rows}</tbody></table>${note}` +
+      calFoot('table', text, on ? count : 0) + '</section>';
+  }
+
+  // Thrusters: each platform's eight thrusts and its thrust decay in use.
+  function calThrustersCard(s, use, file, section, note) {
+    const on = Boolean(s.calibration && s.calibration.thrusters);
+    const th = file.thrusters || {};
+    const tov = (file.overrides || {}).thrusters || {};
+    const count = PLATFORMS.reduce((a, n) => a + countSet(list((tov[n] || {}).thrust)) +
+      ((tov[n] || {}).decay != null ? 1 : 0), 0);
+    const fallback = what => (on ? `Not measured: the ${what} setting (Platforms tab)`
+      : `Off: the ${what} setting (Platforms tab)`);
+    const head = '<tr><th></th>' +
+      `${PLATFORMS.map(n => `<th>${swatch(n)}${platformName(n)}</th>`).join('')}</tr>`;
+    const rows = Array.from({ length: 8 }, (_, k) => `<tr><th>T${k + 1} <i>N</i></th>` +
+      PLATFORMS.map(n => calCell(`thrusters.${n}.thrust.${k}`,
+        numOrNull(list((use.thrust || {})[n])[k]), 1, {
+          on, overridden: on && numOrNull(list((tov[n] || {}).thrust)[k]) != null,
+          measured: th[n] ? numOrNull(list(th[n].thrust)[k]) : null, fallback: fallback('Thrust'),
+        })).join('') + '</tr>').join('') +
+      '<tr><th>Decay <i>%/valve</i></th>' +
+      PLATFORMS.map(n => {
+        const measured = th[n] && th[n].decay && (th[n].decay.model || 'linear') === 'linear'
+          ? numOrNull(th[n].decay.slope) : null;
+        return calCell(`thrusters.${n}.decay`, numOrNull((use.decay || {})[n]), 100, {
+          on, overridden: on && numOrNull((tov[n] || {}).decay) != null, measured,
+          fallback: fallback('Thrust Decay'),
+        });
+      }).join('') + '</tr>';
+    const measured = PLATFORMS.filter(n => th[n]).map(n =>
+      `${platformName(n)} ${String(th[n].updated || '').slice(0, 10)}`).join(', ');
+    const text = on
+      ? 'The measured thrusts and decay where there are some; the Platforms tab\'s elsewhere.'
+      : 'Off: the Platforms tab\'s Thrust and Thrust Decay for every platform.';
+    return calOpen('thrusters', section) +
+      calHead('Thrusters', 'Each thruster\'s measured thrust and each platform\'s thrust decay, ' +
+        'in the mixer and the simulated plant, as in experiments. Off: the Platforms tab\'s ' +
+        'Thrust (all eight) and Thrust Decay.', 'calibration.thrusters', on, measured, count) +
+      '<table class="cal-vals cal-vals-3 cal-vals-thr">' +
+      `<thead>${head}</thead><tbody>${rows}</tbody></table>${note}` +
+      `${calFoot('thrusters', text, on ? count : 0)}</section>`;
+  }
+
+  // Arm: each joint's friction and rotor inertia in use.
+  function calArmCard(s, use, file, c, section, note) {
+    const on = Boolean(s.calibration && s.calibration.arm);
+    const joints = [].concat((file.arm || {}).joints || []);
+    const aov = (file.overrides || {}).arm || {};
+    const count = ARM_ROWS.reduce((a, [key]) => a + countSet(list(aov[key])), 0);
+    const arm = use.arm || {};
+    const head =
+      `<tr><th></th>${['Shoulder', 'Elbow', 'Wrist'].map(j => `<th>${j}</th>`).join('')}</tr>`;
+    const rows = ARM_ROWS.map(([key, label, unit, scale]) =>
+      `<tr><th>${label} <i>${unit}</i></th>` + [0, 1, 2].map(j => {
+        const joint = joints.find(x => x && x.index === j + 1);
+        return calCell(`arm.${key}.${j}`, numOrNull(list(arm[key])[j]), scale, {
+          on, overridden: on && numOrNull(list(aov[key])[j]) != null,
+          measured: joint ? numOrNull(joint[key]) : null,
+          fallback: on ? 'Not measured: the arm model\'s default' : 'Off: the arm model\'s default',
+        });
+      }).join('') + '</tr>').join('');
+    const from = String(c.armUsed || '');
+    const text = !on ? 'Off: the arm model\'s defaults (spot.arm.defaults).'
+      : from ? `From ${esc(from.split(/[\\/]/).pop())}.`
+      : 'Not measured: the arm model\'s defaults.';
+    const measured = file.arm
+      ? String(file.arm.updated || file.arm.created || '').slice(0, 10)
+      : '';
+    return calOpen('arm', section) +
+      calHead('Arm', 'The arm\'s measured friction and rotor inertia (the newer of the lab\'s ' +
+        'arm calibration and an arm_calibration.json in the project folder). Off: the arm ' +
+        'model\'s defaults.', 'calibration.arm', on, measured, count) +
+      `<table class="cal-vals cal-vals-3"><thead>${head}</thead><tbody>${rows}</tbody></table>` +
+      `${note}${calFoot('arm', text, on ? count : 0)}</section>`;
+  }
+
+  // A value typed into the Calibration pane overrides the calibration's (empty: the measured
+  // value again). The project's file changes, and MATLAB applies it (spot-calibration); a value
+  // the console refuses is put back.
+  function setOverride(el) {
+    // Each value once (Enter sends it, and leaving the input fires its change too).
+    if (el.value === el.dataset.sent) {
+      return;
+    }
+    S.calEditing = null;
+    const scale = Number(el.dataset.scale) || 1;
+    const value = el.value.trim() === '' ? null : Number(el.value) / scale;
+    if (value != null && !isFinite(value)) {
+      el.classList.add('invalid');
+      flushCalibration();
+      return;
+    }
+    el.classList.remove('invalid');
+    el.dataset.sent = el.value;
+    act(async () => {
+      try {
+        await api('/api/calibration/override', { path: el.dataset.ovr, value });
+      } catch (e) {
+        renderCalibration(true);
+        throw e;
+      }
+    });
   }
 
   // The table (setup poses)
@@ -746,7 +1014,7 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
       ? S.derived.armInitial
       : null;
     viewer?.setSetup({
-      poses, kind: POSE_LABELS[kind], arm, editable: S.shown && S.pose !== 'off',
+      poses, kind: POSE_LABELS[kind], arm, editable: viewShown() && S.pose !== 'off',
     });
   }
 
@@ -756,7 +1024,7 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
     storage.set('spot.pose', kind);
     fill();
     renderSetup();
-    if (S.shown) {
+    if (viewShown()) {
       layers();
     }
     document.dispatchEvent(new CustomEvent('spot-pose', { detail: kind }));
@@ -802,6 +1070,12 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
   // or a switch) is sent at once (a new diagram rebuilds the panes).
   panes.addEventListener('input', ev => {
     const el = ev.target;
+
+    // A calibration value being typed: its card isn't drawn again until it is sent.
+    if (el.dataset.ovr !== undefined) {
+      S.calEditing = el;
+      return;
+    }
     if (!el.dataset.path || el.type === 'checkbox' || el.tagName === 'SELECT') {
       return;
     }
@@ -815,6 +1089,10 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
   });
   panes.addEventListener('change', ev => {
     const el = ev.target;
+    if (el.dataset.ovr !== undefined) {
+      setOverride(el);
+      return;
+    }
     if (!el.dataset.path) {
       return;
     }
@@ -822,6 +1100,47 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
       edited(el.dataset.path === 'diagram');
     }
   });
+
+  // A calibration value: Enter sends it; Escape puts back the value in use.
+  panes.addEventListener('keydown', ev => {
+    const el = ev.target;
+    if (el.dataset.ovr === undefined) {
+      return;
+    }
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      setOverride(el);
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      el.value = el.defaultValue;
+      el.classList.remove('invalid');
+      S.calEditing = null;
+      flushCalibration();
+    }
+  });
+
+  // A calibration value left unchanged: a card held back is drawn.
+  panes.addEventListener('focusout', ev => {
+    if (ev.target === S.calEditing && ev.target.value === ev.target.defaultValue) {
+      S.calEditing = null;
+      flushCalibration();
+    }
+  });
+
+  // A mouse button down on a card holds back its drawing until the click is over.
+  panes.addEventListener('pointerdown', ev => {
+    if (ev.target.closest('[data-calcards]')) {
+      S.calPointer = true;
+    }
+  });
+  for (const type of ['pointerup', 'pointercancel']) {
+    document.addEventListener(type, () => {
+      if (S.calPointer) {
+        S.calPointer = false;
+        flushCalibration();
+      }
+    }, true);
+  }
 
   // A field's value into the settings, if valid (an invalid number is marked and kept out).
   function commit(el) {
@@ -852,6 +1171,14 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
     const b = ev.target.closest('button');
     if (b && b.dataset.ratelock !== undefined) {
       return handleLockClick(b.dataset.ratelock);
+    }
+
+    // The Calibration pane: a value's measured one again, or a card's.
+    if (b && b.dataset.ovrReset) {
+      return act(() => api('/api/calibration/override', { path: b.dataset.ovrReset, value: null }));
+    }
+    if (b && b.dataset.ovrClear) {
+      return act(() => api('/api/calibration/override', { clear: b.dataset.ovrClear }));
     }
     if (!b || !S.settings) {
       return;
@@ -1071,12 +1398,12 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
     messages?.simResult(res.debug);
     livePlot?.simResult(res.live);
     viewer?.setSimulation(res);
-    if (S.shown) {
+    if (viewShown()) {
       layers();
     }
     renderPlayback();
     seek(span()[0]);
-    if (S.shown) {
+    if (viewShown()) {
       play(true);
     }
     renderRun();
@@ -1213,7 +1540,7 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
   $('#pbSpeed').value = String(storage.get('spot.sim.speed', 5));
   $('#pbSpeed').onchange = () => storage.set('spot.sim.speed', Number($('#pbSpeed').value));
   document.addEventListener('keydown', ev => {
-    if (!S.shown || ev.key !== ' ' || ev.target.closest('input, textarea, select, button')) {
+    if (!viewShown() || ev.key !== ' ' || ev.target.closest('input, textarea, select, button')) {
       return;
     }
     ev.preventDefault();
@@ -1343,7 +1670,7 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
     const before = hasPlayback();
     S.overlays = out;
     viewer?.setOverlays(out);
-    if (S.shown) {
+    if (viewShown()) {
       layers();
     }
     renderPlayback();
@@ -1796,13 +2123,18 @@ export function initSimulation({ api, act, toast, storage, viewer, store, messag
         livePlot?.simData(ev.streams);
       }
     },
+    // The tab is shown: its 3D view, or on the Calibration tab the calibrations.
     show() {
       S.shown = true;
-      layers();
-      renderSetup();
-      if (hasPlayback()) {
-        viewer?.setSimTime(S.t);
+      if (S.tab === 'calibration') {
+        setCalibrationView(true);
+      } else {
+        layers();
+        if (hasPlayback()) {
+          viewer?.setSimTime(S.t);
+        }
       }
+      renderSetup();
     },
     // The tab is left: the poses stay visible elsewhere, but can't be dragged there.
     hide() {

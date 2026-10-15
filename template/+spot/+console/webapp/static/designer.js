@@ -85,14 +85,12 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
       const slots = ['left', 'right'].map(sd => {
         const s = { face: f, side: sd };
         const chosen = same(s, dock);
-        const arm = n === 'RED' && same(s, ARM_MOUNT);
         const blocked = blockedBy(n, s);
         const cls = [
           'dz-slot', chosen ? (dock.type === 'none' ? 'chosen-none' : 'chosen') : '',
-          arm ? 'arm' : '', blocked ? 'blocked' : '',
+          blocked ? 'blocked' : '',
         ].join(' ');
-        const tip = `${slotText(s)}${arm ? ' (the arm\'s usual place, on the arm coupler)' : ''}` +
-          `${blocked ? ` (blocked by ${blocked})` : ''}`;
+        const tip = `${slotText(s)}${blocked ? ` (blocked by ${blocked})` : ''}`;
         return `<button type="button" class="${cls}" data-slot="${f}|${sd}" ` +
           `title="${esc(tip)}" aria-label="${esc(tip)}"></button>`;
       }).join('');
@@ -103,9 +101,7 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
             <div class="dz-face-grid">${slots}</div><span class="dz-edge" title="This edge meets the ${r} face">${r}</span></div></div>`;
     }).join('');
 
-    // Notes: a cone on the arm coupler, a blocked place, a leg across the ZED2.
-    const onArm = n === 'RED' && (dock.type === 'male' || dock.type === 'female') &&
-      same(dock, ARM_MOUNT);
+    // Notes: a blocked place, a leg across the ZED2.
     const blockedHere = dock.type !== 'none' && blockedBy(n, dock);
     const solarOnZed = n === 'RED' && solar.on && solar.axis === 'x';
     const labCard = S.local ? labCardHtml() : '';
@@ -131,9 +127,7 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
         </div>
         <div class="dz-where"><span class="field-label tip" title="Each face as seen from outside, with the faces its edges meet. Click a place here or a disc on the model.">${isArm ? 'Arm Mount' : 'Position'}</span><span class="mono">${slotText(dock)}</span></div>
         <div class="dz-faces">${faces}</div>
-        <p class="hint"><span class="dz-key"><i class="dz-key-arm"></i>Arm coupler</span> <span class="dz-key"><i class="dz-key-blocked"></i>Blocked</span></p>
         ${blockedHere ? `<p class="hint bad" title="${esc(blockedHere)} stands out of the face here">Blocked by ${esc(blockedHere)}.</p>` : ''}
-        ${onArm ? '<p class="hint tip" title="The cone, on its own bracket, takes the arm coupler\'s place. Choose Arm to fly the arm instead.">On the arm coupler.</p>' : ''}
       </section>
       <section class="card">
         <div class="card-head"><h2 class="tip" title="The bracket's top bar crosses the top; its legs run down the middle of the two faces the panels stand off, and the bend in one leg goes round the control panel (on −X). A 1 mm panel on each side of each frame: black cells on a white backsheet, as in the lab.">Solar Panels</h2>

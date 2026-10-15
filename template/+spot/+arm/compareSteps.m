@@ -8,7 +8,7 @@ function r = compareSteps(folder, armModel, show)
     %   r = spot.arm.compareSteps(folder, armModel, true) also plots them.
     %
     %   Inputs
-    %     folder    a run of resources/arm_calibration/calibrate_arm.py (position-mode goal
+    %     folder    a run of +spot/+arm/calibration/calibrate_arm.py (position-mode goal
     %               steps with SPOT's servo settings, base fixed)
     %     armModel  the model to try, e.g. evalin('base', 'armModel') after a simulation, or
     %               spot.arm.loadCalibration(fullfile(folder, 'arm_calibration.json'), armModel)

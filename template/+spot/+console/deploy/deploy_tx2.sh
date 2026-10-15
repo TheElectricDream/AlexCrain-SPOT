@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copies the SPOT Console (webapp/, phasespace/, deploy/ of +spot/+console, and the arm calibration
-# script, resources/arm_calibration/calibrate_arm.py, which the Calibration tab runs on the Chaser) to the Jetson TX2,
+# script, +spot/+arm/calibration/calibrate_arm.py, which the Calibration tab runs on the Chaser) to the Jetson TX2,
 # compiles StreamData there, and (re)starts the webapp
 # service so it runs at boot on http://<tx2>:8080. Safe to re-run after any change.
 #   ./deploy_tx2.sh
@@ -20,7 +20,7 @@ echo "== Copying files to $TX2:~/$DEST"
 rsync -a --delete --relative --exclude '__pycache__' -e "ssh ${ssh_opts[*]}" \
     webapp phasespace deploy \
     "$TX2:$DEST/"
-rsync -a -e "ssh ${ssh_opts[*]}" ../../resources/arm_calibration/calibrate_arm.py "$TX2:$DEST/arm_calibration/"
+rsync -a -e "ssh ${ssh_opts[*]}" ../+arm/calibration/calibrate_arm.py "$TX2:$DEST/arm_calibration/"
 
 echo "== Compiling and starting the service on $TX2"
 ssh "${ssh_opts[@]}" "$TX2" bash -s -- "$DEST" "$SERVICE" <<'REMOTE'

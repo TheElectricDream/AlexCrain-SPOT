@@ -1,12 +1,16 @@
 function c = loadCalibration(root)
-    %LOADCALIBRATION The project's calibration of the lab (resources/spot_calibration.json).
+    %LOADCALIBRATION The project's calibration of the lab (spot_calibration.json).
     %   c = spot.params.loadCalibration(root) reads the calibration the lab console measured (its
-    %   Calibration tab), as the local console copied it into the project. spot.params.apply
-    %   uses it; a file that can't be read is reported and ignored, so simulations still run on
-    %   a level table.
+    %   Calibration tab), as the local console copied it into the project, with the values the
+    %   project overrides. spot.params.apply uses it; a file that can't be read is reported and
+    %   ignored, so simulations still run on a level table.
+    %   c = spot.params.loadCalibration() returns no calibration (and no overrides).
+    %
+    %   The file sits in the project folder, next to spot_settings.json. A project made before
+    %   it moved keeps it in resources/, where it is still read (the console moves it across).
     %
     %   Inputs
-    %     root  project folder
+    %     root  project folder (optional)
     %
     %   Outputs
     %     c     struct with:
@@ -27,6 +31,13 @@ function c = loadCalibration(root)
     %                          torqueRatio (8x1)
     %             arm        the arm calibration (calibrate_arm.py's), or []: joints' friction
     %                        and inertia, created, updated (spot.arm.parameters applies it)
+    %             overrides  the values the project overrides (the Simulation tab's Calibration
+    %                        pane), NaN where not overridden; SI units:
+    %                          table.height     1x5 [a1 a2 (m/m) a3 a4 a5 (1/m)]
+    %                          table.damping    RED, BLACK, BLUE [1/s]
+    %                          thrusters.RED    thrust (8x1 [N]), decay (per extra valve)
+    %                          arm              static, coulomb, stribeck, viscous, armature
+    %                                           (1x3, per joint)
     %             error      why the file couldn't be used ('' if it could)
     %
     %   See also spot.params.apply, spot.sim.tableSlope, spot.arm.loadCalibration.
@@ -39,8 +50,15 @@ function c = loadCalibration(root)
 
     %% The file
     c = struct('file', '', 'updated', '', 'table', [], ...
-               'thrusters', struct('RED', [], 'BLACK', [], 'BLUE', []), 'arm', [], 'error', '');
-    file = fullfile(root, 'resources', 'spot_calibration.json');
+               'thrusters', struct('RED', [], 'BLACK', [], 'BLUE', []), 'arm', [], ...
+               'overrides', noOverrides(), 'error', '');
+    if nargin < 1 || isempty(root)
+        return
+    end
+    file = fullfile(root, 'spot_calibration.json');
+    if ~isfile(file)
+        file = fullfile(root, 'resources', 'spot_calibration.json');
+    end
     if ~isfile(file)
         return
     end
@@ -130,24 +148,79 @@ function c = loadCalibration(root)
                 'joints', {field(saved.arm, 'joints', [])});
         end
 
+        %% Overrides
+        % NaN (JSON null) where a value isn't overridden; the console checked the ranges.
+        if isfield(saved, 'overrides') && isstruct(saved.overrides)
+            ov = saved.overrides;
+            if isfield(ov, 'table') && isstruct(ov.table)
+                c.overrides.table.height = vector(field(ov.table, 'height', []), 5).';
+                if isfield(ov.table, 'damping') && isstruct(ov.table.damping)
+                    for name = {'RED', 'BLACK', 'BLUE'}
+                        c.overrides.table.damping.(name{1}) = ...
+                            scalar(field(ov.table.damping, name{1}, NaN));
+                    end
+                end
+            end
+            if isfield(ov, 'thrusters') && isstruct(ov.thrusters)
+                for name = {'RED', 'BLACK', 'BLUE'}
+                    if isfield(ov.thrusters, name{1}) && isstruct(ov.thrusters.(name{1}))
+                        o = ov.thrusters.(name{1});
+                        c.overrides.thrusters.(name{1}) = struct( ...
+                            'thrust', vector(field(o, 'thrust', []), 8), ...
+                            'decay', scalar(field(o, 'decay', NaN)));
+                    end
+                end
+            end
+            if isfield(ov, 'arm') && isstruct(ov.arm)
+                for f = fieldnames(c.overrides.arm).'
+                    c.overrides.arm.(f{1}) = vector(field(ov.arm, f{1}, []), 3).';
+                end
+            end
+        end
+
     catch err
         % Unusable: report why, and use none of it.
         c = struct('file', file, 'updated', '', 'table', [], ...
             'thrusters', struct('RED', [], 'BLACK', [], 'BLUE', []), 'arm', [], ...
+            'overrides', noOverrides(), ...
             'error', sprintf('%s could not be used (%s); the simulation ignores it.', ...
                              file, err.message));
     end
 end
 
-function v = numbers(x)
-    % 8x1 numbers from a JSON list (null, a thruster without a result, or a missing list: NaN).
-    v = nan(8, 1);
+function ov = noOverrides()
+    % No value overridden: NaN everywhere.
+    damping = struct('RED', NaN, 'BLACK', NaN, 'BLUE', NaN);
+    ov.table = struct('height', nan(1, 5), 'damping', damping);
+    platform = struct('thrust', nan(8, 1), 'decay', NaN);
+    ov.thrusters = struct('RED', platform, 'BLACK', platform, 'BLUE', platform);
+    joints = nan(1, 3);
+    ov.arm = struct('static', joints, 'coulomb', joints, 'stribeck', joints, 'viscous', joints, ...
+                    'armature', joints);
+end
+
+function v = vector(x, n)
+    % nx1 numbers from a JSON list (null elements, or a missing or wrong-sized list: NaN).
+    v = nan(n, 1);
     if iscell(x)
         x = cellfun(@(e) ifEmpty(e), x);
     end
-    if isnumeric(x) && numel(x) == 8
+    if isnumeric(x) && numel(x) == n
         v = double(x(:));
     end
+end
+
+function v = scalar(x)
+    % A finite number, else NaN.
+    v = NaN;
+    if isnumeric(x) && isscalar(x) && isfinite(x)
+        v = double(x);
+    end
+end
+
+function v = numbers(x)
+    % 8x1 numbers from a JSON list (null, a thruster without a result, or a missing list: NaN).
+    v = vector(x, 8);
 end
 
 function e = ifEmpty(e)

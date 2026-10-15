@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Calibrate the SPOT arm's joint friction (and inertia) from the real Dynamixel servos.
 
-Writes arm_calibration.json for SPOT's arm model (copy it to the project's resources folder;
-spot.arm.parameters reads it, see spot.arm.loadCalibration), and the raw data as CSV files.
+Writes arm_calibration.json for SPOT's arm model (copy it to the project's folder, next to
+spot_settings.json; spot.arm.parameters reads it, see spot.arm.loadCalibration), and the raw
+data as CSV files.
 
 Tests, for each joint in turn (the other joints hold their position in position mode):
   breakaway  current mode, the current ramped slowly from zero in each direction until the joint
@@ -663,7 +664,8 @@ def fit_all(out, joints, kt, extra):
     path = os.path.join(out, "arm_calibration.json")
     with open(path, "w") as fh:
         json.dump(result, fh, indent=2)
-    print("Wrote %s\nCopy it to the SPOT project's resources folder; the next simulation uses it." % path)
+    print("Wrote %s\nCopy it to the SPOT project's folder (next to spot_settings.json); the next "
+          "simulation uses it." % path)
     return result
 
 

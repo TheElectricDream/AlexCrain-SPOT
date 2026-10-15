@@ -6,11 +6,16 @@ and the calibration file that holds the results.
 The file (one per console): the lab console keeps the lab's in its
 home (~/.spot_calibration.json), next to the raw data of every run
 (~/SPOTCalibration/<stamp>_<kind>/run.json); a project keeps a copy in
-resources/spot_calibration.json, which spot.params.apply reads
-(spot.params.loadCalibration) for the simulation. Whenever the local
-console sees the lab console and the lab's file is newer, its page
-offers to update the project's copy (which can be declined, or never
-asked again: the copy's "sync").
+spot_calibration.json (next to spot_settings.json), which
+spot.params.apply reads (spot.params.loadCalibration) for the
+simulation. Whenever the local console sees the lab console and the
+lab's file is newer, its page offers to update the project's copy
+(which can be declined, or never asked again: the copy's "sync").
+
+A project's copy can also override single values ("overrides", set on
+the Simulation tab's Calibration pane). Updating from the lab keeps
+them, and a part of the lab's calibration whose every value is
+overridden is not offered as newer (sections_newer).
 
     {"format": "spot-calibration", "version": 1,
      "updated": "2026-10-13T15:02:11Z",  (the newest section's; UTC,
@@ -22,7 +27,14 @@ asked again: the copy's "sync").
      "thrusters": {"RED": {"updated", "by", "thrust": [8 x N], ...},
                    ...},
      "arm": {... spot-arm-calibration ...},
-     "sync": {"ask": true, "declined": null}}  (a project's copy only)
+     "sync": {"ask": true, "declined": null},  (a project's copy only)
+     "overrides": {                            (a project's copy only;
+       "table": {"height": [5 x number or null],     SI units, null:
+                 "damping": {"RED": c, ...}},        not overridden)
+       "thrusters": {"RED": {"thrust": [8 x number or null],
+                             "decay": d}, ...},
+       "arm": {"static": [3 x number or null], "coulomb", "stribeck",
+               "viscous", "armature"}}}
 
 The table slope calibration (TableRun), with PhaseSpace streaming and
 the platform resting on the table:
@@ -66,8 +78,8 @@ All eight together give no net push (opposite thrusters cancel), so
 that firing is only a check; the fit covers it.
 
 The arm calibration (ArmRun) runs the arm calibration script
-(calibrate_arm.py, from the template's resources/arm_calibration; on
-the TX2 next to the console) on the Chaser, through its agent
+(calibrate_arm.py, from the template's +spot/+arm/calibration; on the
+TX2 next to the console) on the Chaser, through its agent
 (spot_agent.sh: arm-cal-check, -receive, -start, -status, -stop,
 -data). It checks the Chaser has what the script needs (python3, the
 Dynamixel SDK, the U2D2 and access to it, nothing else holding it),
@@ -156,6 +168,19 @@ REJECT_RESIDUAL = 20.0       # [mm]
 
 MIN_THRUST = 0.01            # [N] plausible calibrated thrust
 MAX_THRUST = 2.0             # [N]
+
+# Values a project's copy can override, with their plausible ranges (SI
+# units, as in the file): the table's height coefficients [a1 a2: m/m;
+# a3 a4 a5: 1/m] and air-bearing drag [1/s], each thruster's thrust [N]
+# and the thrust decay per extra valve, and each arm joint's friction
+# [N m, rad/s, N m s/rad] and armature [kg m^2].
+NUM_HEIGHT = 5
+NUM_JOINTS = 3
+MAX_HEIGHT = 1.0
+MAX_DAMPING = 10.0           # [1/s]
+MAX_DECAY = 0.5              # as spot.params.loadCalibration
+ARM_FIELDS = {"static": (0.0, 10.0), "coulomb": (0.0, 10.0), "stribeck": (1e-4, 10.0),
+              "viscous": (0.0, 10.0), "armature": (1e-6, 1.0)}
 PUBLISH_PERIOD = 0.2         # [s] run status to the pages, at most this often
 
 
@@ -198,6 +223,144 @@ def _numbers(v, n, what):
     return [_finite(x, what) for x in v]
 
 
+def _override_value(v, low, high, what):
+    """Return an override as a float in [low, high] (None stays None).
+
+    Raises:
+        ApiError: if it is neither null nor such a number.
+    """
+    if v is None:
+        return None
+    v = _finite(v, what)
+    if not low <= v <= high:
+        raise ApiError("%s must be %g to %g." % (what, low, high))
+    return v
+
+
+def _override_list(v, n, low, high, what):
+    """Return n overrides (None where not overridden), or None if none.
+
+    Raises:
+        ApiError: if it isn't a list of n numbers or nulls in range.
+    """
+    if v is None:
+        return None
+    if not isinstance(v, list) or len(v) != n:
+        raise ApiError("%s must be a list of %d numbers or nulls." % (what, n))
+    out = [_override_value(x, low, high, what) for x in v]
+    return out if any(x is not None for x in out) else None
+
+
+def check_overrides(ov):
+    """Return a project's overrides, checked, with empty parts left out.
+
+    Args:
+        ov: The "overrides" object (or None).
+
+    Raises:
+        ApiError: if a value isn't a plausible number in its place.
+    """
+    if ov is None:
+        return {}
+    if not isinstance(ov, dict):
+        raise ApiError("calibration.overrides must be an object.")
+    out = {}
+
+    # The table: its height coefficients and each platform's drag.
+    table = ov.get("table") or {}
+    if not isinstance(table, dict):
+        raise ApiError("overrides.table must be an object.")
+    checked = {}
+    height = _override_list(table.get("height"), NUM_HEIGHT, -MAX_HEIGHT, MAX_HEIGHT,
+                            "overrides.table.height")
+    if height:
+        checked["height"] = height
+    damping = table.get("damping") or {}
+    if not isinstance(damping, dict) or any(k not in PLATFORMS for k in damping):
+        raise ApiError("overrides.table.damping must map RED, BLACK, BLUE to numbers.")
+    damping = dict((k, _override_value(v, 0.0, MAX_DAMPING, "overrides.table.damping.%s" % k))
+                   for k, v in damping.items())
+    damping = dict((k, v) for k, v in damping.items() if v is not None)
+    if damping:
+        checked["damping"] = damping
+    if checked:
+        out["table"] = checked
+
+    # Each platform's thrusts and thrust decay.
+    thrusters = ov.get("thrusters") or {}
+    if not isinstance(thrusters, dict) or any(k not in PLATFORMS for k in thrusters):
+        raise ApiError("overrides.thrusters must map RED, BLACK, BLUE to their overrides.")
+    checked = {}
+    for k, v in thrusters.items():
+        if not isinstance(v, dict):
+            raise ApiError("overrides.thrusters.%s must be an object." % k)
+        mine = {}
+        thrust = _override_list(v.get("thrust"), NUM_THRUSTERS, MIN_THRUST, MAX_THRUST,
+                                "overrides.thrusters.%s.thrust" % k)
+        if thrust:
+            mine["thrust"] = thrust
+        decay = _override_value(v.get("decay"), 0.0, MAX_DECAY,
+                                "overrides.thrusters.%s.decay" % k)
+        if decay is not None:
+            mine["decay"] = decay
+        if mine:
+            checked[k] = mine
+    if checked:
+        out["thrusters"] = checked
+
+    # Each arm joint's friction and armature.
+    arm = ov.get("arm") or {}
+    if not isinstance(arm, dict) or any(k not in ARM_FIELDS for k in arm):
+        raise ApiError("overrides.arm may only hold %s." % ", ".join(sorted(ARM_FIELDS)))
+    checked = {}
+    for name, (low, high) in ARM_FIELDS.items():
+        values = _override_list(arm.get(name), NUM_JOINTS, low, high, "overrides.arm.%s" % name)
+        if values:
+            checked[name] = values
+    if checked:
+        out["arm"] = checked
+    return out
+
+
+def parse_override(path):
+    """Return where an override goes, and its range.
+
+    Args:
+        path: "table.height.<0-4>", "table.damping.<PLATFORM>",
+            "thrusters.<PLATFORM>.thrust.<0-7>",
+            "thrusters.<PLATFORM>.decay" or "arm.<field>.<0-2>".
+
+    Returns:
+        (keys, index, low, high): the keys down to the value (a list's
+        when index is not None), and its plausible range.
+
+    Raises:
+        ApiError: if the path names no value that can be overridden.
+    """
+    parts = str(path).split(".")
+
+    def index(n):
+        """Return the list index the path ends with (below n)."""
+        if not parts[-1].isdigit() or int(parts[-1]) >= n:
+            raise ApiError("No such value to override: %s." % path)
+        return int(parts[-1])
+
+    if parts[:2] == ["table", "height"] and len(parts) == 3:
+        return ("table", "height"), index(NUM_HEIGHT), -MAX_HEIGHT, MAX_HEIGHT
+    if parts[:2] == ["table", "damping"] and len(parts) == 3 and parts[2] in PLATFORMS:
+        return ("table", "damping", parts[2]), None, 0.0, MAX_DAMPING
+    if parts[0] == "thrusters" and len(parts) >= 3 and parts[1] in PLATFORMS:
+        if parts[2] == "thrust" and len(parts) == 4:
+            return (("thrusters", parts[1], "thrust"), index(NUM_THRUSTERS),
+                    MIN_THRUST, MAX_THRUST)
+        if parts[2] == "decay" and len(parts) == 3:
+            return ("thrusters", parts[1], "decay"), None, 0.0, MAX_DECAY
+    if parts[0] == "arm" and len(parts) == 3 and parts[1] in ARM_FIELDS:
+        low, high = ARM_FIELDS[parts[1]]
+        return ("arm", parts[1]), index(NUM_JOINTS), low, high
+    raise ApiError("No such value to override: %s." % path)
+
+
 def validate(cal, local=False):
     """Return a checked copy of a calibration.
 
@@ -206,7 +369,7 @@ def validate(cal, local=False):
 
     Args:
         cal: The calibration.
-        local: A project's copy (it keeps "sync").
+        local: A project's copy (it keeps "sync" and "overrides").
 
     Raises:
         ApiError: if it isn't a SPOT calibration, or a value the
@@ -260,13 +423,15 @@ def validate(cal, local=False):
             raise ApiError("calibration.arm must be an arm calibration (calibrate_arm.py's).")
         out["arm"] = copy.deepcopy(arm)
 
-    # The newest section's time, and a project copy's "sync".
+    # The newest section's time, and a project copy's "sync" and
+    # "overrides".
     out["updated"] = newest(out)
     if local:
         sync = cal.get("sync") or {}
         out["sync"] = {"ask": bool(sync.get("ask", True)),
                        "declined": sync.get("declined")
                                    if isinstance(sync.get("declined"), str) else None}
+        out["overrides"] = check_overrides(cal.get("overrides"))
     return out
 
 
@@ -287,29 +452,54 @@ def newest(cal):
 
 
 def sections_newer(lab, mine):
-    """Return the lab's sections newer than (or not in) a project's.
+    """Return the parts of the lab's calibration a project should take.
+
+    A part counts when the lab's is newer than (or not in) the
+    project's, and at least one of its values is not overridden in the
+    project (calibration.js's newerSections does the same for the
+    page).
 
     Returns:
-        For example ["table", "thrusters RED", "arm"].
+        For example ["table", "thrusters RED", "decay RED", "arm"].
     """
+    ov = mine.get("overrides") or {}
     out = []
 
-    # The table.
+    def open_values(overridden, n):
+        """Return whether a part's n values aren't all overridden."""
+        return n > sum(1 for v in (overridden or []) if v is not None)
+
+    # The table: its height coefficients and the drags it measured.
     lab_table, my_table = lab.get("table"), mine.get("table")
     if lab_table and (not my_table
                       or lab_table.get("updated", "") > my_table.get("updated", "")):
-        out.append("table")
+        table_ov = ov.get("table") or {}
+        drags = [k for k in (lab_table.get("damping") or {})
+                 if k not in (table_ov.get("damping") or {})]
+        if open_values(table_ov.get("height"), NUM_HEIGHT) or drags:
+            out.append("table")
 
-    # Each platform's thrusters.
+    # Each platform's thrusts, and its thrust decay.
     for name, c in sorted((lab.get("thrusters") or {}).items()):
-        my_cal = (mine.get("thrusters") or {}).get(name)
-        if not my_cal or thruster_updated(c) > thruster_updated(my_cal):
+        my_cal = (mine.get("thrusters") or {}).get(name) or {}
+        my_ov = (ov.get("thrusters") or {}).get(name) or {}
+        if (c.get("updated", "") > my_cal.get("updated", "")
+                and open_values(my_ov.get("thrust"), NUM_THRUSTERS)):
             out.append("thrusters " + name)
+        lab_decay, my_decay = c.get("decay") or {}, my_cal.get("decay") or {}
+        if (lab_decay and lab_decay.get("updated", "") > my_decay.get("updated", "")
+                and my_ov.get("decay") is None):
+            out.append("decay " + name)
 
-    # The arm.
+    # The arm: each field of the joints it measured.
     lab_arm, my_arm = lab.get("arm"), mine.get("arm")
     if lab_arm and (not my_arm or lab_arm.get("updated", "") > my_arm.get("updated", "")):
-        out.append("arm")
+        arm_ov = ov.get("arm") or {}
+        joints = [j.get("index") for j in (lab_arm.get("joints") or [])
+                  if isinstance(j, dict) and j.get("index") in (1, 2, 3)]
+        if any((arm_ov.get(f) or [None] * NUM_JOINTS)[j - 1] is None
+               for j in joints for f in ARM_FIELDS):
+            out.append("arm")
     return out
 
 
@@ -319,6 +509,11 @@ class CalibrationStore:
     def __init__(self):
         """Start with an empty calibration and no file."""
         self._lock = threading.Lock()
+
+        # Held through each change (read, change, write), so that
+        # changes made at the same time (the server's threads) don't
+        # undo each other.
+        self._changing = threading.Lock()
         self.path = None
         self.local = False
         self.cal = validate({})
@@ -384,28 +579,98 @@ class CalibrationStore:
             value: The new section; None to remove it.
             platform: For thrusters, the platform.
         """
-        with self._lock:
-            cal = copy.deepcopy(self.cal)
-        if section == "thrusters":
-            th = cal.get("thrusters") or {}
-            if value is None:
-                th.pop(platform, None)
+        with self._changing:
+            with self._lock:
+                cal = copy.deepcopy(self.cal)
+            if section == "thrusters":
+                th = cal.get("thrusters") or {}
+                if value is None:
+                    th.pop(platform, None)
+                else:
+                    th[platform] = value
+                cal["thrusters"] = th or None
             else:
-                th[platform] = value
-            cal["thrusters"] = th or None
-        else:
-            cal[section] = value
+                cal[section] = value
 
-        # Removed sections are left out.
-        cal = dict((k, v) for k, v in cal.items() if v is not None)
-        return self._write(cal)
+            # Removed sections are left out.
+            cal = dict((k, v) for k, v in cal.items() if v is not None)
+            return self._write(cal)
 
     def take(self, lab_cal):
-        """Make a project's copy the lab's (keeping its own "sync")."""
-        with self._lock:
-            sync = copy.deepcopy(self.cal.get("sync"))
-        cal = dict(validate(lab_cal), sync=sync)
-        return self._write(cal)
+        """Make a project's copy the lab's.
+
+        The copy keeps its own "sync" and "overrides".
+        """
+        with self._changing:
+            with self._lock:
+                sync = copy.deepcopy(self.cal.get("sync"))
+                overrides = copy.deepcopy(self.cal.get("overrides"))
+            cal = dict(validate(lab_cal), sync=sync, overrides=overrides)
+            return self._write(cal)
+
+    def set_override(self, path, value):
+        """Override a value of a project's copy, or stop overriding it.
+
+        Args:
+            path: The value (parse_override).
+            value: Its new value (SI units); None to use the measured
+                one again.
+
+        Raises:
+            ApiError: on the lab console, or if the path or value isn't
+                valid.
+        """
+        with self._changing:
+            if not self.local:
+                raise ApiError("Only a project's calibration can be overridden.")
+            keys, index, low, high = parse_override(path)
+            value = _override_value(value, low, high, path)
+            with self._lock:
+                cal = copy.deepcopy(self.cal)
+
+            # Down to the value's parent, making the objects on the way.
+            node = cal.setdefault("overrides", {})
+            for key in keys[:-1]:
+                node = node.setdefault(key, {})
+            if index is None:
+                node[keys[-1]] = value
+            else:
+                size = NUM_HEIGHT if keys[0] == "table" else (
+                    NUM_THRUSTERS if keys[0] == "thrusters" else NUM_JOINTS)
+                values = node.get(keys[-1]) or [None] * size
+                values[index] = value
+                node[keys[-1]] = values
+
+            # Values set back to null are left out (check_overrides).
+            if index is None and value is None:
+                node.pop(keys[-1], None)
+            return self._write(cal)
+
+    def clear_overrides(self, part=None):
+        """Stop overriding a part's values (all, if part is None).
+
+        Args:
+            part: "table", "thrusters", "thrusters.<PLATFORM>" or "arm".
+
+        Raises:
+            ApiError: on the lab console, or for another part.
+        """
+        with self._changing:
+            if not self.local:
+                raise ApiError("Only a project's calibration can be overridden.")
+            with self._lock:
+                cal = copy.deepcopy(self.cal)
+            ov = cal.get("overrides") or {}
+            if part is None:
+                ov = {}
+            elif part in ("table", "thrusters", "arm"):
+                ov.pop(part, None)
+            elif part.startswith("thrusters.") and part.split(".", 1)[1] in PLATFORMS:
+                (ov.get("thrusters") or {}).pop(part.split(".", 1)[1], None)
+            else:
+                raise ApiError("No such part of the overrides: %s." % part)
+            cal["overrides"] = ov
+            return self._write(cal)
 
     def set_sync(self, ask=None, declined=None):
         """Change whether to offer the lab's newer calibration.
@@ -414,15 +679,16 @@ class CalibrationStore:
             ask: False: never ask again.
             declined: The lab calibration's time that was declined.
         """
-        with self._lock:
-            cal = copy.deepcopy(self.cal)
-        sync = cal.get("sync") or {"ask": True, "declined": None}
-        if ask is not None:
-            sync["ask"] = bool(ask)
-        if declined is not None:
-            sync["declined"] = str(declined)
-        cal["sync"] = sync
-        return self._write(cal)
+        with self._changing:
+            with self._lock:
+                cal = copy.deepcopy(self.cal)
+            sync = cal.get("sync") or {"ask": True, "declined": None}
+            if ask is not None:
+                sync["ask"] = bool(ask)
+            if declined is not None:
+                sync["declined"] = str(declined)
+            cal["sync"] = sync
+            return self._write(cal)
 
 
 store = CalibrationStore()
@@ -2094,17 +2360,17 @@ def arm_script():
     """Return the arm calibration script's path.
 
     Next to the console on the TX2 (deploy_tx2.sh copies it there), or
-    in the template's resources/arm_calibration.
+    in the template's +spot/+arm/calibration.
 
     Raises:
         ApiError: if it is in neither place.
     """
     for path in (PROJECT_DIR / "arm_calibration" / "calibrate_arm.py",
-                 PROJECT_DIR.parent.parent / "resources" / "arm_calibration" / "calibrate_arm.py"):
+                 PROJECT_DIR.parent / "+arm" / "calibration" / "calibrate_arm.py"):
         if path.is_file():
             return path
     raise ApiError("calibrate_arm.py is not on the lab console: run deploy_tx2.sh (it copies "
-                   "resources/arm_calibration/calibrate_arm.py there).")
+                   "+spot/+arm/calibration/calibrate_arm.py there).")
 
 
 def arm_check():

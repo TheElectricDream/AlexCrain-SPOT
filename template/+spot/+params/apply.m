@@ -5,8 +5,9 @@ function d = apply(s, root)
     %   ...) and armModel (spot.arm.parameters, for the simulated arm).
     %   d = spot.params.apply(s, root) also uses the project's calibration of the lab
     %   (spot.params.loadCalibration), each part when its s.calibration switch is on: the
-    %   table's slope, each thruster's thrust, and the arm's friction and inertia. It then runs
-    %   root/SPOT_User_Parameters.m, where users define their own variables or override these.
+    %   table's slope, each thruster's thrust and decay, and the arm's friction and inertia,
+    %   with the values the project overrides. It then runs root/SPOT_User_Parameters.m, where
+    %   users define their own variables or override these.
     %
     %   Inputs
     %     s     settings
@@ -14,7 +15,8 @@ function d = apply(s, root)
     %
     %   Outputs
     %     d     derived values for display: tsim, timing, rates, mass properties, arm geometry,
-    %           calibration used, LQR gains, warnings, the variables assigned
+    %           calibration used (d.calibration.inUse: the calibrated values in the workspace,
+    %           after SPOT_User_Parameters.m), LQR gains, warnings, the variables assigned
     %
     %   Example (no GUI needed)
     %     s = spot.params.load('spot_settings.json');
@@ -116,29 +118,41 @@ function d = apply(s, root)
         ws.(['tableDamping_' name{1}]) = 0;
     end
 
-    % No calibration, unless the project has one.
-    none = struct('RED', [], 'BLACK', [], 'BLUE', []);
-    cal = struct('file', '', 'updated', '', 'table', [], 'thrusters', none, 'error', '');
-    d.calibration = struct('file', '', 'updated', '', 'table', [], 'tableUsed', false, ...
-        'thrusters', none, 'thrustersUsed', {{}}, 'decayUsed', {{}}, 'arm', [], ...
-        'armUsed', '', 'error', '');
+    % No calibration (and no overrides), unless the project has one.
     if nargin > 1
         cal = spot.params.loadCalibration(root);
-        d.calibration = struct('file', cal.file, 'updated', cal.updated, 'table', cal.table, ...
-            'tableUsed', false, 'thrusters', cal.thrusters, 'thrustersUsed', {{}}, ...
-            'decayUsed', {{}}, 'arm', cal.arm, 'armUsed', '', 'error', cal.error);
-        if ~isempty(cal.error)
-            d.warnings0 = {cal.error};
-        end
+    else
+        cal = spot.params.loadCalibration();
+    end
+    ov = cal.overrides;
+    d.calibration = struct('file', cal.file, 'updated', cal.updated, 'table', cal.table, ...
+        'tableUsed', false, 'thrusters', cal.thrusters, 'thrustersUsed', {{}}, ...
+        'decayUsed', {{}}, 'arm', cal.arm, 'armUsed', '', 'overrides', ov, ...
+        'error', cal.error);
+    if ~isempty(cal.error)
+        d.warnings0 = {cal.error};
+    end
 
-        % The measured slope and drag.
-        if ~isempty(cal.table) && s.calibration.tableSlope
+    % The measured slope and drag (a level table where not measured), then the values the
+    % project overrides.
+    damping = ov.table.damping;
+    overridden = any(isfinite(ov.table.height)) ...
+        || any(isfinite([damping.RED damping.BLACK damping.BLUE]));
+    if s.calibration.tableSlope && (~isempty(cal.table) || overridden)
+        if ~isempty(cal.table)
             ws.tableSlope = cal.table.slope;
             for name = {'RED', 'BLACK', 'BLUE'}
                 ws.(['tableDamping_' name{1}]) = cal.table.damping.(name{1});
             end
-            d.calibration.tableUsed = true;
         end
+        given = isfinite(ov.table.height);
+        ws.tableSlope(given) = ov.table.height(given);
+        for name = {'RED', 'BLACK', 'BLUE'}
+            if isfinite(damping.(name{1}))
+                ws.(['tableDamping_' name{1}]) = damping.(name{1});
+            end
+        end
+        d.calibration.tableUsed = true;
     end
 
     %% Initial conditions (degrees in the settings, radians in the workspace)
@@ -153,7 +167,8 @@ function d = apply(s, root)
 
     %% Arm model and controllers
     % The model spot.arm.Plant simulates, with the project's arm calibration (the newer of the
-    % lab's and resources/arm_calibration.json) when s.calibration.arm is on.
+    % lab's and calibrate_arm.py's arm_calibration.json, and the project's overrides) when
+    % s.calibration.arm is on.
     if nargin > 1 && s.calibration.arm
         ws.armModel = spot.arm.parameters(ws, root);
     else
@@ -167,7 +182,8 @@ function d = apply(s, root)
     %% Thruster forces and thrust decay
     % F_thrusters_<PLATFORM> (8x1, used by the mixer and so the simulated plant): the thruster
     % calibration's when there is one and s.calibration.thrusters is on, else thrusterForce for
-    % all eight. thrust_decay_<PLATFORM> likewise, else thrusterDecay.
+    % all eight. thrust_decay_<PLATFORM> likewise, else thrusterDecay. With the switch on, the
+    % values the project overrides replace either.
     % F_<platform>_X_nominal and _Y_nominal: the setting's, for code of your own.
     short = struct('RED', 'red', 'BLACK', 'black', 'BLUE', 'blue');
     for name = {'RED', 'BLACK', 'BLUE'}
@@ -182,6 +198,14 @@ function d = apply(s, root)
             if ~isempty(cal.thrusters.(key).decay)
                 decay = cal.thrusters.(key).decay;
                 d.calibration.decayUsed{end + 1} = key;
+            end
+        end
+        if s.calibration.thrusters
+            o = ov.thrusters.(key);
+            given = isfinite(o.thrust);
+            F(given) = o.thrust(given);
+            if isfinite(o.decay)
+                decay = o.decay;
             end
         end
         ws.(['F_thrusters_' key]) = F;
@@ -253,6 +277,47 @@ function d = apply(s, root)
     % take it on its own: sharing armModel would make it a tunable parameter in the generated
     % code, which its field friction.static (a C++ keyword) prevents.
     evalin('base', 'if exist(''armModel'', ''var''), armMotor = armModel.motor; end');
+
+    % The calibrated values the simulation will use, as the workspace has them now.
+    d.calibration.inUse = inUse(ws);
+end
+
+function u = inUse(ws)
+    % The calibrated values in the base workspace (after SPOT_User_Parameters.m), and which of
+    % them that script changed (u.changedBy: the variables' names).
+    u = struct('tableSlope', [], 'tableDamping', struct(), 'thrust', struct(), ...
+               'decay', struct(), 'arm', [], 'changedBy', {{}});
+    names = {'tableSlope'};
+    for name = {'RED', 'BLACK', 'BLUE'}
+        names = [names, {['tableDamping_' name{1}], ['F_thrusters_' name{1}], ...
+                         ['thrust_decay_' name{1}]}]; %#ok<AGROW>
+    end
+    names{end + 1} = 'armModel';
+
+    % Each variable as the workspace has it (as assigned, if the script cleared it).
+    values = struct();
+    for k = 1:numel(names)
+        try
+            values.(names{k}) = evalin('base', names{k});
+        catch
+            values.(names{k}) = ws.(names{k});
+        end
+        if ~isequal(values.(names{k}), ws.(names{k}))
+            u.changedBy{end + 1} = names{k};
+        end
+    end
+
+    u.tableSlope = values.tableSlope;
+    for name = {'RED', 'BLACK', 'BLUE'}
+        key = name{1};
+        u.tableDamping.(key) = values.(['tableDamping_' key]);
+        u.thrust.(key) = values.(['F_thrusters_' key]);
+        u.decay.(key) = values.(['thrust_decay_' key]);
+    end
+    m = values.armModel;
+    u.arm = struct('static', m.friction.static, 'coulomb', m.friction.coulomb, ...
+                   'stribeck', m.friction.stribeck, 'viscous', m.friction.viscous, ...
+                   'armature', m.armature);
 end
 
 function gains = armGains(arm)

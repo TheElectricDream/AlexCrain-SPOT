@@ -1093,15 +1093,10 @@ a.btn { text-decoration: none; }
 }
 .dz-slot:hover { border-color: var(--accent-hover); background: rgba(76,141,255,.15); }
 .dz-slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.dz-slot.arm { border-color: #ff922b; }
 .dz-slot.chosen { background: var(--accent); border-color: #fff; box-shadow: 0 0 0 3px rgba(76,141,255,.3); }
 .dz-slot.chosen-none { border-style: dashed; border-color: #fff; }
 .dz-slot.blocked { border-color: #ff6b6b; border-style: dashed; }
 .dz-slot.blocked.chosen { background: #e5484d; }
-.dz-key { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; white-space: nowrap; }
-.dz-key i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid; display: inline-block; }
-.dz-key i.dz-key-arm { border-color: #ff922b; }
-.dz-key i.dz-key-blocked { border-color: #ff6b6b; border-style: dashed; }
 .dz-lab { display: flex; gap: 8px; flex-wrap: wrap; }
 .dz-file { margin-top: auto; }
 .dz-face.off { opacity: .55; }
@@ -1184,11 +1179,40 @@ a.btn { text-decoration: none; }
   .cal-sync-actions { align-items: flex-start; }
   .cal-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.cal-scenario { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.cal-rows { display: flex; flex-direction: column; gap: 10px; }
-.cal-rows .hint { margin: 0; }
-.cal-scenario .toggle { padding-left: 0; }
-.cal-scenario .hint .bad { color: #ff8787; }
+/* The Simulation tab's Calibration pane: the calibrations (#calRoot) in the main area, in place of
+   the 3D view, the command window and the messages */
+.cal-slot { display: none; }
+.sim-page.cal-mode .cal-slot { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.sim-page.cal-mode .viewer-slot, .sim-page.cal-mode .console-slot,
+.sim-page.cal-mode .msg-slot { display: none; }
+@media (min-width: 901px) {
+  .layout.with-msgs.cal-mode { grid-template-columns: 400px minmax(0, 1fr); }
+}
+
+/* Its sidebar cards: the values in use, each an input (overridden ones marked, with a reset) */
+.cal-cards { display: flex; flex-direction: column; gap: 14px; }
+.cal-card { transition: border-color .15s; }
+.cal-card.active { border-color: var(--border-strong); }
+.cal-card .card-head { margin-bottom: 6px; }
+.cal-card .card-head .toggle { padding: 0; }
+.cal-status { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+.cal-status .pill { font-size: 10.5px; padding: 1px 7px; }
+.cal-vals { border-collapse: separate; border-spacing: 4px; margin: -4px; width: calc(100% + 8px); table-layout: fixed; }
+.cal-vals th { font: 500 12px var(--sans); color: #c3c9d4; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-vals tbody th { width: 52%; }
+.cal-vals-3 thead th:first-child { width: 37%; }
+.cal-vals-thr thead th:first-child { width: 25%; }
+.cal-vals thead th { text-align: center; }
+.cal-vals thead .swatch { margin-right: 4px; vertical-align: -1px; }
+.cal-vals th i { font-style: normal; color: var(--muted); font-size: 11px; margin-left: 2px; }
+.cal-in { position: relative; display: block; }
+.cal-in .input { height: 28px; padding: 0 6px; font-size: 12.5px; font-variant-numeric: tabular-nums; width: 100%; }
+.cal-vals td.ovr .input { border-color: var(--warn); color: var(--warn); padding-right: 19px; }
+.cal-reset { position: absolute; right: 1px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: var(--warn); cursor: pointer; font-size: 13px; padding: 0 4px; }
+.cal-vals input[type=number] { appearance: textfield; -moz-appearance: textfield; }
+.cal-vals input::-webkit-inner-spin-button, .cal-vals input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.cal-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.cal-foot .hint { margin: 0; }
 /* the thruster calibration (calviz.js) */
 .cal-thr-svg { width: 100%; max-width: 400px; display: block; margin: 0 auto; }
 .cal-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 11.5px; color: var(--muted); margin: 4px 0 0; }

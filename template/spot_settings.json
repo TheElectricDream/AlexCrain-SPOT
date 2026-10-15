@@ -150,7 +150,7 @@
       "IDIST": 0.003506,
       "IEE": 0.000106,
       "mount": {
-        "face": "-y",
+        "face": "+y",
         "side": "left"
       }
     }

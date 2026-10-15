@@ -5,8 +5,8 @@ simulated arm (`spot.arm.Plant`; see the tutorial, "The Arm: Servos, Friction an
 
 The easiest way to run it is from the lab console's **Calibration tab** (Arm): it checks what the Chaser
 needs, sends this script, runs it (`--yes`), shows its progress and keeps the result in the lab's
-calibration, which projects get with **Update from Lab** (`resources/spot_calibration.json`). Below is
-how to run it by hand.
+calibration, which projects get with **Update from Lab** (`spot_calibration.json`, in the project
+folder). Below is how to run it by hand.
 
 ## In the lab
 
@@ -24,8 +24,8 @@ how to run it by hand.
    Other options: `--joints 3` (one joint), `--tests breakaway sweep` (some tests), `--window 15` (a
    smaller range), `--port /dev/ttyUSB1`, `--help` for the rest. `--simulate` rehearses without hardware; `--yes` starts
    without asking for Enter.
-5. Copy `runs/<date_time>/arm_calibration.json` to the SPOT project's `resources` folder. The next
-   simulation uses it (the newer of it and the Calibration tab's). Keep the whole `runs/<date_time>` folder with the raw data.
+5. Copy `runs/<date_time>/arm_calibration.json` to the SPOT project's folder (next to
+   `spot_settings.json`). The next simulation uses it (the newer of it and the Calibration tab's). Keep the whole `runs/<date_time>` folder with the raw data.
 
 ## Afterwards, in MATLAB
 

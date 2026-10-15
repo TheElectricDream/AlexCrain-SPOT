@@ -56,6 +56,28 @@ DEFAULT_LAB_URL = "http://192.168.1.116:8080"
 # State and settings
 
 
+def open_project_calibration(root):
+    """Use the project's calibration, spot_calibration.json.
+
+    It sits next to spot_settings.json. A project made before it moved
+    keeps it in resources/: it is moved across the first time.
+
+    Args:
+        root: The project folder.
+    """
+    path = root / "spot_calibration.json"
+    old = root / "resources" / "spot_calibration.json"
+    if old.is_file() and not path.exists():
+        try:
+            old.replace(path)
+            hub.log("matlab", "Moved the project's calibration to %s" % path)
+        except OSError as e:
+            hub.log("matlab", "Could not move %s to %s (%s); using it where it is."
+                    % (old, path, e))
+            path = old
+    calibration_store.open(path, local=True)
+
+
 def features():
     """Return what this server offers.
 
@@ -63,9 +85,10 @@ def features():
     console (started by SPOT.m) runs simulations through the user's
     MATLAB.
     """
+    # (The local console's calibration is on the Simulation tab.)
     if LOCAL["enabled"]:
         return {"mode": "local", "phasespace": False, "hardware": False, "simulation": True,
-                "experiment": True, "results": True, "designer": True, "calibration": True,
+                "experiment": True, "results": True, "designer": True, "calibration": False,
                 "vision": False}
     return {"mode": "lab", "phasespace": True, "hardware": True, "simulation": False,
             "experiment": False, "results": False, "designer": True, "calibration": True,
@@ -638,6 +661,22 @@ class Handler(BaseHTTPRequestHandler):
             return calibration_store.set_sync(ask=body.get("ask"),
                                               declined=body.get("declined")), 200
 
+        # A value of the project's calibration overridden (the
+        # Simulation tab's Calibration pane):
+        # {"path": "thrusters.RED.thrust.3", "value": 0.3}, or
+        # "value": null to use the measured one again; or
+        # {"clear": "thrusters.RED"} (a part's; null: all).
+        if path == "/api/calibration/override":
+            if "clear" in body:
+                result = calibration_store.clear_overrides(body.get("clear"))
+                hub.log("matlab", "Calibration overrides cleared (%s)"
+                        % (body.get("clear") or "all"))
+                return result, 200
+            result = calibration_store.set_override(body.get("path"), body.get("value"))
+            hub.log("matlab", "Calibration override: %s = %s"
+                    % (body.get("path"), body.get("value")))
+            return result, 200
+
         if path == "/api/lab/download":
             return download_run(str(body.get("run", ""))), 200
         if path == "/api/shutdown":
@@ -818,8 +857,7 @@ def main_local(args):
     LOCAL["ready_file"] = args.ready_file or str(Path(LOCAL["root"]) / ".spot_cache"
                                                  / "console.json")
     design_store.open(Path(LOCAL["root"]) / "spot_design.json")
-    calibration_store.open(Path(LOCAL["root"]) / "resources" / "spot_calibration.json",
-                           local=True)
+    open_project_calibration(Path(LOCAL["root"]))
 
     # The server, the MATLAB worker's port and the lab link.
     try:

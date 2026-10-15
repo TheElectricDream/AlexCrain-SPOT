@@ -956,6 +956,11 @@ function applyFeatures(st) {
   }
   $('.topstats .stat').hidden = !f.phasespace;
 
+  // The local console's calibrations are on the Simulation tab (its Calibration pane).
+  if (f.mode === 'local') {
+    $('[data-cal-slot="simulation"]').append($('#calRoot'));
+  }
+
   // The lab console (TX2) drives the hardware; the local one (SPOT in MATLAB) runs simulations.
   const name = f.mode === 'local' ? 'SPOT Local Simulations' : 'SPOT Hardware Interfaces';
   document.title = name;
@@ -1077,7 +1082,11 @@ if (viewer) {
 const store = createDataStore({ api, toast });
 const messages = initMessages({ storage });
 const livePlot = initLivePlot({ api, storage });
-const simulation = initSimulation({ api, act, toast, storage, viewer, store, messages, livePlot });
+// The Simulation tab's Calibration pane shows the calibrations (calibration.js) in its main area.
+const simulation = initSimulation({
+  api, act, toast, storage, viewer, store, messages, livePlot,
+  onCalibrationView: on => (on ? calibration.show() : calibration.hide()),
+});
 const experiment = initExperiment({
   api, act, toast, storage, viewer, messages, livePlot, getSim: () => simulation.getState(),
   setPlatform: (name, on) => simulation.setPlatform(name, on),

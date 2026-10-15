@@ -36,7 +36,7 @@
       <button type="button" id="simReset" class="btn btn-sm" title="Start from a clean slate: the template's default settings, the page's default view, no loaded results (you choose which)"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M4.6 15a8 8 0 1 0 1.9-8.3L4 9"/></svg><span>Reset…</span></button>
     </div>
     <div class="topstats">
-      <button type="button" id="labSetupBtn" class="btn btn-sm btn-ghost" hidden>Lab Setup</button>
+      <button type="button" id="labSetupBtn" class="btn btn-sm" hidden>Lab Setup</button>
       <a id="labLink" class="btn btn-sm" target="_blank" rel="noopener" hidden title="PhaseSpace and the platform hardware run on the lab console (the TX2)">Lab Console ↗</a>
       <span class="stat"><span class="stat-label">Packets</span><span id="statRate" class="stat-value">0 Hz</span></span>
       <span id="connBadge" class="badge badge-warn"><span class="dot"></span>Connecting</span>
@@ -213,7 +213,7 @@
           <label class="toggle" title="Draw the platforms from the lab's CAD instead of cubes: the Chaser in silver MLI with its ZED2 and arm, the Target in gold MLI, and the Obstacle with blue plexiglass panels on an aluminium frame, each with the docking cone and solar panels set on the Designer tab. Loaded the first time it is switched on (about 1 MB)."><input id="toggleCad" type="checkbox"><span></span>Use CAD</label>
           <label class="toggle" title="A window in the corner showing what the Chaser's ZED2 camera sees, with the ZED2's default HD720 intrinsics (fx = fy = 528 px, 68.6° vertical field of view), from its left lens, its right lens or both (120 mm apart, on the front face 0.28 m up, the right lens 0.08 m right of centre), facing along the Chaser's +X. It follows the Chaser live, in a replay, or at its initial conditions."><input id="toggleRedCam" type="checkbox"><span></span>ZED2 Viewpoint</label>
           <label class="toggle live-only" title="A vertical line from each LED PhaseSpace sees down to the table, to show how high it is"><input id="toggleDrop" type="checkbox" checked><span></span>LED Height Lines</label>
-          <label class="toggle" id="toggleSlopeLabel" title="Colour the table by its height, from the table slope calibration (Calibration tab): blue low, red high, with contour lines"><input id="toggleSlope" type="checkbox"><span></span>Table Slope</label>
+          <label class="toggle" id="toggleSlopeLabel" title="Colour the table by its height, from the table slope calibration: blue low, red high, with contour lines"><input id="toggleSlope" type="checkbox"><span></span>Table Slope</label>
           <label class="toggle live-only" id="overlayToggle" hidden title="Show the last simulation on top of the live view"><input id="toggleOverlay" type="checkbox"><span></span>Simulation</label>
           <label class="toggle sim-only" title="Draw each platform's path in the replay"><input id="pbTraces" type="checkbox" checked><span></span>Paths</label>
           <label class="toggle exp-only" title="Draw the paths the platforms take live"><input id="expLivePaths" type="checkbox" checked><span></span>Live Paths</label>
@@ -316,6 +316,10 @@
           <div id="pbOverlays" class="pb-overlays" hidden></div>
         </div>
       </div>
+
+      <!-- The Calibration tab's main area: the calibrations (#calRoot, moved here on the local
+           console) in place of the 3D view, the command window and the messages. -->
+      <div class="cal-slot" data-cal-slot="simulation"></div>
 
       <div class="console-slot" data-console-slot="simulation">
       <section id="matlabConsole" class="console matlab-console">
@@ -528,10 +532,10 @@
   </div>
 
   <div id="pageCalibration" class="page cal-page" hidden>
-    <div class="cal-scroll">
+    <div id="calRoot" class="cal-scroll">
       <div class="cal-head">
         <div>
-          <h2 class="tip" title="Measurements of the lab that make simulations behave as the experiments do. The lab console runs them and keeps the lab's calibration; each project keeps a copy (resources/spot_calibration.json), which its simulations use.">Calibration</h2>
+          <h2 class="tip" title="Measurements of the lab that make simulations behave as the experiments do. The lab console runs them and keeps the lab's calibration; each project keeps a copy (spot_calibration.json, in the project folder), which its simulations use.">Calibration</h2>
         </div>
         <div class="segmented cal-sections" role="group" aria-label="Calibration">
           <button type="button" data-calsec="table" class="active">Table Slope</button>
@@ -736,10 +740,11 @@
       <div class="reset-body">
         <p>The lab console has a newer calibration than this project:</p>
         <ul id="calSyncList" class="cal-sync-list"></ul>
-        <p class="hint">Updating copies it into resources/spot_calibration.json; the next simulation uses it (the table's
-          slope, the thrusters' thrust). Not Now keeps this project's, and doesn't ask again until the lab's changes.</p>
+        <p class="hint">Updating copies it into this project's spot_calibration.json; the next simulation uses it (the
+          table's slope, the thrusters' thrust, the arm). Values you have overridden are kept. Not Now keeps this
+          project's, and doesn't ask again until the lab's changes.</p>
         <label class="reset-opt"><input type="checkbox" id="calSyncNever"><span><b>Never Ask Again</b><span class="hint">For this project.
-          The Calibration tab can turn asking back on, and update at any time.</span></span></label>
+          The Simulation tab's Calibration pane can turn asking back on, and update at any time.</span></span></label>
       </div>
       <div class="dialog-foot">
         <div>

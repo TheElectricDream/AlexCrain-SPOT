@@ -26,7 +26,7 @@ import { heightCanvas } from './calviz.js';
 
 export const TABLE = { x: 3.5, y: 2.4, thickness: 0.33 };   // the granite (0.33 m thick, its CAD)
 export const CRAFT_SIZE = 0.3;
-const BODY_AXIS = 0.27;   // length of each body axis from the cube's centre [m]
+const BODY_AXIS = 0.34;   // length of each body axis from the cube's centre [m]
 
 // Paths trail the platforms' centre of mass, at mid-height of the body.
 const PATH_Z = CRAFT_SIZE / 2;
@@ -886,10 +886,7 @@ export class Viewer {
         return;
       }
       d.active = false;
-      if (d.group) {
-        this.scene.remove(d.group);
-        d.group = null;
-      }
+      this._dropDesigner();
       d.slots = [];
       this.goal.group.visible = true;
       if (d.savedCam) {
@@ -947,9 +944,7 @@ export class Viewer {
     if (!lib || !d.active) {
       return;
     }
-    if (d.group) {
-      this.scene.remove(d.group);
-    }
+    this._dropDesigner();
     const group = new THREE.Group();
     group.position.set(TABLE.x / 2, TABLE.y / 2, 0);
     const design = this._designOf(d.platform);
@@ -957,6 +952,12 @@ export class Viewer {
     if (d.platform === 'RED') {
       group.add(lib.zed(false));
     }
+
+    // The platform's body frame from the centre of its body, as on the other pages (the Axes
+    // switch shows or hides it).
+    const axes = this._bodyAxes();
+    axes.position.z = CRAFT_SIZE / 2;
+    group.add(axes);
 
     // The arm on its mount, at its initial pose: links and the cone end effector, joint to joint.
     if (d.platform === 'RED' && design && design.dock && design.dock.type === 'arm' &&
@@ -974,11 +975,9 @@ export class Viewer {
       });
     }
 
-    // The 6 places: a disc on the face at each (blocked red, the arm coupler's orange on the
-    // Chaser) with a white ring, just off the face (clear of the panel and the coupler's plate);
-    // the chosen one hidden under its cone.
+    // The 6 places: a disc on the face at each (blocked red) with a white ring, just off the
+    // face (clear of the panel and the coupler's plate); the chosen one hidden under its cone.
     d.slots = [];
-    const arm = lib.info.mount && lib.info.mount.armMount;
     for (const face of (lib.info.mount && lib.info.mount.faces) || ['+x', '+y', '-y']) {
       for (const side of ['left', 'right']) {
         const slot = { face, side };
@@ -986,12 +985,11 @@ export class Viewer {
         const holder = new THREE.Group();
         holder.position.set(p.x, p.y, p.z);
         holder.rotation.z = p.rot;
-        const isArm = d.platform === 'RED' && arm && arm.face === face && arm.side === side;
         const blocked = ((lib.info.blocked || {})[d.platform] || {})[`${face}|${side}`];
         const chosen = d.selected && d.selected.face === face && d.selected.side === side;
         const disc = new THREE.Mesh(new THREE.CircleGeometry(0.03, 40),
           new THREE.MeshBasicMaterial({
-            color: blocked ? 0xff6b6b : isArm ? 0xff922b : 0x74c0fc, transparent: true,
+            color: blocked ? 0xff6b6b : 0x74c0fc, transparent: true,
             opacity: d.selected ? 0.7 : 0.4, side: THREE.DoubleSide, depthWrite: false }));
         disc.rotation.y = Math.PI / 2;
         disc.position.x = 0.012;
@@ -1011,6 +1009,23 @@ export class Viewer {
     }
     d.group = group;
     this.scene.add(group);
+  }
+
+  // Takes the close-up out of the scene, with its body frame's labels (CSS2D elements stay in the
+  // page otherwise).
+  _dropDesigner() {
+    const d = this.designer;
+    if (!d.group) {
+      return;
+    }
+    this.scene.remove(d.group);
+    d.group.traverse(o => {
+      this.bodyAxes.groups.delete(o);
+      if (o.element) {
+        o.element.remove();
+      }
+    });
+    d.group = null;
   }
 
   // CAD models are solid, except copies that are not the run being looked at: the simulation

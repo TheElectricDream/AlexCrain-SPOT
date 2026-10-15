@@ -9,8 +9,8 @@
 % Its servos, friction and internal step. The servos run in current control; their limits come
 % from the diagram's "Dynamixel Arm (Torque)" block, and the position and velocity control laws
 % (with their gains) are the diagram's Default Position/Velocity Control (ARM) blocks. The
-% friction comes from resources/arm_calibration.json when there is one
-% (resources/arm_calibration/calibrate_arm.py). Change any of it here, e.g.:
+% friction comes from the arm calibration when there is one (the Simulation tab's Calibration
+% pane; +spot/+arm/calibration/calibrate_arm.py). Change any of it here, e.g.:
 % armModel.friction.static  = [0.30 0.30 0.30];   % breakaway torque [N m] (shoulder, elbow, wrist)
 % armModel.friction.coulomb = [0.20 0.20 0.20];   % sliding friction [N m]
 % armModel.armature = [3.5e-3 3.5e-3 3.5e-3];     % rotor inertia at the joint [kg m^2]

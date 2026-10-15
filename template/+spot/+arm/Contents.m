@@ -14,4 +14,4 @@
 %   inertiaMatrix     - Mass matrix of the Chaser (RED) with its three-link arm, free floating.
 %   coriolisMatrix    - Coriolis and centripetal matrix of the Chaser (RED) with its three-link arm.
 %
-%   The lab calibration script is resources/arm_calibration/calibrate_arm.py (Python, Dynamixel SDK).
+%   The lab calibration script is calibration/calibrate_arm.py (Python, Dynamixel SDK).

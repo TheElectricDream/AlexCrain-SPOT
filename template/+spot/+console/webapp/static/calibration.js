@@ -1,8 +1,10 @@
-// The Calibration tab (both consoles). The lab console runs the calibrations
-// (spot_console/calibration.py) and keeps the lab's calibration file; the local console shows its
-// project's copy (resources/spot_calibration.json, which the simulation uses) next to the lab's,
-// and offers the lab's whenever it is newer (the sync dialog: Update, Not Now, or Never Ask
-// Again).
+// The calibrations (both consoles): the lab console's Calibration tab, and on the local console
+// the Simulation tab's Calibration pane (its main area; sim.js has the sidebar's cards). The lab
+// console runs the calibrations (spot_console/calibration.py) and keeps the lab's calibration
+// file; the local console shows its project's copy (spot_calibration.json, which the simulation
+// uses) next to the lab's, and offers the lab's whenever it is newer (the sync dialog: Update,
+// Not Now, or Never Ask Again). Values the project overrides are kept when it updates, and a
+// part whose every value is overridden isn't offered.
 //
 // Sections: Table Slope, Thrusters and Arm.
 
@@ -92,6 +94,9 @@ const ARM_TESTS = [
    'settings, for spot.arm.compareSteps to check the model.'],
 ];
 const JOINTS = { 1: 'Shoulder', 2: 'Elbow', 3: 'Wrist' };
+
+// The arm values a project can override (calibration.py's ARM_FIELDS).
+const ARM_FIELDS = ['static', 'coulomb', 'stribeck', 'viscous', 'armature'];
 const ARM_MINUTES = { breakaway: 1.5, sweep: 2.5, inertia: 0.5, steps: 0.5 };   // per joint, about
 
 /**
@@ -106,7 +111,8 @@ const ARM_MINUTES = { breakaway: 1.5, sweep: 2.5, inertia: 0.5, steps: 0.5 };   
  */
 export function initCalibration({ api, act, toast, storage, viewer, getStream = () => null }) {
   const S = {
-    local: false, shown: false, section: storage.get('spot.calibration.section', 'table'),
+    // local: null until the page's state says which console this is (onState).
+    local: null, shown: false, section: storage.get('spot.calibration.section', 'table'),
     cal: null, path: null,                 // this console's calibration
     run: null, active: false,              // the lab console's run (lab console only)
     lab: null, labCal: null,               // local console: the lab console and its calibration
@@ -128,14 +134,16 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     savedRuns: { table: null, thrusters: null, decay: null },
     runPick: { table: null, thrusters: null, decay: null },
   };
-  // (The sync card is in the body's left column.)
+  // The section shown, and (local console) the sync card, which the Simulation tab's Calibration
+  // pane shows above its cards (sim.js moves it there).
   const body = $('#calBody');
-  const head = body;
+  const sync = $('#calSync');
 
   // Rendering
 
   // The section chosen.
   function render() {
+    renderSync();
     for (const b of document.querySelectorAll('[data-calsec]')) {
       b.classList.toggle('active', b.dataset.calsec === S.section);
     }
@@ -156,10 +164,12 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   // drag on it cut short) every time the run's progress comes in.
   const viewEl = document.getElementById('viewer');
 
-  // Back to its usual place (the PhaseSpace page), out of the way of a re-render.
+  // Back to its usual place (the lab console's PhaseSpace page, the local console's Simulation
+  // tab), out of the way of a re-render.
   function parkView() {
     if (viewEl && body.contains(viewEl)) {
-      document.querySelector('[data-slot="phasespace"]')?.prepend(viewEl);
+      const home = S.local ? 'simulation' : 'phasespace';
+      document.querySelector(`[data-slot="${home}"]`)?.prepend(viewEl);
     }
   }
 
@@ -183,23 +193,34 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   // The Table Slope section: its frame once, then only the parts that changed.
   function renderTable() {
     const parts = tableSection();
-    if (body.dataset.layout !== 'table' || !body.querySelector('[data-calview]')) {
+    const layout = S.local ? 'table-local' : 'table';
+    if (body.dataset.layout !== layout || !body.querySelector('[data-calview]')) {
       parkView();
-      body.innerHTML = `<div class="cal-col" data-part="left"></div>
+      body.innerHTML = `${S.local ? '' : '<div class="cal-col" data-part="left"></div>'}
         <div class="cal-col cal-wide"><section class="card cal-map-card">
           <div class="card-head" data-part="head"></div>
           <div class="cal-view" data-calview></div>
           <div data-part="below"></div>
         </section></div>`;
-      body.dataset.layout = 'table';
+      body.dataset.layout = layout;
     }
     for (const [k, html] of Object.entries(parts)) {
       const el = body.querySelector(`[data-part="${k}"]`);
-      if (el.innerHTML !== html) {
+      if (el && el.innerHTML !== html) {
         el.innerHTML = html;
       }
     }
     attachView();
+  }
+
+  // Local console: the sync card, drawn again only when it changes (a switch or button isn't
+  // replaced under a click). Wherever it is shown, whether or not the main area is.
+  function renderSync() {
+    const html = S.local ? syncCard() : '';
+    if (sync.dataset.html !== html) {
+      sync.dataset.html = html;
+      sync.innerHTML = html;
+    }
   }
 
   // Local console: this project's calibration against the lab's, with Update from Lab.
@@ -214,8 +235,10 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       pill = ['Lab Console Needs Update', 'warn'];
     } else if (!lab.updated) {
       pill = ['The Lab Has No Calibration', ''];
-    } else if (!mine.updated || lab.updated > mine.updated) {
+    } else if (newerSections(lab, mine).length) {
       pill = ['The Lab Has a Newer One', 'warn'];
+    } else if (!mine.updated || lab.updated > mine.updated) {
+      pill = ['Newer Values Overridden', ''];
     } else {
       pill = ['Up to Date', 'ok'];
     }
@@ -224,7 +247,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     return `<section class="card cal-sync">
       <div class="card-head"><h2>This Project and the Lab</h2><span class="pill ${pill[1]}">${pill[0]}</span></div>
       <div class="cal-sync-row">
-        <div title="resources/spot_calibration.json"><span class="field-label">This Project</span><b>${when(mine.updated)}</b></div>
+        <div title="spot_calibration.json, in the project folder"><span class="field-label">This Project</span><b>${when(mine.updated)}</b></div>
         <div title="Calibrations run on the lab console (its Calibration tab)"><span class="field-label">Lab Console</span><b>${reach && lab ? when(lab.updated) : '—'}</b></div>
         <div class="cal-sync-actions">
           <button type="button" class="btn btn-sm btn-primary" data-cal="take" ${canTake ? '' : 'disabled'}
@@ -242,8 +265,8 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     const run = S.run && S.run.kind === 'table' ? S.run : null;
     const running = run && ['running', 'stopping'].includes(run.state);
     return {
-      left: `${S.local ? syncCard() : ''}
-        ${S.local ? labOnlyCard('table') : runCard(run, running) + savedRunsCard('table', running)}
+      left: S.local ? ''
+        : `${runCard(run, running) + savedRunsCard('table', running)}
         ${run ? progressCard(run) : ''}`,
       head: '<h2 class="tip" title="The table coloured by its fitted height (blue low, red high)' +
         `${running ? ', with the platform and its drifts live' : ''}. Drag to orbit, ` +
@@ -332,7 +355,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       html = stepList(ARM_TESTS.map(([, t, text], k) => [t, text, ARM_ICONS[k]]),
         k => (now && now.test === ARM_TESTS[k][0] ? 'now' : '')) +
         `<p class="hint">For each joint in turn, the other joints hold their position. The script
-          (resources/arm_calibration/calibrate_arm.py) runs on the Chaser, which has the arm's U2D2; it fits each joint's friction
+          (+spot/+arm/calibration/calibrate_arm.py) runs on the Chaser, which has the arm's U2D2; it fits each joint's friction
           and inertia, which SPOT's arm model then uses (spot.arm.parameters). The Chaser rests on the table throughout.</p>`;
     }
     $('#calDetailsTitle').textContent = title;
@@ -455,17 +478,10 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   const shownRunsKind = () =>
     (S.section === 'thrusters' && S.thrStage === 'decay' ? 'decay' : S.section);
   const fetchShownRuns = () => {
-    if (!S.local && (S.section === 'table' || S.section === 'thrusters')) {
+    if (S.local === false && (S.section === 'table' || S.section === 'thrusters')) {
       act(() => fetchRuns(shownRunsKind()));
     }
   };
-
-  // Local console: the calibration runs on the lab console (with a link to it).
-  function labOnlyCard(what) {
-    return `<section class="card"><div class="card-head"><h2 class="tip" title="The ${what === 'table' ? 'table slope' : what} calibration drives a platform, so it runs on the lab console. Its results come here with Update from Lab.">Run</h2><span class="pill">On the Lab Console</span></div>
-        ${S.lab && S.lab.url ? `<p class="hint"><a href="${esc(S.lab.url)}#calibration" target="_blank" rel="noopener">${esc(S.lab.url)}</a></p>` : ''}
-        <div class="cal-actions">${detailsButton}</div></section>`;
-  }
 
   // A run's progress: its state, message, steps and log.
   function progressCard(run) {
@@ -505,11 +521,11 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       : [];
     const viewing = running ? run.platform : S.platform;
     const res = (S.cal && S.cal.thrusters || {})[viewing];
-    return `<div class="cal-col">
-        ${S.local ? syncCard() : ''}
-        ${S.local ? labOnlyCard('thrusters') : thrustRunCard(run, running) + savedRunsCard(running ? run.kind : S.thrStage === 'decay' ? 'decay' : 'thrusters', running)}
+    const left = S.local ? '' : `<div class="cal-col">
+        ${thrustRunCard(run, running) + savedRunsCard(running ? run.kind : S.thrStage === 'decay' ? 'decay' : 'thrusters', running)}
         ${run ? progressCard(run) : ''}
-      </div>
+      </div>`;
+    return `${left}
       <div class="cal-col cal-wide">
         ${running ? `<section class="card cal-map-card"><div class="card-head"><h2>Thrusters</h2><span class="pill live">${firing.length
             ? `Firing T${firing[0]}${firing.length > 1 ? `–T${firing[firing.length - 1]}` : ''}` : 'Measuring'} · ${platformName(run.platform)}</span></div>
@@ -771,11 +787,11 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     const run = S.run && S.run.kind === 'arm' ? S.run : null;
     const running = run && ['running', 'stopping'].includes(run.state);
     const res = armResult(run) || placeholderArm();
-    return `<div class="cal-col">
-        ${S.local ? syncCard() : ''}
-        ${S.local ? labOnlyCard('arm') : armChecksCard() + armRunCard(run, running)}
+    const left = S.local ? '' : `<div class="cal-col">
+        ${armChecksCard() + armRunCard(run, running)}
         ${run ? armProgressCard(run) : ''}
-      </div>
+      </div>`;
+    return `${left}
       <div class="cal-col cal-wide">${armResults(res)}</div>`;
   }
 
@@ -1001,7 +1017,8 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     }
     const mine = S.cal;
     const lab = S.labCal;
-    if (mine.updated && lab.updated <= mine.updated) {
+    const parts = newerSections(lab, mine);
+    if (!parts.length) {
       return;
     }
     if (mine.sync && (mine.sync.ask === false || mine.sync.declined === lab.updated)) {
@@ -1012,31 +1029,62 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     }
     S.asked = lab.updated;
     const dialog = $('#calSyncDialog');
-    $('#calSyncList').innerHTML = newerSections(lab, mine)
+    $('#calSyncList').innerHTML = parts
       .map(([what, t]) => `<li><b>${what}</b><span>${when(t)}</span></li>`).join('');
     $('#calSyncNever').checked = false;
     dialog.showModal();
   }
 
-  // The lab's sections newer than this project's: [name, time] (a thruster section's time
-  // includes its decay's).
+  // The parts of the lab's calibration this project should take: [name, time]. A part counts
+  // when the lab's is newer than (or not in) the project's, and at least one of its values isn't
+  // overridden here (calibration.py's sections_newer does the same).
   function newerSections(lab, mine) {
-    const time = c =>
-      [c && c.updated, c && c.decay && c.decay.updated].filter(Boolean).sort().pop() || '';
+    const ov = mine.overrides || {};
     const out = [];
-    const newer = (a, b) => a && (!b || time(a) > time(b));
-    if (newer(lab.table, mine.table)) {
-      out.push(['Table Slope', lab.table.updated]);
-    }
-    for (const n of NAMES) {
-      const a = (lab.thrusters || {})[n];
-      const b = (mine.thrusters || {})[n];
-      if (newer(a, b)) {
-        out.push([`${platformName(n)} Thrusters`, time(a)]);
+
+    // Whether some of a part's values are still the measured ones.
+    const open = (overridden, n) => n > (overridden || []).filter(v => v != null).length;
+
+    // The table: its height coefficients and the drags it measured.
+    const labTable = lab.table;
+    const myTable = mine.table;
+    if (labTable && (!myTable || (labTable.updated || '') > (myTable.updated || ''))) {
+      const tableOv = ov.table || {};
+      const drags = Object.keys(labTable.damping || {})
+        .filter(k => (tableOv.damping || {})[k] == null);
+      if (open(tableOv.height, 5) || drags.length) {
+        out.push(['Table Slope', labTable.updated]);
       }
     }
-    if (newer(lab.arm, mine.arm)) {
-      out.push(['Arm', lab.arm.updated]);
+
+    // Each platform's thrusts, and its thrust decay.
+    for (const n of NAMES) {
+      const c = (lab.thrusters || {})[n];
+      if (!c) {
+        continue;
+      }
+      const myCal = (mine.thrusters || {})[n] || {};
+      const myOv = (ov.thrusters || {})[n] || {};
+      if ((c.updated || '') > (myCal.updated || '') && open(myOv.thrust, 8)) {
+        out.push([`${platformName(n)} Thrusters`, c.updated]);
+      }
+      const labDecay = c.decay || {};
+      const myDecay = myCal.decay || {};
+      if (labDecay.updated && labDecay.updated > (myDecay.updated || '') && myOv.decay == null) {
+        out.push([`${platformName(n)} Thrust Decay`, labDecay.updated]);
+      }
+    }
+
+    // The arm: each field of the joints it measured.
+    const labArm = lab.arm;
+    const myArm = mine.arm;
+    if (labArm && (!myArm || (labArm.updated || '') > (myArm.updated || ''))) {
+      const armOv = ov.arm || {};
+      const joints = [].concat(labArm.joints || []).map(j => j && j.index)
+        .filter(i => [1, 2, 3].includes(i));
+      if (joints.some(i => ARM_FIELDS.some(f => (armOv[f] || [])[i - 1] == null))) {
+        out.push(['Arm', labArm.updated]);
+      }
     }
     return out;
   }
@@ -1059,9 +1107,10 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     onCalibration(await api('/api/calibration/sync',
       never ? { ask: false } : { declined: lab.updated }));
     toast(never
-      ? 'The lab\'s calibration won\'t be offered again (Calibration tab: Ask When the Lab\'s Is ' +
-        'Newer turns it back on).'
-      : 'Kept this project\'s calibration. The Calibration tab can update it later.', 'info', 6000);
+      ? 'The lab\'s calibration won\'t be offered again (Simulation tab, Calibration: Ask ' +
+        'When the Lab\'s Is Newer turns it back on).'
+      : 'Kept this project\'s calibration. The Simulation tab\'s Calibration pane can update ' +
+        'it later.', 'info', 6000);
   });
 
   // Input
@@ -1073,12 +1122,18 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       S.section = b.dataset.calsec;
       storage.set('spot.calibration.section', S.section);
       render();
-      fetchShownRuns();
-      if (!S.local && S.section === 'arm' && !S.armCheck && !S.armChecking) {
-        act(checkArm);
-      }
+      fetchShown();
     }
   });
+
+  // The lab console: the shown section's saved runs, and (the first time) the Chaser's setup for
+  // the arm. Nothing until the console is known (onState).
+  function fetchShown() {
+    fetchShownRuns();
+    if (S.local === false && S.section === 'arm' && !S.armCheck && !S.armChecking) {
+      act(checkArm);
+    }
+  }
 
   // The section's buttons.
   body.addEventListener('click', ev => act(async () => {
@@ -1230,7 +1285,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   });
 
   // The sync card: Update from Lab, and Ask When the Lab's Is Newer.
-  head.addEventListener('click', ev => act(async () => {
+  sync.addEventListener('click', ev => act(async () => {
     const b = ev.target.closest('button');
     if (b && b.dataset.cal === 'take' && !b.disabled) {
       onCalibration(await api('/api/calibration/take', {}));
@@ -1238,7 +1293,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         'success', 5000);
     }
   }));
-  head.addEventListener('change', ev => act(async () => {
+  sync.addEventListener('change', ev => act(async () => {
     if (ev.target.dataset.cal === 'ask') {
       onCalibration(await api('/api/calibration/sync', { ask: ev.target.checked }));
     }
@@ -1246,7 +1301,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
 
   // Esc on the tab (lab console) stops the run.
   document.addEventListener('keydown', ev => {
-    if (ev.key === 'Escape' && S.shown && S.active && !S.local) {
+    if (ev.key === 'Escape' && S.shown && S.active && S.local === false) {
       act(async () => onRun(await api('/api/calibration/stop', {})));
     }
   });
@@ -1270,6 +1325,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     S.path = d.path;
     viewer?.setTableSlope(S.cal.table || null);
     document.dispatchEvent(new CustomEvent('spot-calibration', { detail: S.cal }));
+    renderSync();
     if (S.shown) {
       render();
     }
@@ -1294,8 +1350,8 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     }
 
     // A run just ended: it saved its data, so its kind's saved runs change.
-    if (!S.local && before && S.savedRuns[before.kind] !== undefined && isRunning(before) &&
-        !isRunning(S.run)) {
+    if (S.local === false && before && S.savedRuns[before.kind] !== undefined &&
+        isRunning(before) && !isRunning(S.run)) {
       act(() => fetchRuns(before.kind));
     }
 
@@ -1330,6 +1386,11 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         onRun(st.calibration_run);
       }
       onCalibration(st.calibration);
+
+      // Shown before the console was known (the local console's remembered Calibration tab).
+      if (S.shown) {
+        fetchShown();
+      }
     },
     onCalibration,
     onRun,
@@ -1341,6 +1402,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       } else if (l && l.snapshot && l.snapshot.calibration) {
         S.labCal = l.snapshot.calibration.calibration;
       }
+      renderSync();
       if (S.shown) {
         render();
       }
@@ -1349,6 +1411,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     // The lab's calibration changed.
     onLabCalibration(d) {
       S.labCal = d && d.calibration;
+      renderSync();
       if (S.shown) {
         render();
       }
@@ -1356,17 +1419,14 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     },
     // PhaseSpace started or stopped (the Run cards' state).
     onStream() {
-      if (S.shown && !S.local) {
+      if (S.shown && S.local === false) {
         render();
       }
     },
     show() {
       S.shown = true;
       render();
-      fetchShownRuns();
-      if (!S.local && S.section === 'arm' && !S.armCheck && !S.armChecking) {
-        act(checkArm);
-      }
+      fetchShown();
     },
     // The tab is left: the other pages' view shows the slope as their Table Slope switch has
     // it, and no drifts.
