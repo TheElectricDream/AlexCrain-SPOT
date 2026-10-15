@@ -338,6 +338,16 @@ classdef Worker < handle
                 case 'workspace.eval'
                     result = spot.workspace.evaluate(args.command);
 
+                %% Documentation tab
+                case 'code.lint'
+                    % The Code Analyzer's messages for code in the editor (not saved yet).
+                    result = spot.worker.checkCode(args.name, args.text);
+
+                case 'code.rehash'
+                    % A file was saved from the page: use its new version from the next call.
+                    rehash;
+                    result = true;
+
                 otherwise
                     error('spot:worker:unknown', 'Unknown command %s.', cmd);
             end

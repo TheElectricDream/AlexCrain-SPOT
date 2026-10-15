@@ -13,6 +13,7 @@ import { initDesigner } from './designer.js';
 import { initCalibration } from './calibration.js';
 import { initVision } from './vision.js';
 import { initLabSetup } from './labsetup.js';
+import { initDocs } from './docs.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -638,6 +639,7 @@ function connect() {
     labSetup.onLab(l);
   });
   on('design', d => designer.onDesign(d));
+  on('docs', d => docs.onSaved(d));
   on('lab_design', d => designer.onLabDesign(d));
 
   // A new calibration (lab console: Interactive Mode's controller now flies with the new
@@ -851,7 +853,7 @@ $('#toggleConsole').onclick = () => {
 const PAGES = {
   simulation: $('#pageSimulation'), experiment: $('#pageExperiment'), results: $('#pageResults'),
   phasespace: $('#pagePhasespace'), hardware: $('#pageHardware'), designer: $('#pageDesigner'),
-  calibration: $('#pageCalibration'), vision: $('#pageVision'),
+  calibration: $('#pageCalibration'), vision: $('#pageVision'), docs: $('#pageDocs'),
 };
 
 function pageAvailable(page) {
@@ -871,7 +873,8 @@ function showPage(page) {
     el.hidden = name !== page;
   }
   storage.set('spot.page', page);
-  if (location.hash !== `#${page}`) {
+  // The Documentation tab keeps its own place after the page's name (#docs/...).
+  if (location.hash.split('/')[0] !== `#${page}`) {
     history.replaceState(null, '', `#${page}`);
   }
   if (page === 'hardware') {
@@ -919,6 +922,9 @@ function showPage(page) {
   if (page !== 'vision') {
     vision.hide();
   }
+  if (page !== 'docs') {
+    docs.hide();
+  }
   if (page === 'simulation') {
     simulation.show();
   } else if (page === 'experiment') {
@@ -931,6 +937,8 @@ function showPage(page) {
     calibration.show();
   } else if (page === 'vision') {
     vision.show();
+  } else if (page === 'docs') {
+    docs.show();
   } else {
     viewer?.setLayers({
       live: true, sim: $('#toggleOverlay').checked && simulation.hasResult(), setup: false,
@@ -967,7 +975,7 @@ function applyFeatures(st) {
   $('.brand h1').textContent = name;
   if (!S.pageShown) {
     S.pageShown = true;
-    showPage(location.hash.slice(1) ||
+    showPage(location.hash.slice(1).split('/')[0] ||
       storage.get('spot.page', f.mode === 'local' ? 'simulation' : 'phasespace'));
   }
 }
@@ -975,7 +983,7 @@ function applyFeatures(st) {
 for (const b of $$('[data-page]')) {
   b.onclick = () => showPage(b.dataset.page);
 }
-window.addEventListener('hashchange', () => showPage(location.hash.slice(1)));
+window.addEventListener('hashchange', () => showPage(location.hash.slice(1).split('/')[0]));
 const hardware = initHardware({ api, act, toast, storage, fmtTime });
 
 // Viewer
@@ -1106,6 +1114,15 @@ const calibration = initCalibration({
 });
 const vision = initVision({ api, act, toast, storage });
 const labSetup = initLabSetup({ api, act, toast });
+const docs = initDocs({ api, act, toast, storage });
+
+// Unsaved edits in the Documentation tab's editor: ask before leaving the page.
+window.addEventListener('beforeunload', ev => {
+  if (docs.isDirty()) {
+    ev.preventDefault();
+    ev.returnValue = '';
+  }
+});
 
 // The table slope overlay on the 3D view: off unless switched on; only with a table calibration.
 const slopeToggle = $('#toggleSlope');

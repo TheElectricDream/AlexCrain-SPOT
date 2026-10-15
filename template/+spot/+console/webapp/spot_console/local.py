@@ -36,6 +36,9 @@ MATLAB_COMMANDS = {
     # (data.load may open a dialog).
     "data.list": 120, "data.load": 900, "data.unload": 30, "data.series": 300,
     "data.trajectory": 300, "data.saveSimulation": 120, "data.figure": 900,
+    # Documentation tab: the Code Analyzer on code being edited, and
+    # MATLAB noticing a saved file.
+    "code.lint": 30, "code.rehash": 30,
 }
 
 HELLO_TIMEOUT = 10         # [s] for the worker's hello
@@ -185,13 +188,15 @@ class MatlabBridge:
         return bool(busy) and busy.get("cmd") in ("sim.run", "experiment.build",
                                                   "experiment.decode", "workspace.eval")
 
-    def request(self, cmd, args=None, timeout=60):
+    def request(self, cmd, args=None, timeout=60, quiet=False):
         """Run a command in MATLAB and return its result.
 
         Args:
             cmd: The command (see MATLAB_COMMANDS).
             args: Its arguments, a dict.
             timeout: Seconds to wait for the answer; None for no limit.
+            quiet: Don't tell the pages MATLAB is busy (a quick command
+                the user didn't ask for, such as checking code).
 
         Raises:
             ApiError: if MATLAB is busy, not connected, doesn't answer,
@@ -217,7 +222,8 @@ class MatlabBridge:
                 self._pending[rid] = waiter
                 self.busy = {"cmd": cmd, "since": time.time(),
                              "label": BUSY_LABELS.get(cmd, cmd)}
-            self._publish()
+            if not quiet:
+                self._publish()
             try:
                 conn.sendall((json.dumps({"id": rid, "cmd": cmd, "args": args or {}})
                               + "\n").encode("utf-8"))
@@ -229,7 +235,8 @@ class MatlabBridge:
                 with self._state:
                     self._pending.pop(rid, None)
                     self.busy = None
-                self._publish()
+                if not quiet:
+                    self._publish()
 
             # Its reply.
             reply = waiter[1] or {}
@@ -289,6 +296,8 @@ BUSY_LABELS = {
     "data.trajectory": "preparing the playback",
     "data.figure": "drawing the figure (or waiting for its file dialog)",
     "data.saveSimulation": "saving the simulation",
+    "code.lint": "checking code",
+    "code.rehash": "reading saved code",
 }
 
 

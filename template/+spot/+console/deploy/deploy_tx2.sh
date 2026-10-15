@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Copies the SPOT Console (webapp/, phasespace/, deploy/ of +spot/+console, and the arm calibration
 # script, +spot/+arm/calibration/calibrate_arm.py, which the Calibration tab runs on the Chaser) to the Jetson TX2,
-# compiles StreamData there, and (re)starts the webapp
-# service so it runs at boot on http://<tx2>:8080. Safe to re-run after any change.
+# with a copy of the project's code for the Documentation tab, compiles StreamData there, and
+# (re)starts the webapp service so it runs at boot on http://<tx2>:8080. Safe to re-run after any change.
 #   ./deploy_tx2.sh
 #   TX2=user@host SSH_KEY=~/.ssh/other_key ./deploy_tx2.sh
 set -euo pipefail
@@ -21,6 +21,13 @@ rsync -a --delete --relative --exclude '__pycache__' -e "ssh ${ssh_opts[*]}" \
     webapp phasespace deploy \
     "$TX2:$DEST/"
 rsync -a -e "ssh ${ssh_opts[*]}" ../+arm/calibration/calibrate_arm.py "$TX2:$DEST/arm_calibration/"
+# The project's code and diagrams, which the console's Documentation tab shows (read only there).
+shopt -s nullglob
+docs_source=(../../+spot ../../*.m ../../*.slx)
+shopt -u nullglob
+rsync -a --delete --exclude '__pycache__' --exclude 'models' --exclude 'vendor' \
+    --exclude 'libowl-src-410' --exclude '*.bak*' -e "ssh ${ssh_opts[*]}" \
+    "${docs_source[@]}" "$TX2:$DEST/docs_source/"
 
 echo "== Compiling and starting the service on $TX2"
 ssh "${ssh_opts[@]}" "$TX2" bash -s -- "$DEST" "$SERVICE" <<'REMOTE'

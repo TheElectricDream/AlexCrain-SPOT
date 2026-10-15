@@ -21,7 +21,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .common import ApiError, PROJECT_DIR, STATIC_DIR, parse_bool, parse_number
 from .events import hub, settings
@@ -40,12 +40,15 @@ from .design import design_store
 from .calibration import assumed_defaults, calibrator, saved_runs, store as calibration_store
 from . import vision
 from .deploy import deployer
+from .docs import DOCS_DIR, doc_index
 
 
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                  ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
                  ".txt": "text/plain; charset=utf-8", ".json": "application/json",
-                 ".gz": "application/gzip"}
+                 ".gz": "application/gzip", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                 ".gif": "image/gif", ".webp": "image/webp", ".woff2": "font/woff2",
+                 ".woff": "font/woff", ".ttf": "font/ttf", ".md": "text/markdown; charset=utf-8"}
 
 MAX_EXTRA_DESTINATIONS = 20
 EVENT_KEEPALIVE = 15       # [s] a comment line when no event has come
@@ -89,10 +92,10 @@ def features():
     if LOCAL["enabled"]:
         return {"mode": "local", "phasespace": False, "hardware": False, "simulation": True,
                 "experiment": True, "results": True, "designer": True, "calibration": False,
-                "vision": False}
+                "vision": False, "docs": True}
     return {"mode": "lab", "phasespace": True, "hardware": True, "simulation": False,
             "experiment": False, "results": False, "designer": True, "calibration": True,
-            "vision": True}
+            "vision": True, "docs": True}
 
 
 def app_state(client_ip=None):
@@ -273,12 +276,28 @@ class Handler(BaseHTTPRequestHandler):
                               % (self._cookie_name(), LOCAL["token"]))]
                 return self._file(STATIC_DIR / "index.html", extra)
 
-            # Static files, only from STATIC_DIR.
+            # Static files, only from STATIC_DIR; the documentation's
+            # pictures, only from DOCS_DIR.
             if url.path.startswith("/static/"):
                 target = (STATIC_DIR / url.path[len("/static/"):]).resolve()
                 if STATIC_DIR not in target.parents:
                     return self._send(404, b"Not found", "text/plain")
                 return self._file(target)
+            if url.path.startswith("/docs/"):
+                target = (DOCS_DIR / unquote(url.path[len("/docs/"):])).resolve()
+                if DOCS_DIR.resolve() not in target.parents:
+                    return self._send(404, b"Not found", "text/plain")
+                return self._file(target)
+
+            # The Documentation tab: the index (compressed, and not
+            # sent again while it hasn't changed) and a file to edit.
+            if url.path == "/api/docs/index":
+                return self._docs_index()
+            if url.path == "/api/docs/file":
+                try:
+                    return self._json(doc_index.read(qs.get("path", [""])[0]))
+                except ApiError as e:
+                    return self._json({"error": str(e)}, 404)
 
             # State.
             if url.path == "/api/ping":
@@ -394,6 +413,10 @@ class Handler(BaseHTTPRequestHandler):
             # Settings and design.
             if path == "/api/settings":
                 result = update_settings(body)
+            elif path == "/api/docs/lint":
+                result = doc_index.lint(body)
+            elif path == "/api/docs/save":
+                result = doc_index.save(body, requester)   # refused: lab console
             elif path == "/api/design":
                 result = design_store.set(body.get("design"), requester)
 
@@ -644,6 +667,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/design":
             return design_store.set(body.get("design"), requester), 200
 
+        # The Documentation tab: check code as it is edited; save it.
+        if path == "/api/docs/lint":
+            return doc_index.lint(body), 200
+        if path == "/api/docs/save":
+            return doc_index.save(body, requester), 200
+
         # The project's copy of the calibration becomes the lab
         # console's (the page's Update).
         if path == "/api/calibration/take":
@@ -707,6 +736,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, b"Not found", "text/plain")
         self._send(200, body, CONTENT_TYPES.get(path.suffix, "application/octet-stream"),
                    extra_headers)
+
+    def _docs_index(self):
+        """Send the documentation's index (gzip'd if it can be)."""
+        try:
+            version, raw, packed = doc_index.payload()
+        except Exception as e:   # a broken index must not take the page down
+            return self._json({"error": "The documentation could not be built: %s" % e}, 500)
+        etag = '"%s"' % version
+        if self.headers.get("If-None-Match") == etag:
+            return self._send(304, b"", "application/json", [("ETag", etag)])
+        if "gzip" in (self.headers.get("Accept-Encoding") or ""):
+            return self._send(200, packed, "application/json",
+                              [("ETag", etag), ("Content-Encoding", "gzip")])
+        return self._send(200, raw, "application/json", [("ETag", etag)])
 
     def _events(self):
         """Stream server-sent events until the page goes away."""

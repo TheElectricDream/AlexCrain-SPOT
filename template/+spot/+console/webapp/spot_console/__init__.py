@@ -18,6 +18,12 @@ Start it with webapp/app.py.
     local        the local console: the MATLAB worker bridge,
                  simulation/build runs, the lab link
     files        the folder browser
+    docs         the Documentation tab: the index of the code, the
+                 guides and notes, saving edited files
+    docparse     reading the code: functions, their documentation,
+                 their blocks, what calls what
+    doclint      checking edited code (Python, MATLAB, shell, C/C++,
+                 JSON, XML, the guides' links)
     server       the HTTP API and start-up (lab or local console)
 
 Python 3.6 standard library only (the lab console runs on the TX2's

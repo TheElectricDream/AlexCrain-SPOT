@@ -1,0 +1,78 @@
+{
+  "sections": [
+    {"title": "Start Here", "pages": [
+      {"id": "welcome", "file": "guides/welcome.md", "summary": "What SPOT is, the two consoles, and how this documentation is organised."},
+      {"id": "installing", "file": "guides/installing.md", "summary": "MATLAB, Python and a browser on Windows or Linux, and starting the console."},
+      {"id": "new-project", "file": "guides/new-project.md", "title": "Making a New Project", "summary": "New_SPOT_Project: your own copy of the template."},
+      {"id": "quick-start-simulation", "file": "guides/quick-start-simulation.md", "summary": "From nothing to a simulated run on your computer."},
+      {"id": "quick-start-experiment", "file": "guides/quick-start-experiment.md", "summary": "Building your diagram and running it on the platforms."},
+      {"id": "architecture", "file": "guides/architecture.md", "title": "How It Fits Together", "summary": "The computers, the programs and what connects them."},
+      {"id": "project-folder", "file": "guides/project-folder.md", "summary": "What is in a project, and what each part is for."},
+      {"id": "conventions", "file": "guides/conventions.md", "summary": "Units, the table and body frames, platform names, the phases."}
+    ]},
+    {"title": "The Lab", "pages": [
+      {"id": "lab-overview", "file": "guides/lab-overview.md", "summary": "The table, the platforms, PhaseSpace and the computers."},
+      {"id": "lab-procedures", "file": "guides/lab-procedures.md", "title": "Preparing the Lab, and Putting It Away", "summary": "Uncovering and cleaning the table, preparing the platforms, shutting down."},
+      {"id": "lab-safety", "file": "guides/lab-safety.md", "summary": "The E-stop, the software stops, the air bearings, leaks."},
+      {"id": "lab-air", "file": "guides/lab-air.md", "summary": "Filling the platforms' air tanks safely."},
+      {"id": "lab-network", "file": "guides/lab-network.md", "summary": "Every address, port and stream in the lab."},
+      {"id": "lab-setup", "file": "guides/lab-setup.md", "summary": "Deploying the lab's software from the local console."},
+      {"id": "lab-admin", "file": "guides/lab-admin.md", "summary": "The deployment scripts and the platforms' agent, in detail."},
+      {"id": "troubleshooting", "file": "guides/troubleshooting.md", "summary": "From what a console says to what to do."}
+    ]},
+    {"title": "The Local Console", "pages": [
+      {"id": "tab-simulation", "file": "guides/tab-simulation.md", "summary": "Scenario, platforms, calibration, control, running and replaying."},
+      {"id": "tab-experiment", "file": "guides/tab-experiment.md", "summary": "Cameras, building, deploying, running and collecting."},
+      {"id": "tab-results", "file": "guides/tab-results.md", "summary": "Plotting simulations, experiments and any .mat file."},
+      {"id": "tab-designer", "file": "guides/tab-designer.md", "summary": "Docking cones, the arm and solar panels on each platform."},
+      {"id": "tab-documentation", "file": "guides/tab-documentation.md", "summary": "Searching, the reference pages, editing code, notes and guides."}
+    ]},
+    {"title": "The Lab Console", "pages": [
+      {"id": "tab-phasespace", "file": "guides/tab-phasespace.md", "summary": "StreamData, the live view and the telemetry."},
+      {"id": "interactive-mode", "file": "guides/interactive-mode.md", "summary": "Flying the platforms to goals dragged on the table."},
+      {"id": "tab-hardware", "file": "guides/tab-hardware.md", "summary": "Pucks, thrusters and thruster checks on each platform."},
+      {"id": "tab-calibration", "file": "guides/tab-calibration.md", "summary": "Measuring the table's slope, the thrusters, the thrust decay and the arm."},
+      {"id": "tab-vision", "file": "guides/tab-vision.md", "summary": "The Orin's cameras: ZED, L515, DVXplorer and USB cameras."}
+    ]},
+    {"title": "Working in MATLAB", "pages": [
+      {"id": "matlab-without-console", "file": "guides/matlab-without-console.md", "summary": "Simulations, sweeps, figures and builds from scripts."},
+      {"id": "settings-file", "file": "guides/settings-file.md", "summary": "Every key of spot_settings.json."},
+      {"id": "workspace-variables", "file": "guides/workspace-variables.md", "summary": "What the diagram reads from MATLAB's workspace."},
+      {"id": "user-parameters", "file": "guides/user-parameters.md", "summary": "SPOT_User_Parameters.m: your own variables."},
+      {"id": "logged-signals", "file": "guides/logged-signals.md", "summary": "The 108 signals every run records."}
+    ]},
+    {"title": "The Simulink Diagram", "pages": [
+      {"id": "diagram-overview", "file": "guides/diagram-overview.md", "summary": "One diagram for simulations and experiments, and the order of a step."},
+      {"id": "diagram-your-code", "file": "guides/diagram-your-code.md", "summary": "Where your guidance and control go, and the rules that keep it working."},
+      {"id": "data-stores", "file": "guides/data-stores.md", "summary": "The 49 data stores the subsystems share."},
+      {"id": "diagram-status", "file": "guides/diagram-status.md"},
+      {"id": "diagram-phasespace", "file": "guides/diagram-phasespace.md"},
+      {"id": "diagram-arm-code", "file": "guides/diagram-arm-code.md"},
+      {"id": "diagram-orin-receive", "file": "guides/diagram-orin-receive.md"},
+      {"id": "diagram-plant", "file": "guides/diagram-plant.md"},
+      {"id": "diagram-experiment-logic", "file": "guides/diagram-experiment-logic.md"},
+      {"id": "diagram-navigation", "file": "guides/diagram-navigation.md"},
+      {"id": "diagram-guidance", "file": "guides/diagram-guidance.md"},
+      {"id": "diagram-control", "file": "guides/diagram-control.md"},
+      {"id": "diagram-thrusters", "file": "guides/diagram-thrusters.md"},
+      {"id": "diagram-arm-torques", "file": "guides/diagram-arm-torques.md"},
+      {"id": "diagram-outgoing", "file": "guides/diagram-outgoing.md"},
+      {"id": "diagram-debugger", "file": "guides/diagram-debugger.md"},
+      {"id": "diagram-live-streams", "file": "guides/diagram-live-streams.md"},
+      {"id": "diagram-data-logger", "file": "guides/diagram-data-logger.md"}
+    ]},
+    {"title": "The Maths", "pages": [
+      {"id": "math-dynamics-lqr", "file": "guides/math-dynamics-lqr.md"},
+      {"id": "math-mixer", "file": "guides/math-mixer.md"},
+      {"id": "math-mass-properties", "file": "guides/math-mass-properties.md"},
+      {"id": "math-arm", "file": "guides/math-arm.md"},
+      {"id": "math-dynamixel", "file": "guides/math-dynamixel.md"},
+      {"id": "math-calibration", "file": "guides/math-calibration.md"}
+    ]},
+    {"title": "For Developers", "pages": [
+      {"id": "dev-console-code", "file": "guides/dev-console-code.md", "summary": "The console's server and page, module by module; adding routes, commands and tabs."},
+      {"id": "dev-code-standard", "file": "guides/dev-code-standard.md", "summary": "CODE_TEMPLATE.md in short, and how the editor checks it."},
+      {"id": "dev-documentation", "file": "guides/dev-documentation.md", "summary": "How the Reference is read from the code; the guides and notes."}
+    ]}
+  ]
+}

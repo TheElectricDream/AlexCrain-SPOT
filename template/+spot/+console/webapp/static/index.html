@@ -6,6 +6,7 @@
   <title>SPOT Console</title>
   <link rel="icon" type="image/png" href="/static/srl_logo.png">
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/docs.css">
   <script type="importmap">{ "imports": { "three": "/static/vendor/three.module.min.js" } }</script>
   <script type="module" src="/static/app.js"></script>
 </head>
@@ -27,6 +28,7 @@
       <button type="button" data-page="designer" hidden title="Spacecraft Designer: the docking cones and solar panels on each platform">Designer</button>
       <button type="button" data-page="calibration" hidden title="Measure the lab (the table's slope, the thrusters, the arm) so simulations behave as the experiments do">Calibration</button>
       <button type="button" data-page="vision" hidden title="Computer vision: stream the cameras plugged into the Jetson Orin (the ZED, the L515 LiDAR, any USB camera)">Vision</button>
+      <button type="button" data-page="docs" hidden title="Guides to SPOT and the lab, and a page for every function in the project, read from the code itself. Search it, and edit the code with its checks.">Documentation</button>
     </nav>
     <div id="settingsBar" class="settings-bar" role="group" aria-label="Simulation and experiment settings" hidden>
       <span class="sb-label" title="The settings on the Simulation tab (scenario, timeline, initial conditions, platforms, control, solver), used for simulations and for building experiments. They are saved automatically to this file in the project folder.">
@@ -611,6 +613,67 @@
       </div>
       <pre id="logHardware" class="log active" data-log="hardware"></pre>
     </section>
+  </div>
+
+  <!-- Documentation (docs.js): guides, the reference read from the code, search, the editor -->
+  <div id="pageDocs" class="page docs-page" hidden>
+    <aside class="docs-nav" aria-label="Documentation">
+      <div class="docs-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="docsSearch" class="input" type="search" placeholder="Search functions, guides and code" autocomplete="off" spellcheck="false" aria-label="Search the documentation" title="Words must all match. Filters: lang:matlab, kind:method, in:code, in:guides, file:sim.js. Press / to come here.">
+        <kbd class="docs-kbd">/</kbd>
+        <div id="docsSuggest" class="docs-suggest" role="listbox" hidden></div>
+      </div>
+      <div class="segmented docs-navtabs" role="tablist" aria-label="Contents">
+        <button type="button" data-docnav="guides" class="active">Guides</button>
+        <button type="button" data-docnav="reference">Reference</button>
+      </div>
+      <input id="docsFilter" class="input docs-filter" type="search" placeholder="Filter the list" spellcheck="false" aria-label="Filter the list" hidden>
+      <nav id="docsTree" class="docs-tree"></nav>
+      <div id="docsStatus" class="docs-status muted small"></div>
+    </aside>
+    <main class="docs-main">
+      <div class="docs-bar">
+        <button type="button" id="docsNavToggle" class="btn btn-sm docs-navbtn" title="Show or hide the contents">☰</button>
+        <nav id="docsCrumbs" class="docs-crumbs" aria-label="Where you are"></nav>
+        <div id="docsActions" class="docs-actions"></div>
+        <button type="button" id="docsFindBtn" class="btn btn-sm" title="Find words on this page (Ctrl+F)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Find</span></button>
+      </div>
+      <div id="docsFind" class="docs-find" hidden>
+        <input id="docsFindInput" class="input" type="search" placeholder="Find on this page" spellcheck="false" aria-label="Find on this page">
+        <span id="docsFindCount" class="muted small"></span>
+        <button type="button" id="docsFindPrev" class="btn btn-sm" title="Previous (Shift+Enter)">↑</button>
+        <button type="button" id="docsFindNext" class="btn btn-sm" title="Next (Enter)">↓</button>
+        <label class="toggle" title="Match upper and lower case exactly"><input id="docsFindCase" type="checkbox"><span></span>Aa</label>
+        <button type="button" id="docsFindClose" class="btn btn-sm" title="Close (Esc)">✕</button>
+      </div>
+      <div id="docsScroll" class="docs-scroll">
+        <article id="docsContent" class="docs-content"></article>
+      </div>
+      <section id="docsEditor" class="docs-editor" hidden aria-label="Editor">
+        <div class="docs-editor-bar">
+          <div class="docs-editor-file"><span id="docsEdLang" class="docs-badge"></span><span id="docsEdPath" class="mono"></span><span id="docsEdDirty" class="docs-dirty" hidden title="Not saved">●</span></div>
+          <div class="docs-editor-actions">
+            <span id="docsEdLint" class="docs-lint-sum"></span>
+            <button type="button" id="docsEdPreview" class="btn btn-sm" hidden title="Show the page as it will look, beside the text">Preview</button>
+            <button type="button" id="docsEdRevert" class="btn btn-sm" title="Go back to the saved version">Revert</button>
+            <button type="button" id="docsEdDownload" class="btn btn-sm" title="Download this text as a file">Download</button>
+            <button type="button" id="docsEdSave" class="btn btn-primary btn-sm" title="Save to the project (Ctrl+S)">Save</button>
+            <button type="button" id="docsEdClose" class="btn btn-sm" title="Close the editor">Close</button>
+          </div>
+        </div>
+        <div id="docsEdBanner" class="docs-banner" hidden></div>
+        <div class="docs-editor-body">
+          <div id="docsEdHost" class="docs-editor-host"></div>
+          <div id="docsEdPreviewPane" class="docs-content docs-preview" hidden></div>
+        </div>
+        <div class="docs-editor-foot">
+          <span id="docsEdPos" class="mono"></span>
+          <span id="docsEdChecks" class="muted"></span>
+        </div>
+      </section>
+    </main>
+    <aside id="docsToc" class="docs-toc" aria-label="On this page"></aside>
   </div>
 
   <dialog id="folderDialog" class="dialog">
