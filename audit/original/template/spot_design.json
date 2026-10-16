@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "platforms": {
+    "RED": {
+      "dock": {
+        "type": "arm",
+        "face": "+y",
+        "side": "left"
+      },
+      "solar": {
+        "on": false,
+        "axis": "x"
+      }
+    },
+    "BLACK": {
+      "dock": {
+        "type": "female",
+        "face": "-y",
+        "side": "left"
+      },
+      "solar": {
+        "on": true,
+        "axis": "x"
+      }
+    },
+    "BLUE": {
+      "dock": {
+        "type": "none",
+        "face": "+y",
+        "side": "left"
+      },
+      "solar": {
+        "on": false,
+        "axis": "x"
+      }
+    }
+  }
+}

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPOT Audit</title>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="stylesheet" href="/static/audit.css">
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+  <script type="module" src="/static/audit.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/logo.png" alt="SRL" class="brand-logo">
+      <div>
+        <h1>SPOT Audit</h1>
+        <p id="hostLine">Loading…</p>
+      </div>
+    </div>
+    <nav class="segmented page-tabs" aria-label="Pages">
+      <button type="button" data-page="play" class="active" title="One chunk at a time: accept it or rewrite it">Audit</button>
+      <button type="button" data-page="progress" title="Every chapter, section and file as a checklist, and your activity">Progress</button>
+      <button type="button" data-page="flags" title="What you flagged to come back to">Flags<span id="flagCount" class="count"></span></button>
+      <button type="button" data-page="achievements" title="What you have earned, and what is left">Achievements</button>
+      <button type="button" data-page="export" title="The rewritten files, their diffs, and copying them over the project">Export</button>
+    </nav>
+    <div class="topstats">
+      <span class="stat"><span class="stat-label">Cleared</span><span id="statCleared" class="stat-value">0 / 0</span></span>
+      <span class="stat"><span class="stat-label">Level</span><span id="statLevel" class="stat-value">1</span></span>
+      <span class="stat"><span class="stat-label">Streak</span><span id="statStreak" class="stat-value">0 d</span></span>
+      <button type="button" id="saveGameBtn" class="btn btn-sm" title="Keep a copy of your progress as a named save file">Save Game</button>
+      <button type="button" id="loadGameBtn" class="btn btn-sm" title="Your save files: the latest automatic save, then the manual ones">Load Game</button>
+      <span id="saveBadge" class="badge badge-ok" title="Every change is saved automatically to saves/autosave.json"><span class="dot"></span>Saved</span>
+    </div>
+  </header>
+
+  <!-- Audit: the game -->
+  <div id="pagePlay" class="layout page">
+    <aside class="sidebar">
+      <section class="card xp-card">
+        <div class="xp-row">
+          <div id="xpRing" class="xp-level" style="--pct: 0%"><span id="xpLevel">1</span></div>
+          <div class="xp-text">
+            <div id="xpTitle" class="xp-title">Reader</div>
+            <div id="xpSub" class="xp-sub">0 XP</div>
+          </div>
+        </div>
+        <div class="xp-today">
+          <span>Played <b id="xpPlayed">0 min</b></span>
+          <span>Today <b id="xpToday">0</b> cleared</span>
+          <span><b id="xpTodayRw">0</b> rewrites</span>
+          <span><b id="xpFiles">0</b> files done</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Chapters</h2>
+          <button type="button" id="nextPendingBtn" class="btn btn-sm btn-primary" title="The next chunk that is still to do, in reading order (Enter)">Next Pending</button>
+        </div>
+        <div id="chapterTree" class="tree"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Open Flags</h2>
+          <span id="flagsOpen" class="muted small"></span>
+        </div>
+        <ul id="flagsMini" class="mini-list"></ul>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Recent</h2>
+          <button type="button" class="btn btn-ghost btn-sm" data-page-link="progress">All</button>
+        </div>
+        <ul id="recentMini" class="mini-list"></ul>
+      </section>
+    </aside>
+
+    <main class="main">
+      <div class="play-bar">
+        <div id="crumbs" class="crumbs"></div>
+        <label class="toggle" title="After you accept or save, go straight to the next chunk still to do"><input id="autoAdvance" type="checkbox" checked><span></span><span>Auto-Advance</span></label>
+        <div class="play-nav">
+          <button type="button" id="prevBtn" class="btn btn-sm" title="Previous chunk (←)">←</button>
+          <span id="chunkPos" class="pos"></span>
+          <button type="button" id="nextBtn" class="btn btn-sm" title="Next chunk (→)">→</button>
+          <button type="button" id="helpBtn" class="btn btn-ghost btn-sm" title="Keyboard shortcuts (?)">?</button>
+        </div>
+      </div>
+
+      <div id="stage" class="stage">
+        <section class="pane pane-orig">
+          <div class="pane-head">
+            <h2>Original</h2>
+            <span id="langBadge" class="lang-badge"></span>
+            <span class="sp"></span>
+            <div id="origMode" class="segmented">
+              <button type="button" data-mode="code" class="active" title="The chunk as it is in the file">Code</button>
+              <button type="button" data-mode="diff" title="What your version changes, line by line (D)">Diff</button>
+              <button type="button" data-mode="preview" hidden title="The Markdown rendered">Preview</button>
+            </div>
+            <label class="toggle" title="Show the lines around the chunk, dimmed (C)"><input id="ctxToggle" type="checkbox"><span></span><span>Context</span></label>
+          </div>
+          <div id="origBody" class="pane-body"></div>
+        </section>
+
+        <section class="pane pane-mine">
+          <div class="pane-head">
+            <h2>Your Version</h2>
+            <span id="checkLine" class="check-line"></span>
+            <span class="sp"></span>
+            <div id="mineMode" class="segmented">
+              <button type="button" data-mode="edit" class="active" title="Edit your version">Edit</button>
+              <button type="button" data-mode="preview" title="Your version rendered: Markdown as a page, code highlighted (V)">Preview</button>
+            </div>
+            <span id="statusPill" class="pill">Pending</span>
+            <button type="button" id="restoreBtn" class="btn btn-ghost btn-sm" title="Put the original text back in the editor">Restore Original</button>
+          </div>
+          <div id="editorHost" class="pane-body editor-host"></div>
+          <div id="minePreview" class="pane-body mine-preview" hidden></div>
+          <div id="checkDetail" class="check-detail" hidden></div>
+          <div class="actions">
+            <button type="button" id="acceptBtn" class="btn btn-go" title="The chunk is fine as it is (A)">Accept As Is <kbd>A</kbd></button>
+            <button type="button" id="saveBtn" class="btn btn-primary" title="Keep your version of this chunk (Ctrl+Enter in the editor)">Save My Rewrite <kbd>Ctrl+⏎</kbd></button>
+            <button type="button" id="flagBtn" class="btn" title="Flag this chunk to come back to, with a note (F)">Flag… <kbd>F</kbd></button>
+            <button type="button" id="skipBtn" class="btn btn-ghost" title="Leave it for later; it comes back after the pending ones (S)">Skip <kbd>S</kbd></button>
+            <span class="sp"></span>
+            <button type="button" id="resetBtn" class="btn btn-ghost btn-sm" hidden title="Put the chunk back to pending (a rewrite is dropped)">Reopen</button>
+          </div>
+        </section>
+
+        <div id="celebrate" class="celebrate" hidden></div>
+      </div>
+
+      <div class="strip-bar">
+        <span id="stripLabel" class="strip-label"></span>
+        <div id="strip" class="strip"></div>
+        <div class="strip-nav">
+          <button type="button" id="filePrevBtn" class="btn btn-ghost btn-sm" title="The previous file">⇤ File</button>
+          <button type="button" id="fileNextBtn" class="btn btn-ghost btn-sm" title="The next file">File ⇥</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Progress -->
+  <div id="pageProgress" class="page flat" hidden>
+    <div class="inner">
+      <div id="progressTiles" class="grid-2"></div>
+      <section class="card">
+        <div class="card-head"><h2>Chunks Cleared per Day</h2><span id="daysTotal" class="muted small"></span></div>
+        <div id="days" class="days"></div>
+        <div id="daysAxis" class="days-axis"></div>
+      </section>
+      <div id="checklist" class="checklist"></div>
+      <section class="card">
+        <div class="card-head"><h2>Log</h2><span id="logTotal" class="muted small"></span></div>
+        <ul id="logList" class="mini-list"></ul>
+      </section>
+    </div>
+  </div>
+
+  <!-- Flags -->
+  <div id="pageFlags" class="page flat" hidden>
+    <div class="inner" id="flagsList"></div>
+  </div>
+
+  <!-- Achievements -->
+  <div id="pageAchievements" class="page flat" hidden>
+    <div class="inner" id="achList"></div>
+  </div>
+
+  <!-- Export -->
+  <div id="pageExport" class="page flat" hidden>
+    <div class="inner">
+      <div class="note-box" id="exportNote"></div>
+      <section class="card">
+        <div class="card-head">
+          <h2>Rewritten Files</h2>
+          <div style="display:flex;gap:8px">
+            <button type="button" id="exportRefresh" class="btn btn-sm">Refresh</button>
+            <button type="button" id="applyAllBtn" class="btn btn-sm btn-warn" title="Copy every rewritten file over the project's copy (a backup is kept)">Apply All to Project…</button>
+          </div>
+        </div>
+        <div id="exportBody"></div>
+      </section>
+    </div>
+  </div>
+
+  <dialog id="flagDialog" class="dialog">
+    <form method="dialog" class="dialog-inner">
+      <div class="dialog-head"><h2 id="flagDialogTitle">Flag This Chunk</h2></div>
+      <div class="dialog-body">
+        <p class="muted small" id="flagDialogWhere"></p>
+        <label class="field-label" for="flagNote">What to come back to</label>
+        <textarea id="flagNote" class="input" placeholder="e.g. Check this against the hardware, or: is this the right unit?"></textarea>
+      </div>
+      <div class="dialog-foot">
+        <button type="button" id="flagRemove" class="btn btn-ghost" hidden>Remove Flag</button>
+        <div>
+          <button type="button" id="flagCancel" class="btn">Cancel</button>
+          <button type="button" id="flagSave" class="btn btn-primary">Save Flag</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="savesDialog" class="dialog">
+    <div class="dialog-inner">
+      <div class="dialog-head"><h2 id="savesTitle">Save Game</h2><button type="button" class="btn btn-sm" data-close>Close</button></div>
+      <div class="dialog-body">
+        <div id="savesNew" class="saves-new">
+          <label class="field-label" for="saveName">Name for this save</label>
+          <div class="input-row">
+            <input id="saveName" class="input" placeholder="e.g. Before rewriting the arm code" maxlength="60">
+            <button type="button" id="saveSlotBtn" class="btn btn-primary">Save</button>
+          </div>
+        </div>
+        <p id="savesWhere" class="hint"></p>
+        <div id="savesList" class="saves-list"></div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="diffDialog" class="dialog wide">
+    <div class="dialog-inner">
+      <div class="dialog-head"><h2 id="diffTitle">Diff</h2><button type="button" class="btn btn-sm" data-close>Close</button></div>
+      <div class="dialog-body"><div id="diffBody" class="diff-view"></div></div>
+    </div>
+  </dialog>
+
+  <dialog id="confirmDialog" class="dialog">
+    <div class="dialog-inner">
+      <div class="dialog-head"><h2 id="confirmTitle">Are you sure?</h2></div>
+      <div class="dialog-body" id="confirmBody"></div>
+      <div class="dialog-foot"><div>
+        <button type="button" id="confirmNo" class="btn">Cancel</button>
+        <button type="button" id="confirmYes" class="btn btn-warn">Yes</button>
+      </div></div>
+    </div>
+  </dialog>
+
+  <dialog id="helpDialog" class="dialog">
+    <div class="dialog-inner">
+      <div class="dialog-head"><h2>Keyboard Shortcuts</h2><button type="button" class="btn btn-sm" data-close>Close</button></div>
+      <div class="dialog-body">
+        <p>When the editor is not focused:</p>
+        <p><kbd>A</kbd> accept as is &nbsp; <kbd>S</kbd> skip &nbsp; <kbd>F</kbd> flag &nbsp; <kbd>E</kbd> edit (focus the editor) &nbsp; <kbd>Enter</kbd> next pending</p>
+        <p><kbd>←</kbd> <kbd>→</kbd> previous / next chunk &nbsp; <kbd>D</kbd> diff view &nbsp; <kbd>V</kbd> preview your version &nbsp; <kbd>C</kbd> context &nbsp; <kbd>?</kbd> this help</p>
+        <p>In the editor:</p>
+        <p><kbd>Ctrl+Enter</kbd> save your rewrite &nbsp; <kbd>Esc</kbd> leave the editor &nbsp; <kbd>Ctrl+F</kbd> find &nbsp; <kbd>Ctrl+Z</kbd> undo</p>
+        <p class="muted small">A chunk is a comment and the code under it (or a piece of a guide). Accept it if it is right as it is; rewrite it in your own words if you want to own it. Flags are for what you want to come back to. The check line under the editor says whether a rewrite changed only the comments or the code too.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toasts" class="toasts"></div>
+</body>
+</html>
