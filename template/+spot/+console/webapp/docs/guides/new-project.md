@@ -7,7 +7,7 @@ SPOT/
 ├── New_SPOT_Project.m     makes projects
 ├── template/              what is copied
 └── projects/              where new projects go (not published)
-    └── MyProject/         SPOT.m, SPOT_User_Parameters.m, +spot/, MyProject.slx, Saved Data/, ...
+    └── MyProject/         SPOT.m, Constants.m, +spot/, MyProject.slx, Saved Data/, ...
 ```
 
 ## How to call it
@@ -25,7 +25,7 @@ Then `cd` into the project and run `SPOT` ([Quick Start: Your First Simulation](
 
 ## The name
 
-The name is also the **Simulink model's name**, so it must be a valid MATLAB name: letters, digits and `_`, starting with a letter, at most 63 characters, not a MATLAB keyword (`end`, `for`, ...), not `spot` or `SPOT_User_Parameters`, and not the name of an existing MATLAB function (a model called `plot` would hide `plot`). A name with a problem is refused with the reason, and the dialog asks again.
+The name is also the **Simulink model's name**, so it must be a valid MATLAB name: letters, digits and `_`, starting with a letter, at most 63 characters, not a MATLAB keyword (`end`, `for`, ...), not `spot` or `Constants`, and not the name of an existing MATLAB function (a model called `plot` would hide `plot`). A name with a problem is refused with the reason, and the dialog asks again.
 
 ## What is copied
 
@@ -39,4 +39,4 @@ The diagram is copied as `<name>.slx`; Simulink takes a model's name from its fi
 
 ## Moving your work to a newer template
 
-A project keeps the `+spot` it was made with. To use a newer version of SPOT, make a new project from the updated template and copy your own work across: your diagram's custom subsystems, `SPOT_User_Parameters.m`, `spot_settings.json` (or load it with **Load…**), and `Saved Data/`.
+A project keeps the `+spot` it was made with. To use a newer version of SPOT, make a new project from the updated template and copy your own work across: your diagram's custom subsystems, the values you changed or added in `Constants.m`, `spot_settings.json` (or load it with **Load…**), and `Saved Data/`.

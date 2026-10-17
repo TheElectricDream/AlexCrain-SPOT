@@ -23,13 +23,13 @@
 
 ![Receive and Process Phasespace Data](images/sub_PhaseSpace_Camera_Code_Use_Hardware_to_Obtain_States_Receive_and_Process_Phasespace_Data.png)
 
-- **Receive PhaseSpace Data** (a MATLAB Function block, one line): `[packet, newPackets, age] = spot.hardware.phasespaceLatest(31534, labConsoleIP)` (`spot.hardware.phasespaceLatest`): the newest 115-float packet from [StreamData](file:StreamData.cc) on UDP port 31534, how many arrived since the last step (terminated) and how old the newest is (−1 = none yet).
+- **Receive PhaseSpace Data** (a MATLAB Function block, one line): `[packet, newPackets, age] = spot.hardware.phasespaceLatest(31534, labConsoleIP)` (`spot.hardware.phasespaceLatest`): the newest 115-float packet (`Constants.PACKET_LENGTH`) from [StreamData](file:StreamData.cc) on UDP port 31534 (`PORT_PHASESPACE_CLIENT`), how many arrived since the last step (terminated) and how old the newest is (−1 = none yet).
 - **To double** → **Reshape** → **Demux2** `[1, 18, 96]`: slot 1 is the PhaseSpace server's clock (→ *PhaseSpace Clock*), the next 18 are the three rigid bodies' positions and velocities in **millimetres**, the last 96 are the 32 LEDs' coordinates (**LED Terminator**: not used by the diagram; the console's 3D view shows them).
 - **Experiment Clock** takes the packet and its age and gives the *experiment* time:
 
 ![Experiment Clock](images/sub_PhaseSpace_Camera_Code_Use_Hardware_to_Obtain_States_Receive_and_Process_Phasespace_Data_Experiment_Clock.png)
   - **Experiment Time**: `[t, state] = spot.hardware.experimentTime(packet, age)` ([spot.hardware.experimentTime](ref:spot.hardware.experimentTime)). The lab console puts an agreed start time into the packet (slot 113) when every platform's program is running; `t` is 0 until then, and afterwards the shared clock. `state` (0 waiting, 1 counting down, 2 running, 3 running on this computer's own clock because the stream was lost) is terminated here; the time itself is what matters.
-  - **Send Sync. Time**: the If-blocks pick this platform's branch (`WhoAmI == n & isSim == 0`) and its **UDP Send (GUI)** sends the time to the lab console (`spot.hardware.udpSend(labConsoleIP, 48720/48721/48722, t)`), which shows each platform's clock on the Experiment tab and uses the three to agree the start ([experiment.py](file:experiment.py)).
+  - **Send Sync. Time**: the If-blocks pick this platform's branch (`WhoAmI == n & isSim == 0`) and its **UDP Send (GUI)** sends the time to the lab console (`spot.hardware.udpSend(labConsoleIP, 48720/48721/48722, t)`; `PORT_EXP_CLOCK_RED/BLACK/BLUE`), which shows each platform's clock on the Experiment tab and uses the three to agree the start ([experiment.py](file:experiment.py)).
 - **Mux** puts the experiment time in front of the 18 position/velocity values → *PhaseSpace Data*.
 
 ### Store BLACK Data (RED and BLUE are the same)
@@ -44,7 +44,7 @@ Inputs: *BLACK Data* `[x y θ]` (mm, mm, rad), *BLACK Velocities* `[ẋ ẏ θ̇
 
 $$\alpha = 1 - e^{-dt/\tau}, \qquad \text{ema}_k = \alpha\, y_k + (1-\alpha)\,\text{ema}_{k-1}, \qquad \dot y_k = \frac{\text{ema}_k - \text{ema}_{k-1}}{dt}$$
 
-  A first-order low-pass with a 0.1 s time constant, differenced: smooth enough to use, with about 0.1 s of lag. The velocities the diagram *stores* are the ones StreamData computed (**Mux4**, converted to m/s); Subsystem2's own velocity estimate is only differentiated again to get the accelerations.
+  A first-order low-pass with a 0.1 s time constant (`LOWPASS_TIME_CONSTANT`), differenced: smooth enough to use, with about 0.1 s of lag. The velocities the diagram *stores* are the ones StreamData computed (**Mux4**, converted to m/s); Subsystem2's own velocity estimate is only differentiated again to get the accelerations.
 - **Mux2** = `[Mux1 (x y θ); Mux4 (ẋ ẏ θ̇); Subsystem1 (ẍ ÿ θ̈)]` → **Data Store Write** `BLACK_Measured_States`.
 
 **Store RED Data** differs in one block: its first input has four values (the experiment time in front of `x y θ`), so a **Demux1** `n=4` peels the time off and a **Data Store Write** puts it in `Univ_Time`. On a platform, the experiment clock *is* the universal time: every platform's `Univ_Time` is the same clock, so [1 - Experiment Logic](page:diagram-experiment-logic) changes phase on all of them at the same instant.

@@ -16,9 +16,9 @@ From left to right: the console's name (**SPOT Local Simulations** here, **SPOT 
 
 - **Diagram**: which `.slx` in the project folder to simulate and build. **Open in Simulink** opens it in MATLAB. A new project has one diagram, named after the project.
 - **Platforms**: the Chaser, Target, Obstacle and Arm that take part. The Arm is mounted on the Chaser; turning it on here also picks it on the [Designer](page:tab-designer), and the other way round. The combination becomes `platformSelection`, which tells the diagram which plants to simulate and the build which programs to make.
-- **Sample Rate** (Hz): the diagram's step, `baseRate = 1/rate`. 20 Hz is the default, and what the arm controllers are tuned for.
+- **Sample Rate** (Hz): the diagram's step, `baseRate = 1/rate`. 20 Hz is the default (`Constants.SAMPLE_RATE`; every default on this tab is a property of [`Constants`](page:dev-constants)), and what the arm controllers are tuned for.
 - **Data Rate** (Hz): the PhaseSpace stream's rate. The simulation holds its measurements at this rate so the controller sees what it will see in the lab, the LQR gains are designed at it, and the Experiment tab starts the cameras at it. It is **locked**: its padlock opens a dialog that explains the consequences before it unlocks.
-- **Thruster PWM** (Hz): the thrusters' PWM frequency, `PWMFreq`. It must match the Teensy firmware's fixed 5 Hz, so it is locked too.
+- **Thruster PWM** (Hz): the thrusters' PWM frequency, `PWMFreq`. It must match the Teensy firmware's fixed 5 Hz (`TEENSY_PWM_FREQUENCY`), so it is locked too.
 
 **Timeline**
 
@@ -35,8 +35,8 @@ Pick a platform at the top, then:
 - **Initial Conditions**: the **Initial** pose (where the simulation starts, and where phase 2 drives the platform) and the **Home** pose (where phase 4 returns it), as x and y in metres and θ in degrees in the table frame. Click **Initial** or **Home** to show those poses on the table, where you can **drag** them (Shift+drag turns them). Viewing Options › Initial Conditions does the same.
 - **Mass Properties**: the platform's mass, centre of gravity and inertia, computed from the three scale readings and the bifilar pendulum test (`spot.massprops.compute`, see [Mass Properties](page:math-mass-properties)), or typed in directly with **Override**.
 - **Thrust** (N): the nominal thrust of one thruster, used when the project has no thruster calibration for this platform (or the Thrusters calibration card's **Use** switch is off).
-- **Thrust Decay** (/valve): the thrust lost per extra valve open at once. With *n* valves open each thruster gives $1 - \text{decay}\,(n-1)$ of its thrust alone. The default, 0.112, is the Obstacle's, measured on 2026-10-14; the thruster calibration's Together stage replaces it when used.
-- **Thruster and LED Layout…** opens the platform drawn from above, to scale: the eight thrusters (with their lines of action), the four PhaseSpace LEDs, the scales and the centre of gravity, with every dimension measured from the CG. Beside it are the three scale readings and each LED's position from the body centre; the drawing follows as they are typed, so you see the CG move. The thrusters' table gives each one's lever arm about the CG, signed as the [thruster mixer](page:math-mixer) takes it (`thruster_dist2CG`); the LEDs' gives each one's position from the CG too. The LEDs' positions are kept in the project's `spot_calibration.json` (**Default Layout** puts them back 13 mm in from each corner). PhaseSpace needs them from the CG so the poses it reports are those of the centre of gravity: the Experiment tab's **Start Cameras** sends them to the lab console.
+- **Thrust Decay** (/valve): the thrust lost per extra valve open at once. With *n* valves open each thruster gives $1 - \text{decay}\,(n-1)$ of its thrust alone. The default, 0.112 (`THRUST_DECAY_DEFAULT`), is the Obstacle's, measured on 2026-10-14; the thruster calibration's Together stage replaces it when used.
+- **Thruster and LED Layout…** opens the platform drawn from above, to scale: the eight thrusters (with their lines of action), the four PhaseSpace LEDs, the scales and the centre of gravity, with every dimension measured from the CG. Beside it are the three scale readings and each LED's position from the body centre; the drawing follows as they are typed, so you see the CG move. The thrusters' table gives each one's lever arm about the CG, signed as the [thruster mixer](page:math-mixer) takes it (`thruster_dist2CG`); the LEDs' gives each one's position from the CG too. The LEDs' positions are kept in the project's `spot_calibration.json` (**Default Layout** puts them back 13 mm in from each corner, `LED_INSET`). PhaseSpace needs them from the CG so the poses it reports are those of the centre of gravity: the Experiment tab's **Start Cameras** sends them to the lab console.
 
 For the **Arm**: its **Initial Pose** (three joint angles in degrees, 0 straight out, ±90° to either side), and its **Arm Geometry**: link lengths, masses and inertias (`spot.arm.defaults`; the definitions are in [The Arm](page:math-arm)). Where it is mounted is chosen on the Designer.
 
@@ -48,7 +48,7 @@ What the next simulation takes from the lab's calibration. At the top, **This Pr
 - **Thrusters**: each platform's eight measured thrusts and its measured thrust decay, which the diagram's mixer uses, and so the simulated plant and the experiments built from this project.
 - **Arm**: each joint's measured friction and inertia, for the simulated arm.
 
-Each card has a **Use** switch (the settings' `calibration.tableSlope`, `calibration.thrusters` and `calibration.arm`, all on by default) and shows the values the next simulation will use, read back from MATLAB after `SPOT_User_Parameters.m` has run. With the switch off, the card shows what is used instead: a level table, the Platforms pane's thrust and decay, or the arm model's defaults.
+Each card has a **Use** switch (the settings' `calibration.tableSlope`, `calibration.thrusters` and `calibration.arm`, all on by default) and shows the values the next simulation will use, read back from MATLAB. With the switch off, the card shows what is used instead: a level table, the Platforms pane's thrust and decay, or the arm model's defaults.
 
 Any calibrated value can be **overridden**: type a new value in its cell. Overridden values are marked, with **↺** to go back to the measured value, and **Reset Overrides** clears a card's. They are kept in `spot_calibration.json`, so **Update from Lab** keeps them. While this pane is open, the main area shows the calibrations themselves (maps, plots and tables, as on the lab console's [Calibration Tab](page:tab-calibration)) in place of the 3D view.
 
@@ -58,10 +58,10 @@ Per platform taking part, its **LQR** weights: `Q` on the position, attitude, ve
 
 With the **Arm** taking part, two more cards set its controllers (`control.ARM` in the settings, `armControl` in the workspace; see [4 - Control](page:diagram-control) and [The Arm](page:math-arm)):
 
-- **Position · Mode 1**: the servo's position law, a PID on the joint angle error, with a P, I and D gain per joint; the **Profile Velocity** (how fast the goal moves, in 0.229 rev/min; 0 = at once), the **Profile Acceleration** (in 214.577 rev/min²; 0 = none) and the **PWM Limit** (the most it asks of the motor, out of 885).
+- **Position · Mode 1**: the servo's position law, a PID on the joint angle error, with a P, I and D gain per joint; the **Profile Velocity** (how fast the goal moves, in 0.229 rev/min, `VEL_UNIT_RPM`; 0 = at once), the **Profile Acceleration** (in 214.577 rev/min², `ACC_UNIT_RPM2`; 0 = none) and the **PWM Limit** (the most it asks of the motor, out of 885, `PWM_FULL`).
 - **Velocity · Mode 3**: the servo's velocity law, a PI on the joint speed error, with its profile acceleration and PWM limit.
 
-The gains are in the servos' own units (P/128, I/65536, D/16 in the Dynamixel manual), so values from a servo's control table mean the same here. The defaults are retuned for the diagram's 20 Hz. Which controller runs in each phase is set by `ARM_Control_Law_Enabler` in [1 - Experiment Logic](page:diagram-experiment-logic): 1 position, 3 velocity, 2 your own controller (its output is PWM, which at rest acts as a torque: [The Arm](page:math-arm)), 0 off.
+The gains are in the servos' own units (P/128, I/65536, D/16 in the Dynamixel manual; `GAIN_SCALE_P/I/D`), so values from a servo's control table mean the same here. The defaults are retuned for the diagram's 20 Hz. Which controller runs in each phase is set by `ARM_Control_Law_Enabler` in [1 - Experiment Logic](page:diagram-experiment-logic): 1 position, 3 velocity, 2 your own controller (its output is PWM, which at rest acts as a torque: [The Arm](page:math-arm)), 0 off.
 
 ## The Workspace pane
 
@@ -79,7 +79,7 @@ The bar under the 3D view: play and pause (Space), the time and a scrubber marke
 
 ## The 3D view
 
-**3D**, **Top** and **Side** cameras; drag to orbit, right-drag to pan, scroll to zoom. **Viewing Options** holds the switches: **Initial Conditions** (Off, Initial, Home), **Labels**, **Axes**, **Use CAD** (the platforms drawn from the lab's CAD, with the Designer's docking cones and solar panels; about 1 MB, loaded the first time), **ZED2 Viewpoint** (a window showing what the Chaser's camera sees, from either lens or both), **Table Slope** (the table coloured by its height, from the table slope calibration) and **Paths**. The table is 3.5 m × 2.4 m; the origin is the corner marked with the axes ([viewer.js](file:viewer.js)).
+**3D**, **Top** and **Side** cameras; drag to orbit, right-drag to pan, scroll to zoom. **Viewing Options** holds the switches: **Initial Conditions** (Off, Initial, Home), **Labels**, **Axes**, **Use CAD** (the platforms drawn from the lab's CAD, with the Designer's docking cones and solar panels; about 1 MB, loaded the first time), **ZED2 Viewpoint** (a window showing what the Chaser's camera sees, from either lens or both), **Table Slope** (the table coloured by its height, from the table slope calibration) and **Paths**. The table is 3.51155 m × 2.41935 m (about 3.5 × 2.4; `TABLE_X`, `TABLE_Y`); the origin is the corner marked with the axes ([viewer.js](file:viewer.js)).
 
 ## The MATLAB console and the Live Plot
 
@@ -91,4 +91,4 @@ Each platform's debug message, the text the diagram writes to `RED_Logger`, `BLA
 
 ## Where the values go
 
-Every field is a key of `spot_settings.json` ([The Settings File](page:settings-file)). `spot.params.apply` turns the file into the workspace variables the diagram reads ([Workspace Variables](page:workspace-variables)), then runs `SPOT_User_Parameters.m`, where your own variables go and where you can override any of SPOT's ([Your Own Parameters](page:user-parameters)).
+Every field is a key of `spot_settings.json` ([The Settings File](page:settings-file)). `spot.params.apply` turns the file into the workspace variables the diagram reads ([Workspace Variables](page:workspace-variables)). Every other number the diagram uses comes from `Constants.m` ([Constants](page:dev-constants)), where your own values go too.

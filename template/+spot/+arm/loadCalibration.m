@@ -22,7 +22,7 @@ function a = loadCalibration(file, a)
     %   See also spot.arm.parameters, spot.arm.compareSteps, spot.arm.defaults.
 
     %% Constants
-    PWM_FORMAT = 2;   % first version measured in PWM control
+    PWM_FORMAT = Constants.ARM_CALIBRATION_FORMAT;   % first version measured in PWM control
 
     %% Read the calibration
     if isstruct(file)

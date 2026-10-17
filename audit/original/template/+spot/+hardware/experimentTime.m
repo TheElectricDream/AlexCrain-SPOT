@@ -32,8 +32,8 @@ function [t, state] = experimentTime(packet, age)
     %#codegen
 
     %% Constants
-    EXP_CLOCK = 113;     % 1-based slot of the experiment clock in the PhaseSpace packet
-    MAX_BACKWARDS = 0.5; % [s] a shared clock this far behind t counts as lost
+    EXP_CLOCK = Constants.PACKET_EXP_CLOCK;              % 1-based slot of the experiment clock
+    MAX_BACKWARDS = Constants.EXP_CLOCK_MAX_BACKWARDS;   % [s] a clock this far behind t: lost
 
     %% State between steps
     persistent armed started lastT lastNow

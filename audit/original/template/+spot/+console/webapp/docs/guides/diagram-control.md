@@ -48,13 +48,13 @@ Placeholders: a **Mux** of three **Zero** constants, i.e. `[0 0 0]`. Replace the
 
 ## The arm's controllers
 
-The servos run in PWM (voltage) control throughout ([Robotic Arm Code](page:diagram-arm-code)); position and velocity control are controllers **here** that output each joint's PWM (`ARM_Controls`, 885 = 100 % of the supply), replicas of the servos' own control laws (whose output is PWM too) retuned for the diagram's 20 Hz step ([The Arm](page:math-arm)). Each branch also writes its number to `ARM_Control_Mode` (logged), so the record says which law produced each command.
+The servos run in PWM (voltage) control throughout ([Robotic Arm Code](page:diagram-arm-code)); position and velocity control are controllers **here** that output each joint's PWM (`ARM_Controls`, 885 = 100 % of the supply, `Constants.PWM_FULL`), replicas of the servos' own control laws (whose output is PWM too) retuned for the diagram's 20 Hz step (`SAMPLE_RATE`) ([The Arm](page:math-arm)). Each branch also writes its number to `ARM_Control_Mode` (logged), so the record says which law produced each command.
 
 ### Default Position Control (ARM): mode 1
 
 ![Default Position Control (ARM)](images/sub_4_Control_Default_Position_Control_ARM.png)
 
-**Dynamixel Position Control**, the MATLAB System block `spot.arm.PositionControl`, with inputs `ARM_Measured_States` (Data Store Read1) and `ARM_Path` (Data Store Read2; the goal joint angles in rad). Inside: the servo's profile (the desired position moves towards the goal at Profile Velocity), a PID on the position error with the servo's structure (P/I/D 25 56 21 / 10 / 1545 230 236 for the shoulder/elbow/wrist at 20 Hz), and the PWM limit. Its gains, profile and PWM limit come from the settings (the Control pane's arm cards, `armControl.position.*` on the block); the step time is `baseRate`. Output: three PWM values.
+**Dynamixel Position Control**, the MATLAB System block `spot.arm.PositionControl`, with inputs `ARM_Measured_States` (Data Store Read1) and `ARM_Path` (Data Store Read2; the goal joint angles in rad). Inside: the servo's profile (the desired position moves towards the goal at Profile Velocity), a PID on the position error with the servo's structure (P/I/D 25 56 21 / 10 / 1545 230 236 for the shoulder/elbow/wrist at 20 Hz; the defaults `ARM_POSITION_P/I/D`), and the PWM limit (80 by default, `ARM_POSITION_PWM_LIMIT`). Its gains, profile and PWM limit come from the settings (the Control pane's arm cards, `armControl.position.*` on the block); the step time is `baseRate`. Output: three PWM values.
 
 ### Default Velocity Control (ARM): mode 3
 

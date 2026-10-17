@@ -8,35 +8,45 @@
 // spot.massprops.trackerPositions).
 
 import { platformName, swatch } from './platforms.js';
+import { constant, constantPlatform } from './constants.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 const PLATFORMS = ['RED', 'BLACK', 'BLUE'];
-
-// The body (spot.massprops.centerOfGravity) [mm]: centre to edge, and the thrusters' lines of
-// action this far from the centre (81 mm in from the edges).
-const HALF_SIDE = 150;
-const THRUSTER_LINE = HALF_SIDE - 81;
-
-// Where the three scales hold the platform [x, y] [mm from the body centre].
-const SCALES = [[0, 150], [-150, -150], [150, -150]];
 const SCALE_TITLES = ['A · left middle edge', 'B · right back corner', 'C · right front corner'];
 
-// The thrusters (viewer.js's THRUSTER_NOZZLES): the nozzle [x, y] [mm] on the body's edge, and
-// the way the gas leaves it.
-const THRUSTERS = [
-  [[150, THRUSTER_LINE], [1, 0]], [[150, -THRUSTER_LINE], [1, 0]],
-  [[THRUSTER_LINE, -150], [0, -1]], [[-THRUSTER_LINE, -150], [0, -1]],
-  [[-150, -THRUSTER_LINE], [-1, 0]], [[-150, THRUSTER_LINE], [-1, 0]],
-  [[-THRUSTER_LINE, 150], [0, 1]], [[THRUSTER_LINE, 150], [0, 1]],
-];
+// Metres to mm, to a micrometre (so 0.15 m is 150, not 150.00000000000003).
+const toMm = m => Math.round(m * 1e6) / 1e3;
 
-// Each platform's LED ids (spot.massprops.markerLayout), in the corner order (+x,+y), (+x,-y),
-// (-x,-y), (-x,+y), and where they sit by default [mm from the body centre].
-const LED_IDS = { RED: [5, 3, 7, 4], BLACK: [13, 11, 9, 15], BLUE: [8, 14, 12, 10] };
-const LED_CORNERS = [[1, 1], [1, -1], [-1, -1], [-1, 1]];
-const LED_DEFAULT = 137;
-const MAX_LED = 300;   // [mm] from the body centre, as the console checks
+/**
+ * The platform's geometry [mm from the body centre] (spot.massprops.centerOfGravity,
+ * spot.massprops.markerLayout), read when drawn since the constants arrive after this module
+ * loads: HALF_SIDE, centre to edge (BODY_HALF_SIDE); THRUSTER_LINE, the thrusters' lines of
+ * action from the centre (THRUSTER_ARM); SCALES, where the three scales hold the platform [x, y]
+ * (SCALE_A, SCALE_B, SCALE_C); THRUSTERS (viewer.js's nozzles), each nozzle [x, y] on the body's
+ * edge and the way the gas leaves it; LED_IDS, each platform's LED ids (LED_IDS_<PLATFORM>) in
+ * the corner order LED_CORNERS, (+x,+y), (+x,-y), (-x,-y), (-x,+y); LED_DEFAULT, where they sit
+ * by default (LED_DEFAULT_OFFSET); MAX_LED, as far as the console lets one be (LED_MAX_OFFSET).
+ * @return {!Object} The geometry.
+ */
+function geom() {
+  const HALF_SIDE = toMm(constant('BODY_HALF_SIDE'));
+  const THRUSTER_LINE = toMm(constant('THRUSTER_ARM'));
+  return {
+    HALF_SIDE, THRUSTER_LINE,
+    SCALES: ['SCALE_A', 'SCALE_B', 'SCALE_C'].map(name => constant(name).map(toMm)),
+    THRUSTERS: [
+      [[HALF_SIDE, THRUSTER_LINE], [1, 0]], [[HALF_SIDE, -THRUSTER_LINE], [1, 0]],
+      [[THRUSTER_LINE, -HALF_SIDE], [0, -1]], [[-THRUSTER_LINE, -HALF_SIDE], [0, -1]],
+      [[-HALF_SIDE, -THRUSTER_LINE], [-1, 0]], [[-HALF_SIDE, THRUSTER_LINE], [-1, 0]],
+      [[-THRUSTER_LINE, HALF_SIDE], [0, 1]], [[THRUSTER_LINE, HALF_SIDE], [0, 1]],
+    ],
+    LED_IDS: Object.fromEntries(PLATFORMS.map(p => [p, constantPlatform('LED_IDS', p)])),
+    LED_CORNERS: constant('LED_CORNERS'),
+    LED_DEFAULT: toMm(constant('LED_DEFAULT_OFFSET')),
+    MAX_LED: toMm(constant('LED_MAX_OFFSET')),
+  };
+}
 
 // The drawing, in mm of the body: nozzle size, where the dimension rows go out from the body's
 // edge, extension lines' gap and overshoot, label size; features closer than MERGE share a
@@ -72,6 +82,7 @@ export function centreOfGravity(scales) {
   if (!(mass > 0)) {
     return null;
   }
+  const { SCALES } = geom();
   return [0, 1].map(k => scales.reduce((a, v, i) => a + v * SCALES[i][k], 0) / mass);
 }
 
@@ -82,13 +93,16 @@ export function centreOfGravity(scales) {
  * @return {!Array<number>} T1 to T8 [mm].
  */
 export function thrusterArms([x, y]) {
-  const e = THRUSTER_LINE;
+  const e = geom().THRUSTER_LINE;
   return [e - y, -(e + y), e - x, -(e + x), e + y, -(e - y), e + x, -(e - x)];
 }
 
 // A platform's LEDs where they sit by default: [{id, x, y}] [mm from the body centre].
-const defaultLeds = n => LED_IDS[n].map((id, k) =>
-  ({ id, x: LED_CORNERS[k][0] * LED_DEFAULT, y: LED_CORNERS[k][1] * LED_DEFAULT }));
+const defaultLeds = n => {
+  const { LED_IDS, LED_CORNERS, LED_DEFAULT } = geom();
+  return LED_IDS[n].map((id, k) =>
+    ({ id, x: LED_CORNERS[k][0] * LED_DEFAULT, y: LED_CORNERS[k][1] * LED_DEFAULT }));
+};
 
 // The drawing
 
@@ -118,6 +132,7 @@ function placeDims(datum, features) {
 // How far out from the body centre a side's dimensions reach (its last row's extension lines).
 function sideReach(placed) {
   const rows = placed.length ? Math.max(...placed.map(g => g.row)) : -1;
+  const { HALF_SIDE } = geom();
   return rows < 0 ? HALF_SIDE + EXT_OVER : HALF_SIDE + FIRST_ROW + rows * ROW_GAP + EXT_OVER;
 }
 
@@ -139,6 +154,7 @@ function drawSide(side, datum, placed, kind) {
   const along = side === 'top' || side === 'bottom';
   const pt = (a, c) => (along ? [a, c] : [c, a]);
   const arrows = ` marker-start="url(#lyArrow-${kind})" marker-end="url(#lyArrow-${kind})"`;
+  const { HALF_SIDE } = geom();
   return placed.map(g => {
     const row = out * (HALF_SIDE + FIRST_ROW + g.row * ROW_GAP);
     const start = out * Math.max(...g.from.map(f => out * f)) + out * EXT_GAP;
@@ -156,6 +172,7 @@ function drawSide(side, datum, placed, kind) {
 // The platform's top view: the body, the thrusters' lines of action, the CG's lines, every
 // dimension, then the nozzles, LEDs, scales and CG on top.
 function drawing(cg, leds) {
+  const { HALF_SIDE, THRUSTER_LINE, THRUSTERS, SCALES } = geom();
   const [cu, cv] = toView(cg[0], cg[1]);
   const tip = HALF_SIDE + NOZZLE_L;
   const ledsView = leds.map(l => toView(l.x, l.y));
@@ -281,7 +298,7 @@ export function initLayout({ api, act, getSettings, getMarkers, setSetting }) {
         <span class="sfield-input"><input class="input" type="number" step="any" min="0"
           data-scale="${k}" aria-label="Scale ${'ABC'[k]}"><span class="unit">kg</span></span>
       </label>`).join('');
-    const ledRows = LED_IDS[n].map((id, k) => `<tr><th>${id}</th>
+    const ledRows = geom().LED_IDS[n].map((id, k) => `<tr><th>${id}</th>
         ${['x', 'y'].map(a => `<td><input class="input" type="number" step="0.1"
           data-led="${k}" data-axis="${a}" aria-label="LED ${id} ${a}"></td>`).join('')}
         <td data-cgx="${k}"></td><td data-cgy="${k}"></td></tr>`).join('');
@@ -297,7 +314,7 @@ export function initLayout({ api, act, getSettings, getMarkers, setSetting }) {
       <section class="ly-sec">
         <div class="ly-sec-head">
           <span class="field-label tip" title="Where each PhaseSpace LED is on the platform's top, from the body centre (+x forward, +y left). Kept in this project's spot_calibration.json (markers).">LEDs from the Body Centre (mm)</span>
-          <button type="button" class="btn btn-sm" data-lreset title="Put the LEDs back where they sit by default: 13 mm in from each corner">Default Layout</button>
+          <button type="button" class="btn btn-sm" data-lreset title="Put the LEDs back where they sit by default: ${toMm(constant('LED_INSET'))} mm in from each corner">Default Layout</button>
         </div>
         <table class="gain-table ly-table"><thead><tr><th>LED</th><th>x</th><th>y</th>
           <th class="tip" title="From the CG: what the lab console's marker file holds">x · CG</th><th class="tip" title="From the CG: what the lab console's marker file holds">y · CG</th></tr></thead>
@@ -364,7 +381,7 @@ export function initLayout({ api, act, getSettings, getMarkers, setSetting }) {
     let ok = true;
     for (const el of $$('[data-led]', side)) {
       const v = el.value.trim() === '' ? NaN : Number(el.value);
-      const good = isFinite(v) && Math.abs(v) <= MAX_LED;
+      const good = isFinite(v) && Math.abs(v) <= geom().MAX_LED;
       el.classList.toggle('invalid', !good);
       ok = ok && good;
       if (good) {

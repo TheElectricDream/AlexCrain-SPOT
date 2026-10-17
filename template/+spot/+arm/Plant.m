@@ -7,9 +7,9 @@ classdef Plant < matlab.System
     %
     %   Each diagram step (baseRate), the commands are taken as spot.hardware.ArmPWM sends them
     %   (whole PWM units within the PWM Limit, none pushing a joint past Min/Max Position), and
-    %   the plant takes baseRate/innerStep internal steps (1 ms by default) of:
-    %     1. Motors: each gives torquePerVolt (V - backEMF w) at its joint, V = PWM / 885 x the
-    %        supply voltage (spot.arm.defaults). The back-EMF part brakes the joint in
+    %   the plant takes baseRate/innerStep internal steps (ARM_PLANT_INNER_STEP by default) of:
+    %     1. Motors: each gives torquePerVolt (V - backEMF w) at its joint, V = PWM / PWM_FULL x
+    %        the supply voltage (spot.arm.defaults). The back-EMF part brakes the joint in
     %        proportion to its speed, and is taken implicitly with the viscous friction.
     %     2. Dynamics: base (x, y, theta; thruster forces, table slope and air-bearing drag) and
     %        the three joints, coupled (spot.arm.inertiaMatrix, spot.arm.coriolisMatrix), with
@@ -62,16 +62,16 @@ classdef Plant < matlab.System
         v = zeros(6, 1)                     % velocities
         volts = zeros(3, 1)                 % [V] across each motor this diagram step
         nSub = 1                            % internal steps per diagram step
-        h = 1e-3                            % [s] internal step
+        h = Constants.ARM_PLANT_INNER_STEP   % [s] internal step
         g = zeros(3, 1)                     % [N m/V] torque per volt at the joint
         Ke = zeros(3, 1)                    % [V s/rad] back-EMF at the joint
         floating = 1                        % air bearings on (the table's pull acts)
     end
 
     properties (Constant, Access = private)
-        PWM_FULL = 885                      % PWM at 100 % of the supply
-        PULSES_PER_REV = 4096               % [pulses/rev] encoder resolution
-        CENTER_PULSE = 2048                 % [pulses] joint straight out
+        PWM_FULL = Constants.PWM_FULL                  % PWM at 100 % of the supply
+        PULSES_PER_REV = Constants.PULSES_PER_REV      % [pulses/rev] encoder resolution
+        CENTER_PULSE = Constants.CENTER_PULSE          % [pulses] joint straight out
     end
 
     methods

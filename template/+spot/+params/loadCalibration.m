@@ -50,11 +50,12 @@ function c = loadCalibration(root)
     %   spot.massprops.markerLayout.
 
     %% Constants
-    TABLE_CENTRE = [1.75 1.2];   % [m] default centre of the height surface
-    MIN_THRUST = 0.01;           % [N] plausible thrust range
-    MAX_THRUST = 2;
-    MAX_DECAY = 0.5;             % plausible thrust decay per extra valve
-    MAX_LED = 0.3;               % [m] an LED this far from the body centre at most
+    % The height surface's default centre (the table's), and what a calibrated value may be.
+    TABLE_CENTRE = [Constants.TABLE_CENTRE_X Constants.TABLE_CENTRE_Y];   % [m]
+    MIN_THRUST = Constants.CAL_MIN_THRUST;   % [N] plausible thrust range
+    MAX_THRUST = Constants.CAL_MAX_THRUST;   % [N]
+    MAX_DECAY = Constants.CAL_MAX_DECAY;     % plausible thrust decay per extra valve
+    MAX_LED = Constants.LED_MAX_OFFSET;      % [m] an LED this far from the body centre at most
     M_PER_MM = 1e-3;
 
     %% The file
@@ -128,7 +129,8 @@ function c = loadCalibration(root)
                 F = double(cal.thrust(:));
                 if numel(F) ~= 8 || ~all(isfinite(F)) || any(F < MIN_THRUST | F > MAX_THRUST)
                     error('spot:params:loadCalibration', ...
-                        'thrusters.%s.thrust must be 8 thrusts of 0.01 to 2 N', name{1});
+                        'thrusters.%s.thrust must be 8 thrusts of %g to %g N', ...
+                        name{1}, MIN_THRUST, MAX_THRUST);
                 end
 
                 % Thrust decay, if measured with the linear model.
@@ -139,7 +141,7 @@ function c = loadCalibration(root)
                     decay = double(cal.decay.slope);
                     if ~isscalar(decay) || ~isfinite(decay) || decay < 0 || decay > MAX_DECAY
                         error('spot:params:loadCalibration', ...
-                            'thrusters.%s.decay.slope must be 0 to 0.5', name{1});
+                            'thrusters.%s.decay.slope must be 0 to %g', name{1}, MAX_DECAY);
                     end
                 end
 
@@ -177,8 +179,8 @@ function c = loadCalibration(root)
                     xy = double([led.x led.y]) * M_PER_MM;
                     if numel(xy) ~= 2 || ~all(isfinite(xy)) || any(abs(xy) > MAX_LED)
                         error('spot:params:loadCalibration', ...
-                            'markers.%s must give LED %d one position within 300 mm', ...
-                            name{1}, platform.ids(k));
+                            'markers.%s must give LED %d one position within %g mm', ...
+                            name{1}, platform.ids(k), MAX_LED / M_PER_MM);
                     end
                     platform.leds(k, :) = xy;
                 end

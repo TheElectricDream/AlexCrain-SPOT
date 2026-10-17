@@ -12,7 +12,7 @@ function s = load(file)
     %   See also spot.params.save, spot.params.merge, spot.params.fromLegacyState.
 
     %% Constants
-    MAX_DATA_RATE = 960;   % [Hz] PhaseSpace
+    MAX_DATA_RATE = Constants.MAX_DATA_RATE;   % [Hz] PhaseSpace
 
     %% Old GUI state file
     [~, ~, ext] = fileparts(file);

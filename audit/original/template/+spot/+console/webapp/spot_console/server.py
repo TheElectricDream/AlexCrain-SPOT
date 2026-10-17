@@ -24,6 +24,7 @@ from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .common import ApiError, PROJECT_DIR, STATIC_DIR, parse_bool, parse_number
+from .constants import C
 from .events import hub, settings
 from .phasespace import (PLATFORM_DIR, RESERVED_PORTS, WSL_INFO, broadcast_loop, builder,
                          monitor, parse_frequency, read_base_destinations, read_led_owner,
@@ -53,7 +54,14 @@ CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; c
 MAX_EXTRA_DESTINATIONS = 20
 EVENT_KEEPALIVE = 15       # [s] a comment line when no event has come
 EVENTS_PER_WRITE = 200     # events sent together when they queue up
-DEFAULT_LAB_URL = "http://192.168.1.116:8080"
+WEB_PORT = C.int("PORT_LAB_CONSOLE")   # the consoles' web port
+DEFAULT_LAB_URL = "http://%s:%d" % (C.IP_LAB_CONSOLE, WEB_PORT)
+
+# The Hardware tab's thruster check: duty cycle [%], and how long [s]
+# (default and range).
+CHECK_DUTY = C.THRUSTER_CHECK_DUTY
+CHECK_TIME = C.THRUSTER_CHECK_TIME
+CHECK_TIME_RANGE = C.THRUSTER_CHECK_TIME_RANGE
 
 
 # State and settings
@@ -108,6 +116,7 @@ def app_state(client_ip=None):
     # The local console: MATLAB, its jobs, and the lab link.
     if LOCAL["enabled"]:
         return {"features": features(), "client_ip": client_ip, "project_dir": LOCAL["root"],
+                "constants": C.as_dict(),
                 "host": {"os": platform.system(), "name": socket.gethostname(), "wsl": WSL_INFO},
                 "logs": hub.history(), "matlab": matlab.status(), "sim": sim_runner.status(),
                 "build": build_runner.status(), "lab_url": local.lab.url,
@@ -119,6 +128,7 @@ def app_state(client_ip=None):
     return {
         "features": features(),
         "client_ip": client_ip,
+        "constants": C.as_dict(),
         "base_destinations": read_base_destinations(),
         "host": {"os": platform.system(), "name": socket.gethostname(), "wsl": WSL_INFO},
         "project_dir": str(PROJECT_DIR),
@@ -177,7 +187,8 @@ def update_settings(body):
         except (TypeError, ValueError):
             raise ApiError("Viewer port must be a number.")
         if not 1024 <= port <= 65535 or port in RESERVED_PORTS:
-            raise ApiError("Viewer port must be 1024-65535 and not 31534/31535 (used by SPOT).")
+            raise ApiError("Viewer port must be 1024-65535 and not %d/%d (used by SPOT)."
+                           % RESERVED_PORTS)
         if port != settings.get("monitor_port") and streamer.status()["running"]:
             raise ApiError("Stop streaming before changing the viewer port.")
         changes["monitor_port"] = port
@@ -543,10 +554,11 @@ class Handler(BaseHTTPRequestHandler):
                     if thruster != int(thruster):
                         raise ApiError("thruster must be 1-%d." % NUM_THRUSTERS)
                     plat.set_thruster(int(thruster) - 1,
-                                      parse_number(body.get("duty", 100), "duty", 0, 100),
+                                      parse_number(body.get("duty", CHECK_DUTY), "duty", 0, 100),
                                       requester)
                 elif path == "/api/hardware/check":
-                    plat.start_check(parse_number(body.get("duration", 0.5), "duration", 0.2, 10),
+                    plat.start_check(parse_number(body.get("duration", CHECK_TIME), "duration",
+                                                  CHECK_TIME_RANGE[0], CHECK_TIME_RANGE[1]),
                                      requester)
                 elif path == "/api/hardware/check/cancel":
                     plat.cancel_check(requester)
@@ -816,7 +828,8 @@ def main():
     parser.add_argument("--host", default="127.0.0.1",
                         help="address to serve on (default 127.0.0.1 = this computer only; "
                              "0.0.0.0 = whole network)")
-    parser.add_argument("--port", type=int, default=8080, help="web port (default 8080)")
+    parser.add_argument("--port", type=int, default=WEB_PORT,
+                        help="web port (default %d)" % WEB_PORT)
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
     parser.add_argument("--local", action="store_true",
                         help="local console for simulations, started by SPOT.m in MATLAB (this "
@@ -828,8 +841,8 @@ def main():
                         help="local mode: where to write the ports and token for MATLAB")
     parser.add_argument("--lab-url", default=os.environ.get("SPOT_LAB_URL"),
                         help="local mode: the lab console (default: the project's "
-                             "spot_settings.json labConsoleAddress, port 8080; else "
-                             "$SPOT_LAB_URL or http://192.168.1.116:8080)")
+                             "spot_settings.json labConsoleAddress, port %d; else "
+                             "$SPOT_LAB_URL or %s)" % (WEB_PORT, DEFAULT_LAB_URL))
     args = parser.parse_args()
 
     # The local console, or the lab console (Linux only).

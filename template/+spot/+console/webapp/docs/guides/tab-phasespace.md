@@ -1,6 +1,6 @@
 # Lab Console: the PhaseSpace Tab
 
-The lab console's page (`http://192.168.1.116:8080`, **SPOT Hardware Interfaces**) opens on this tab: the motion-capture stream, what it sees on the table, and Interactive Mode. The code is [app.js](file:app.js) (the cards) and [interactive.js](file:interactive.js) in the page, [phasespace.py](file:phasespace.py) and [interactive.py](file:interactive.py) in the server.
+The lab console's page (`http://192.168.1.116:8080`, **SPOT Hardware Interfaces**; `Constants.IP_LAB_CONSOLE`, `PORT_LAB_CONSOLE`) opens on this tab: the motion-capture stream, what it sees on the table, and Interactive Mode. The code is [app.js](file:app.js) (the cards) and [interactive.js](file:interactive.js) in the page, [phasespace.py](file:phasespace.py) and [interactive.py](file:interactive.py) in the server.
 
 ## Compile
 
@@ -8,7 +8,7 @@ The lab console's page (`http://192.168.1.116:8080`, **SPOT Hardware Interfaces*
 
 ## Stream
 
-- **Frequency** (Hz, 1–960): the PhaseSpace rate; the Experiment tab's **Start Cameras** uses the project's Data Rate instead.
+- **Frequency** (Hz, 1–960, `MAX_DATA_RATE`; 100 Hz at first, `PHASESPACE_FREQUENCY`): the PhaseSpace rate; the Experiment tab's **Start Cameras** uses the project's Data Rate instead.
 - **Start Streaming** / **Stop Streaming**: runs StreamData, which connects to the PhaseSpace server, builds the three rigid bodies from the LED calibration (`tracker_positions_phasespace.txt` in its folder; the Experiment tab sends the project's), and sends a pose packet every frame to the platforms (`.110`, `.111`, `.112`) and to this console's **Viewer UDP Port**. The pill shows **Streaming** with the time and the packet rate, **Stopped**, or **Exited** with the reason; who started or stopped it is noted. Frequency and transport are locked while it streams.
 - **Destinations**: extra computers to send the packets to (**Add**, or **+ This Computer** for the one you are browsing from); remove with ×.
 - The hint about **UDP under WSL**: on a Windows laptop running the console under WSL 2 with NAT, the packets can't reach the laptop's own address.

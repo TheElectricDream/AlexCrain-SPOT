@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from .common import PROJECT_DIR, decode, quote_cmd
+from .constants import C
 
 
 # Settings
@@ -24,24 +25,24 @@ from .common import PROJECT_DIR, decode, quote_cmd
 # PC each keep their own paths.
 SETTINGS_FILE = Path.home() / ".spot_phasespace_console.json"
 
-DEFAULT_PLATFORMS = {
-    "RED": {"host": "192.168.1.110", "user": "spot-red"},
-    "BLACK": {"host": "192.168.1.111", "user": "spot-black"},
-    "BLUE": {"host": "192.168.1.112", "user": "spot-blue"},
-}
+# Each platform's address and login name (IP_*, USER_* in Constants.m).
+DEFAULT_PLATFORMS = dict((p, {"host": C.platform("IP", p), "user": C.platform("USER", p)})
+                         for p in C.PLATFORMS)
+
+# The Orin's SPOT Vision (Vision tab).
+DEFAULT_VISION = {"host": C.IP_ORIN, "port": C.int("PORT_VISION"), "user": C.USER_VISION}
 
 DEFAULT_SETTINGS = {
     "output_dir": str(PROJECT_DIR / "output"),
-    "frequency": 100,
-    "monitor_port": 31540,
+    "frequency": C.int("PHASESPACE_FREQUENCY"),   # [Hz] the cameras
+    "monitor_port": C.int("PORT_PHASESPACE_MONITOR"),
     # How StreamData receives frames from PhaseSpace: "tcp" or "udp".
     "transport": "tcp",
     # Computers that also get the packets, besides StreamData.cc's list.
     "extra_destinations": [],
     # Where the Hardware tab logs in.
     "platforms": DEFAULT_PLATFORMS,
-    # The Orin's SPOT Vision (Vision tab).
-    "vision": {"host": "192.168.1.115", "port": 8090, "user": "spot-vision"},
+    "vision": DEFAULT_VISION,
 }
 
 LOG_LINES = 3000      # kept per log channel

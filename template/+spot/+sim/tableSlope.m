@@ -21,7 +21,7 @@ function a = tableSlope(position, velocity, slope, damping)
     %#codegen
 
     %% Constants
-    G = 9.80665;   % [m/s^2]
+    G = Constants.G;   % [m/s^2] standard gravity
 
     % Position relative to the height surface's centre.
     u = position(1) - slope(6);

@@ -9,6 +9,7 @@
 import { PLATFORM_KEYS as PLATFORMS, COLORS as SWATCH, platformName, swatch } from './platforms.js';
 import { handleLockClick, isUnlocked, lockButton, onLockChange } from './ratelock.js';
 import { initLayout } from './layout.js';
+import { constant } from './constants.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -102,17 +103,18 @@ function rateField() {
     'Rate is the same setting. Locked: click the padlock to change it.';
   return `<div class="sfield" title="${esc(title)}">
     <span class="sfield-label lock-label"><span>Data Rate</span>${lockButton()}</span>
-    <span class="sfield-input"><input class="input" type="number" min="1" max="960" step="1" data-path="dataRate" data-rate aria-label="Data rate"><span class="unit">Hz</span></span>
+    <span class="sfield-input"><input class="input" type="number" min="1" max="${constant('MAX_DATA_RATE')}" step="1" data-path="dataRate" data-rate aria-label="Data rate"><span class="unit">Hz</span></span>
   </div>`;
 }
-const validRate = v => Number.isInteger(v) && v >= 1 && v <= 960;
+const validRate = v => Number.isInteger(v) && v >= 1 && v <= constant('MAX_DATA_RATE');
 
 // The thrusters' PWM frequency (pwmFrequency): locked like the data rate, since it must match
 // the Teensy firmware's.
 function pwmField() {
   const title = 'The thrusters\' PWM frequency (PWMFreq): the duty cycles assume a valve period ' +
-    'of 1/frequency. The Teensy firmware runs its PWM at 5 Hz (PWM_FREQUENCY in ' +
-    'teensy_pwm_control.ino), so they must be equal. Locked: click the padlock to change it.';
+    `of 1/frequency. The Teensy firmware runs its PWM at ${constant('TEENSY_PWM_FREQUENCY')} Hz ` +
+    '(PWM_FREQUENCY in teensy_pwm_control.ino), so they must be equal. Locked: click the padlock ' +
+    'to change it.';
   return `<div class="sfield" title="${esc(title)}">
     <span class="sfield-label lock-label"><span>Thruster PWM</span>${lockButton('pwm')}</span>
     <span class="sfield-input"><input class="input" type="number" min="0.1" max="100" step="any" data-path="pwmFrequency" data-pwm aria-label="Thruster PWM frequency"><span class="unit">Hz</span></span>
@@ -386,6 +388,7 @@ export function initSimulation({
   // A platform's cards: initial conditions, and mass properties (scales, bifilar pendulum,
   // overrides, thrust, and the Thruster and LED Layout window).
   function platformCards(n) {
+    const decay = constant('THRUST_DECAY_DEFAULT');
     const rows = POSE_KINDS.map(([k, label, title]) =>
       `<tr data-poserow="${k}" title="${esc(title)}"><th><button type="button" ` +
       `class="pose-row-btn" data-setpose="${k}" ` +
@@ -411,7 +414,7 @@ export function initSimulation({
           ${num(`mass.${n}.mass`, 'Mass', { unit: 'kg', title: 'Used when Override is on' })}
           ${num(`mass.${n}.inertia`, 'Inertia', { unit: 'kg·m²', title: 'Used when Override is on' })}
           ${num(`thrusterForce.${n}`, 'Thrust', { unit: 'N', title: 'Force of one thruster (all eight; the thruster calibration replaces it when used)' })}
-          ${num(`thrusterDecay.${n}`, 'Thrust Decay', { unit: '/valve', title: 'Thrust lost per extra valve open at once: the valves share one regulated supply, so with n open each thruster gives 1 − decay (n − 1) of its thrust alone (0.112 = 11.2 %). The mixer uses it, so the simulated plant and the platforms alike. The thruster calibration\'s Together stage replaces it when used; the default is the Obstacle\'s, measured 2026-10-14.' })}
+          ${num(`thrusterDecay.${n}`, 'Thrust Decay', { unit: '/valve', title: `Thrust lost per extra valve open at once: the valves share one regulated supply, so with n open each thruster gives 1 − decay (n − 1) of its thrust alone (${decay} = ${(100 * decay).toFixed(1)} %). The mixer uses it, so the simulated plant and the platforms alike. The thruster calibration\'s Together stage replaces it when used; the default is the Obstacle\'s, measured 2026-10-14.` })}
         </div>
         <p class="hint" data-derived="calthrust"></p>
         <button type="button" class="btn btn-sm sp-top" data-action="layout" title="The platform from above, to scale: where the thrusters and the PhaseSpace LEDs are, dimensioned from the CG the scales give. The LEDs' positions are edited there (this project's spot_calibration.json); Start Cameras sends them to the lab console.">Thruster and LED Layout…</button>
@@ -474,9 +477,17 @@ export function initSimulation({
     const JOINTS = ['Shoulder', 'Elbow', 'Wrist'];
     const ARM_LAWS = 'Which controller runs is set by each phase (ARM_Control_Law_Enabler in 1 - ' +
       'Experiment Logic: 1 position, 3 velocity, 2 your torque controller, 0 off). Defaults are ' +
-      'tuned for 20 Hz.';
-    const gain = (path, title) => `<td><span class="lqr-in" title="${esc(title)}"><input class="input" type="number" step="1" min="0" max="16383"
-        data-min="0" data-max="16383" data-path="${path}" aria-label="${esc(title)}"></span></td>`;
+      `tuned for ${constant('SAMPLE_RATE')} Hz.`;
+    const maxGain = constant('MAX_GAIN');
+    const maxProfile = constant('MAX_PROFILE');
+    const pwmFull = constant('PWM_FULL');
+    const scales = `P/${constant('GAIN_SCALE_P')}, I/${constant('GAIN_SCALE_I')}`;
+    const velUnit = constant('VEL_UNIT_RPM');
+    const accUnit = constant('ACC_UNIT_RPM2');
+    const profileVelocity = constant('ARM_POSITION_PROFILE_VELOCITY');
+    const radPerS = (profileVelocity * velUnit * 2 * Math.PI / 60).toFixed(2);
+    const gain = (path, title) => `<td><span class="lqr-in" title="${esc(title)}"><input class="input" type="number" step="1" min="0" max="${maxGain}"
+        data-min="0" data-max="${maxGain}" data-path="${path}" aria-label="${esc(title)}"></span></td>`;
     const rows = (mode, gains) => JOINTS.map((j, i) => `<tr><th scope="row" class="arm-joint">${j}</th>
         ${gains.map(g => gain(`control.ARM.${mode}.${g}.${i}`, `${j}: ${mode} ${g} gain`)).join('')}</tr>`).join('');
     const limit = (path, label, max, unit, title) => `<label class="sfield" title="${esc(title)}">
@@ -487,20 +498,20 @@ export function initSimulation({
       `<thead><tr><th></th>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
     return `
       <section class="card lqr-card arm-card">
-        <div class="card-head"><h2 class="hw-name">${swatch('ARM')}${platformName('ARM')}</h2><span class="pill tip" title="The servo's position law, run every step: a PID on the joint angle error, giving the torque the servo would give. Gains in the servo's units (P/128, I/65536, D/16 per the Dynamixel manual). ${ARM_LAWS}">Position · Mode 1</span></div>
+        <div class="card-head"><h2 class="hw-name">${swatch('ARM')}${platformName('ARM')}</h2><span class="pill tip" title="The servo's position law, run every step: a PID on the joint angle error, giving the torque the servo would give. Gains in the servo's units (${scales}, D/${constant('GAIN_SCALE_D')} per the Dynamixel manual). ${ARM_LAWS}">Position · Mode 1</span></div>
         <table class="lqr-table arm-table">${head(['P', 'I', 'D'])}<tbody>${rows('position', ['P', 'I', 'D'])}</tbody></table>
         <div class="fgrid cols-3 sp-top">
-          ${limit('control.ARM.position.profileVelocity', 'Profile Velocity', 32767, '', 'How fast the desired angle moves to the goal, in units of 0.229 rev/min (20 = 0.48 rad/s; 0 = at once)')}
-          ${limit('control.ARM.position.profileAcceleration', 'Profile Accel.', 32767, '', 'The profile\'s acceleration, in units of 214.577 rev/min² (0 = none)')}
-          ${limit('control.ARM.position.pwmLimit', 'PWM Limit', 885, '', 'The most the controller asks of the motor, out of 885 (= the full supply voltage)')}
+          ${limit('control.ARM.position.profileVelocity', 'Profile Velocity', maxProfile, '', `How fast the desired angle moves to the goal, in units of ${velUnit} rev/min (${profileVelocity} = ${radPerS} rad/s; 0 = at once)`)}
+          ${limit('control.ARM.position.profileAcceleration', 'Profile Accel.', maxProfile, '', `The profile's acceleration, in units of ${accUnit} rev/min² (0 = none)`)}
+          ${limit('control.ARM.position.pwmLimit', 'PWM Limit', pwmFull, '', `The most the controller asks of the motor, out of ${pwmFull} (= the full supply voltage)`)}
         </div>
       </section>
       <section class="card lqr-card arm-card">
-        <div class="card-head"><h2 class="hw-name">${swatch('ARM')}${platformName('ARM')}</h2><span class="pill tip" title="The servo's velocity law: a PI on the joint speed error (P/128, I/65536). ${ARM_LAWS}">Velocity · Mode 3</span></div>
+        <div class="card-head"><h2 class="hw-name">${swatch('ARM')}${platformName('ARM')}</h2><span class="pill tip" title="The servo's velocity law: a PI on the joint speed error (${scales}). ${ARM_LAWS}">Velocity · Mode 3</span></div>
         <table class="lqr-table arm-table">${head(['P', 'I'])}<tbody>${rows('velocity', ['P', 'I'])}</tbody></table>
         <div class="fgrid cols-3 sp-top">
-          ${limit('control.ARM.velocity.profileAcceleration', 'Profile Accel.', 32767, '', 'How fast the desired speed moves to the goal, in units of 214.577 rev/min² (0 = at once)')}
-          ${limit('control.ARM.velocity.pwmLimit', 'PWM Limit', 885, '', 'The most the controller asks of the motor, out of 885 (= the full supply voltage)')}
+          ${limit('control.ARM.velocity.profileAcceleration', 'Profile Accel.', maxProfile, '', `How fast the desired speed moves to the goal, in units of ${accUnit} rev/min² (0 = at once)`)}
+          ${limit('control.ARM.velocity.pwmLimit', 'PWM Limit', pwmFull, '', `The most the controller asks of the motor, out of ${pwmFull} (= the full supply voltage)`)}
         </div>
       </section>`;
   }
@@ -734,7 +745,7 @@ export function initSimulation({
     // The workspace tab's tooltip, and the warnings.
     $('[data-simtab="workspace"]').title = d.variables
       ? `MATLAB's base workspace: ${d.variables.length} variables are put there whenever a ` +
-        'setting changes; SPOT_User_Parameters.m then runs, for your own.'
+        'setting changes.'
       : 'MATLAB\'s base workspace';
     const notice = $('#simNotice');
     const warnings = [S.error, ...((d && d.warnings) || [])].filter(Boolean);
@@ -783,7 +794,7 @@ export function initSimulation({
   }
 
   // The three cards, from the settings' switches, the project's file (what was measured, what is
-  // overridden) and MATLAB's values in use (after SPOT_User_Parameters.m).
+  // overridden) and MATLAB's values in use.
   function calibrationCards() {
     const s = S.settings;
     const c = (S.derived || {}).calibration || {};
@@ -793,19 +804,9 @@ export function initSimulation({
     if (!s || !use) {
       return '<p class="hint">Waiting for MATLAB: the values come from the settings applied.</p>';
     }
-
-    // The variables SPOT_User_Parameters.m changes, among a card's.
-    const changed = list(use.changedBy);
-    const scriptNote = names => {
-      const mine = changed.filter(n => names.some(p => n.startsWith(p)));
-      return mine.length
-        ? `<p class="hint warn-text">SPOT_User_Parameters.m changes ${esc(mine.join(', '))}: ` +
-          'these are the values it leaves.</p>'
-        : '';
-    };
-    return calTableCard(s, use, file, section, scriptNote(['tableSlope', 'tableDamping_'])) +
-      calThrustersCard(s, use, file, section, scriptNote(['F_thrusters_', 'thrust_decay_'])) +
-      calArmCard(s, use, file, c, section, scriptNote(['armModel']));
+    return calTableCard(s, use, file, section, '') +
+      calThrustersCard(s, use, file, section, '') +
+      calArmCard(s, use, file, c, section, '');
   }
 
   // A card's start: the main area shows its part when it is clicked (calibration.js), and it is

@@ -5,8 +5,8 @@ function SPOT(action)
 %   SPOT open     opens it in the browser again (and prints its address)
 %   SPOT stop     stops the console
 %
-%   The console's settings are kept in spot_settings.json in this folder. Variables of your own
-%   go in SPOT_User_Parameters.m, which runs after the console's settings are applied.
+%   The console's settings are kept in spot_settings.json in this folder; every parameter of
+%   SPOT, and any value of your own the diagram should read, is in Constants.m (Constants.NAME).
 %   Everything the console does is also available as functions, e.g.
 %     s = spot.params.load('spot_settings.json');
 %     spot.sim.run(s, pwd);

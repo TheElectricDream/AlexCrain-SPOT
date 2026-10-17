@@ -275,6 +275,10 @@ function [result, py] = checkPython(root, n)
     LQR_TOL = 1e-12;
     MIXER_TOL = 1e-4;
     MIXER_WARN = 1e-6;       % above this, explain the mixer's rounding
+    TABLE_X = Constants.TABLE_X;                       % [m] random poses on the table
+    TABLE_Y = Constants.TABLE_Y;                       % [m]
+    MAX_ITERATIONS = Constants.MIXER_MAX_ITERATIONS;   % the mixer mask's defaults
+    TOLERANCE = Constants.MIXER_TOLERANCE;
 
     rng(SEED, 'twister');
     inputs = struct('gains', [], 'lqr', [], 'mixer', []);
@@ -303,8 +307,9 @@ function [result, py] = checkPython(root, n)
     for k = 1:n
         K = Kref{randi(N_MODELS)} .* (0.5 + rand(3, 6));
         testCase = struct('K', K, ...
-                          'measured', [3.5 * rand, 2.4 * rand, 8 * rand - 4, randn(1, 3) * 0.1], ...
-                          'desired', [3.5 * rand, 2.4 * rand, 8 * rand - 4], ...
+                          'measured', [TABLE_X * rand, TABLE_Y * rand, 8 * rand - 4, ...
+                                       randn(1, 3) * 0.1], ...
+                          'desired', [TABLE_X * rand, TABLE_Y * rand, 8 * rand - 4], ...
                           'rate', randn(1, 3) * 0.2);
         lqrCases{k} = testCase;
         uref(:, k) = spot.control.lqrCommand(testCase.K, testCase.measured, ...
@@ -322,7 +327,7 @@ function [result, py] = checkPython(root, n)
             'u', [0.8 * (2 * rand - 1), 0.8 * (2 * rand - 1), 0.15 * (2 * rand - 1)] ...
                  .* (rand > 0.2), ...
             'theta', 4 * pi * rand - 2 * pi, 'dist', props.thrusters(:).' + randn(1, 8), ...
-            'F', F, 'max_iters', 20, 'tol', 1e-6, 'decay', 0.2 * rand);
+            'F', F, 'max_iters', MAX_ITERATIONS, 'tol', TOLERANCE, 'decay', 0.2 * rand);
         mixerCases{k} = testCase;
         dref(:, k) = spot.control.thrusterDutyCycles(testCase.u, testCase.theta, testCase.dist, ...
             testCase.F, testCase.max_iters, testCase.tol, testCase.decay);
@@ -423,10 +428,11 @@ function result = checkDefaults(model, py)
                                   period, 1 / d.sample_rate, base)};
 
     %% Mixer mask
+    % The mask's values are numbers or expressions (Constants.MIXER_MAX_ITERATIONS, ...).
     mixer = [model '/Thruster & Float' newline ...
              'Control Code/Change RED Behavior/Calculate Duty Cycle/MATLAB Function5'];
-    maxIters = str2double(get_param(mixer, 'max_iters'));
-    tol = str2double(get_param(mixer, 'tol'));
+    maxIters = maskValue(mixer, 'max_iters');
+    tol = maskValue(mixer, 'tol');
     checks(end + 1, :) = {same(d.max_iters, maxIters) && same(d.tol, tol), ...
                           sprintf('mixer mask: %g iterations, tolerance %g', maxIters, tol)};
 
@@ -482,6 +488,20 @@ function period = thrusterPeriod(model, baseRate)
         % Another workspace variable, e.g. dataRate.
         if isnan(period)
             period = evalin('base', value);
+        end
+    end
+end
+
+function v = maskValue(block, name)
+    % A mask parameter's value [number]: the text as a number, else evaluated where the block
+    % can see it (an expression such as Constants.MIXER_TOLERANCE, or a workspace variable).
+    text = strtrim(get_param(block, name));
+    v = str2double(text);
+    if isnan(v)
+        try
+            v = slResolve(text, block);
+        catch
+            v = evalin('base', text);
         end
     end
 end

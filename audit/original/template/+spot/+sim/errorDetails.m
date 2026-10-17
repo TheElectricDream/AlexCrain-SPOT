@@ -16,7 +16,7 @@ function d = errorDetails(err, root)
     %                      message, identifier, depth, blocks)
     %             blocks   every block named, as full paths (for spot.sim.showBlock)
     %             where    'file.m, line N' when the error comes from the project's own code
-    %                      (e.g. SPOT_User_Parameters.m), otherwise ''
+    %                      (e.g. Constants.m), otherwise ''
     %             output   what Simulink printed before the error (SimulationFailed only)
     %             report   MATLAB's full report (getReport), without hyperlinks
     %

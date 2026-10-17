@@ -8,7 +8,7 @@
 
 - **Data Store Read1** (`isSim`) → **If** `u1 == 0`: experiments only.
 - **Subsystem** (the action):
-  - **UDP Receive**: a MATLAB Function block: `[data, newPackets, age] = spot.hardware.udpReceive(36845, '0.0.0.0', 4, 'single')` (`spot.hardware.udpReceive`): the newest packet of four `single`s on UDP port 36845 (from any address); the packet count and age are terminated.
+  - **UDP Receive**: a MATLAB Function block: `[data, newPackets, age] = spot.hardware.udpReceive(36845, '0.0.0.0', 4, 'single')` (`spot.hardware.udpReceive`): the newest packet of four `single`s on UDP port 36845 (from any address; `Constants.PORT_ORIN_COMMANDS`, `ORIN_COMMAND_LENGTH`, `ANY_ADDRESS`); the packet count and age are terminated.
   - **Demux** `n=4` → four **Cast To Double** blocks: the first three (a pose, `x y θ`) are **Mux**ed and written to `VIS_Measured_States`; the fourth is written to `VIS_Confidence`.
 
 Both stores are logged as `VIS_Measured_States` and `VIS_Confidence`. The other direction, the platforms' states to the Orin, is [Send Data to Orin](page:diagram-outgoing).

@@ -31,6 +31,7 @@ import time
 from pathlib import Path
 
 from .common import PROJECT_DIR, ApiError, decode
+from .constants import C
 from .events import hub
 
 DEPLOY_DIR = PROJECT_DIR / "deploy"
@@ -41,7 +42,7 @@ BOARDS = ("red", "black", "blue")
 ACTIONS = {
     "tx2": {
         "title": "Update the Lab Console", "script": "deploy_tx2.sh",
-        "target": "TX2 · 192.168.1.116", "minutes": 2,
+        "target": "TX2 · %s" % C.IP_LAB_CONSOLE, "minutes": 2,
         "what": "Copies this project's lab console (the webapp, StreamData and the arm "
                 "calibration script) to the TX2, builds StreamData there and restarts the "
                 "console. Do it after updating SPOT, so the lab console has the same version as "
@@ -51,7 +52,7 @@ ACTIONS = {
                    "during an experiment."},
     "orin": {
         "title": "Update SPOT Vision", "script": "deploy_orin.sh",
-        "target": "Orin · 192.168.1.115", "minutes": 1,
+        "target": "Orin · %s" % C.IP_ORIN, "minutes": 1,
         "what": "Copies SPOT Vision (the service that streams the Orin's cameras to the lab "
                 "console's Vision tab) to the Jetson Orin and restarts it.",
         "careful": "Any Vision tab stream stops for a few seconds; the cameras' settings are "

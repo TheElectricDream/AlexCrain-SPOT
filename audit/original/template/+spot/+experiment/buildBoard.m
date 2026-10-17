@@ -28,7 +28,7 @@ function board = buildBoard(root, s)
 
     %% Board
     board.address = strtrim(char(s.labConsoleAddress));
-    board.user = 'spot-tx2';
+    board.user = Constants.USER_LAB_CONSOLE;
     board.buildDir = ['/home/' board.user '/ExperimentSoftware/'];
 
     % One folder per project on the TX2, named after the project's path as the old GUI did.

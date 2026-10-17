@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Copies SPOT Vision (+spot/+console/vision: the Orin's cameras for the lab console's Vision tab) to the Jetson
-# Orin and (re)starts its service, so it runs at boot on http://<orin>:8090. Safe to re-run after any change.
+# Orin and (re)starts its service, so it runs at boot on http://<orin>:<PORT_VISION>. Safe to re-run after any
+# change. The Orin's address, login name and port come from Constants.m (constants.sh).
 #   ./deploy_orin.sh
 #   ORIN=user@host SSH_KEY=~/.ssh/other_key REALSENSE_PYTHON=/path/to/python DVS_PYTHON=/path/to/python ./deploy_orin.sh
 # REALSENSE_PYTHON: a Python with pyrealsense2 2.54 (the last librealsense that supports the L515 LiDAR; the
@@ -8,9 +9,11 @@
 # DVS_PYTHON: a Python with iniVation's dv-processing, for the DVXplorer (python3 -m pip install --user dv-processing).
 # The default is the system's python3.
 set -euo pipefail
+source "$(dirname "$0")/constants.sh"
 cd "$(dirname "$0")/.."   # +spot/+console
 
-ORIN="${ORIN:-spot-vision@192.168.1.115}"
+ORIN="${ORIN:-$(spot_constant USER_VISION)@$(spot_constant IP_ORIN)}"
+PORT=$(spot_constant PORT_VISION)   # SPOT Vision's port, filled into the service file
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_spot}"
 REALSENSE_PYTHON="${REALSENSE_PYTHON:-/home/spot-vision/Documents/lidarLegends2026/.lidar_venv/bin/python}"
 DVS_PYTHON="${DVS_PYTHON:-/usr/bin/python3}"
@@ -23,9 +26,9 @@ echo "== Copying SPOT Vision to $ORIN:~/$DEST"
 rsync -a --delete --exclude '__pycache__' -e "ssh ${ssh_opts[*]}" vision/ "$ORIN:$DEST/"
 
 echo "== Starting the service on $ORIN"
-ssh "${ssh_opts[@]}" "$ORIN" bash -s -- "$DEST" "$SERVICE" "$REALSENSE_PYTHON" "$DVS_PYTHON" <<'REMOTE'
+ssh "${ssh_opts[@]}" "$ORIN" bash -s -- "$DEST" "$SERVICE" "$REALSENSE_PYTHON" "$DVS_PYTHON" "$PORT" <<'REMOTE'
 set -euo pipefail
-dest="$1"; service="$2"; rs_python="$3"; dvs_python="$4"
+dest="$1"; service="$2"; rs_python="$3"; dvs_python="$4"; port="$5"
 cd "$HOME/$dest"
 python3 -c "import cv2, pyzed.sl" 2>/dev/null || echo "NOTE: the system python3 lacks OpenCV or the ZED SDK's pyzed: the ZED won't stream"
 if [ -x "$rs_python" ] && "$rs_python" -c "import pyrealsense2, cv2, numpy" 2>/dev/null; then
@@ -41,7 +44,8 @@ else
     dvs_python=/usr/bin/python3
 fi
 mkdir -p "$HOME/.config/systemd/user"
-sed -e "s|@REALSENSE_PYTHON@|$rs_python|" -e "s|@DVS_PYTHON@|$dvs_python|" "$service.service" > "$HOME/.config/systemd/user/$service.service"
+sed -e "s|@REALSENSE_PYTHON@|$rs_python|" -e "s|@DVS_PYTHON@|$dvs_python|" -e "s|@PORT@|$port|g" \
+    "$service.service" > "$HOME/.config/systemd/user/$service.service"
 systemctl --user daemon-reload
 systemctl --user enable "$service" >/dev/null 2>&1
 systemctl --user restart "$service"
@@ -55,4 +59,4 @@ if [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null)" != "yes" 
     }
 fi
 REMOTE
-echo "== Done: http://${ORIN#*@}:8090 (the lab console's Vision tab)"
+echo "== Done: http://${ORIN#*@}:$PORT (the lab console's Vision tab)"

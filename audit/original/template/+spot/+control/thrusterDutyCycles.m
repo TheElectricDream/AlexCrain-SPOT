@@ -12,8 +12,10 @@ function [duty, Fb, H] = thrusterDutyCycles(u, theta, thrusterDist, F, maxIters,
     %                   (thruster_dist2CG_<PLATFORM>, spot.massprops.centerOfGravity)
     %     F             8x1 thrust of each thruster [N] (F_thrusters_<PLATFORM>); one number:
     %                   all eight alike
-    %     maxIters      mixer's Maximum Number of Iterations (default 20, as in the diagram)
-    %     tol           mixer's Convergence Tolerance (default 1e-6, as in the diagram)
+    %     maxIters      mixer's Maximum Number of Iterations (default
+    %                   Constants.MIXER_MAX_ITERATIONS, the diagram's mask)
+    %     tol           mixer's Convergence Tolerance (default Constants.MIXER_TOLERANCE,
+    %                   the diagram's mask)
     %     decay         thrust lost per extra valve open at once: with n open, each gives
     %                   1 - decay*(n - 1) of its thrust alone (thrust_decay_<PLATFORM>);
     %                   default from spot.params.defaults
@@ -50,10 +52,10 @@ function [duty, Fb, H] = thrusterDutyCycles(u, theta, thrusterDist, F, maxIters,
 
     %% Defaults (the diagram's mask values)
     if nargin < 5
-        maxIters = 20;
+        maxIters = Constants.MIXER_MAX_ITERATIONS;
     end
     if nargin < 6
-        tol = 1e-6;
+        tol = Constants.MIXER_TOLERANCE;
     end
     if nargin < 7
         defaults = spot.params.defaults();
@@ -89,23 +91,9 @@ end
 % ---- verbatim: Thruster & Float Control Code/Change RED Behavior/Calculate Duty Cycle/Generate Initial Guess/MATLAB Function
 function H = MakeH(thruster_dist2CG_RED,F_thrusters_RED)
 
-    Vec1 = [ -1
-             -1
-              0 
-              0
-              1
-              1
-              0
-              0 ];
+    Vec1 = Constants.THRUSTER_DIRECTION_X(:);
           
-    Vec2 = [  0
-              0
-              1
-              1
-              0
-              0
-             -1
-             -1 ];
+    Vec2 = Constants.THRUSTER_DIRECTION_Y(:);
          
     Vec3 = thruster_dist2CG_RED./1000;
     
@@ -194,10 +182,10 @@ function x_opt = custom_constrained_least_squares(H, b, x0)
     %       x_opt - Optimal duty cycle vector (8x1)
 
     % Parameters
-    max_iterations = 100;
-    tolerance      = 1e-6;
-    alpha          = 0.01;  % initial step size
-    beta           = 0.5;   % backtracking factor
+    max_iterations = Constants.MIXER_CLS_MAX_ITERATIONS;
+    tolerance      = Constants.MIXER_CLS_TOLERANCE;
+    alpha          = Constants.MIXER_CLS_ALPHA;    % initial step size
+    beta           = Constants.MIXER_CLS_BETA;     % backtracking factor
 
     % Initialization
     x      = x0;
@@ -216,7 +204,7 @@ function x_opt = custom_constrained_least_squares(H, b, x0)
 
         % Backtracking line search
         step_size = alpha;
-        for ls_iter = 1:20
+        for ls_iter = 1:Constants.MIXER_CLS_LINE_SEARCH
             x_new = x - step_size * gradient;
             x_new = max(0, min(1, x_new)); % project into [0,1]
 
@@ -238,9 +226,9 @@ function x_opt = custom_constrained_least_squares(H, b, x0)
 
         % Adaptive step size tuning
         if iter > 1 && new_obj < current_obj
-            alpha = min(alpha * 1.1, 0.1); % speed up if progress
+            alpha = min(alpha * Constants.MIXER_CLS_STEP_GROWTH, Constants.MIXER_CLS_STEP_CAP); % speed up if progress
         else
-            alpha = alpha * 0.9;           % slow down otherwise
+            alpha = alpha * Constants.MIXER_CLS_STEP_SHRINK; % slow down otherwise
         end
 
         % Store for next iteration
@@ -265,8 +253,8 @@ function H = MakeHWithDecay(thruster_dist2CG, F_thrusters, thrust_decay_factor)
     adjusted_dist = thruster_dist2CG / 1000;
 
     % Thruster directions (X, Y, and moment arm)
-    Vec1 = [-1; -1;  0;  0;  1;  1;  0;  0]; % X
-    Vec2 = [ 0;  0;  1;  1;  0;  0; -1; -1]; % Y
+    Vec1 = Constants.THRUSTER_DIRECTION_X(:); % X
+    Vec2 = Constants.THRUSTER_DIRECTION_Y(:); % Y
     Vec3 = adjusted_dist;                    % moment (Z)
 
     Mat1 = [Vec1, Vec2, Vec3]';
@@ -291,8 +279,8 @@ function H = MakeHWithDecayRecalculateForce(thruster_dist2CG, F_thrusters, thrus
 
     adjusted_dist = thruster_dist2CG / 1000;
 
-    Vec1 = [-1; -1;  0;  0;  1;  1;  0;  0];
-    Vec2 = [ 0;  0;  1;  1;  0;  0; -1; -1];
+    Vec1 = Constants.THRUSTER_DIRECTION_X(:);
+    Vec2 = Constants.THRUSTER_DIRECTION_Y(:);
     Vec3 = adjusted_dist;
 
     Mat1 = [Vec1, Vec2, Vec3]';

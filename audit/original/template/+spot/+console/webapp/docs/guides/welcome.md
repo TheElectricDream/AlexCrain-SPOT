@@ -1,6 +1,6 @@
 # Welcome to SPOT
 
-SPOT, the **Spacecraft Proximity Operations Testbed**, is the testbed of Carleton University's Spacecraft Robotics and Control Laboratory: three spacecraft platforms that float on air bearings over a 3.5 m × 2.4 m granite table, so they move as spacecraft do in a plane, without friction. You design a guidance and control law in a Simulink diagram, simulate it on your own computer, then build it and run it on the platforms.
+SPOT, the **Spacecraft Proximity Operations Testbed**, is the testbed of Carleton University's Spacecraft Robotics and Control Laboratory: three spacecraft platforms that float on air bearings over a 3.5 m × 2.4 m granite table (3.51155 × 2.41935 m exactly: `Constants.TABLE_X`, `TABLE_Y`), so they move as spacecraft do in a plane, without friction. You design a guidance and control law in a Simulink diagram, simulate it on your own computer, then build it and run it on the platforms.
 
 | Name in the code | Name on screen | What it is |
 |---|---|---|
@@ -18,7 +18,7 @@ Each platform has eight cold-gas thrusters fed by an air tank, three air bearing
 You use SPOT through two web pages, called **consoles**:
 
 - **The local console** (*SPOT Local Simulations*) runs on your computer; type `SPOT` in MATLAB, in your project folder, to start it. Its tabs are Simulation, Experiment, Results, Designer and Documentation. Everything it does is done by your MATLAB session.
-- **The lab console** (*SPOT Hardware Interfaces*) runs on the TX2 at `http://192.168.1.116:8080`, on the lab network. Its tabs are PhaseSpace, Hardware, Designer, Calibration, Vision and Documentation. The local console's Experiment tab talks to it for you.
+- **The lab console** (*SPOT Hardware Interfaces*) runs on the TX2 at `http://192.168.1.116:8080` (`IP_LAB_CONSOLE`, `PORT_LAB_CONSOLE`), on the lab network. Its tabs are PhaseSpace, Hardware, Designer, Calibration, Vision and Documentation. The local console's Experiment tab talks to it for you.
 
 [How It Fits Together](page:architecture) draws the whole system.
 

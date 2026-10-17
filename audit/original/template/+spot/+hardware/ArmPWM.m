@@ -43,22 +43,22 @@ classdef ArmPWM < matlab.System & coder.ExternalDependency
     %#codegen
 
     properties (Nontunable)
-        Port = '/dev/ttyUSB0'           % the U2D2's serial port
-        PWMLimit = 885                  % PWM Limit written to the servos; commands kept within
-        ZeroReturnDelay (1,1) logical = false   % Return Delay Time 0 (from 500 us): faster reads
-        MinPosition = 1024              % [pulses] at or beyond: no PWM pushing further
-        MaxPosition = 3072              % [pulses] (old blocks' limits: +-90 deg)
+        Port = Constants.SERVO_PORT            % the U2D2's serial port
+        PWMLimit = Constants.PWM_FULL          % PWM Limit (written to the servos)
+        ZeroReturnDelay (1,1) logical = false       % Return Delay Time 0 (from 500 us)
+        MinPosition = Constants.MIN_POSITION   % [pulses] at or beyond: no PWM pushing further
+        MaxPosition = Constants.MAX_POSITION   % [pulses] (old blocks' limits: +-90 deg)
     end
 
     properties (Access = private)
         opened = false                  % port opened and servos set up
-        pulses = 2048 * ones(3, 1)      % [pulses] last positions read
+        pulses = Constants.CENTER_PULSE * ones(3, 1)   % [pulses] last positions read
     end
 
     properties (Constant, Access = private)
-        PULSES = 4096 / (2*pi)          % [pulses/rad] encoder
-        VEL_UNIT = 0.229 * 2*pi/60      % [rad/s] per velocity unit
-        CENTER_PULSE = 2048             % [pulses] joint straight out
+        PULSES = Constants.PULSES_PER_REV / (2*pi)     % [pulses/rad] encoder
+        VEL_UNIT = Constants.VEL_UNIT_RPM * 2*pi/60    % [rad/s] per velocity unit
+        CENTER_PULSE = Constants.CENTER_PULSE          % [pulses] joint straight out
     end
 
     methods

@@ -5,6 +5,7 @@
 
 import { PLATFORM_KEYS as PLATFORMS, platformName, swatch } from './platforms.js';
 import { handleLockClick, isUnlocked, onLockChange, paintLocks } from './ratelock.js';
+import { constant } from './constants.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" ' +
@@ -314,8 +315,8 @@ export function initExperiment({
     }
   }
 
-  // The PhaseSpace data rate [Hz]: the settings' dataRate (whole Hz, 1 to 960).
-  const validRate = v => Number.isInteger(v) && v >= 1 && v <= 960;
+  // The PhaseSpace data rate [Hz]: the settings' dataRate (whole Hz, 1 to MAX_DATA_RATE).
+  const validRate = v => Number.isInteger(v) && v >= 1 && v <= constant('MAX_DATA_RATE');
   function dataRate() {
     const s = getSim().settings;
     const d = getSim().derived;
@@ -408,8 +409,8 @@ export function initExperiment({
     const ok = validAddress(v);
     el.classList.toggle('invalid', !ok);
     if (!ok) {
-      return toast('The lab console address must be an IPv4 address such as 192.168.1.116.',
-        'error', 6000);
+      return toast('The lab console address must be an IPv4 address such as ' +
+        `${constant('IP_LAB_CONSOLE')}.`, 'error', 6000);
     }
     if (v === labAddress()) {
       return;
@@ -433,7 +434,8 @@ export function initExperiment({
     const ok = el.value !== '' && validRate(v);
     el.classList.toggle('invalid', !ok);
     if (!ok) {
-      return toast('Frequency must be a whole number of Hz, 1 to 960.', 'error', 5000);
+      return toast(`Frequency must be a whole number of Hz, 1 to ${constant('MAX_DATA_RATE')}.`,
+        'error', 5000);
     }
     if (!setSetting('dataRate', v)) {
       toast('The settings haven\'t come from MATLAB yet.', 'error', 5000);

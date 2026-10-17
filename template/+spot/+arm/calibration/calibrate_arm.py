@@ -67,6 +67,10 @@ arm_calibration.json was written; 1 when stopped or aborted.
 
 Units: the servos' (protocol 2.0, MX and X series): position 4096
 pulses/rev, velocity 0.229 rev/min, PWM 885 = 100 % of the supply.
+The script runs standalone on the Chaser, so it keeps its own copies
+of these and of SPOT's servo settings; the comments name the
+Constants property each mirrors (Constants.m), and
+Constants.verify compares them with that file.
 Python 3.6 or newer.
 """
 
@@ -101,12 +105,12 @@ ADDR = {
 STATE_START = 120
 STATE_LEN = 16
 
-MODE_POSITION = 3
-MODE_PWM = 16
-PWM_FULL = 885                       # PWM at 100 % of the supply
-CENTER_PULSE = 2048                  # [pulses] joint straight out
-PULSES = 4096 / (2 * math.pi)        # [pulses/rad]
-VEL_UNIT = 0.229 * 2 * math.pi / 60  # [rad/s] per velocity unit
+MODE_POSITION = 3                    # Constants.MODE_POSITION
+MODE_PWM = 16                        # Constants.MODE_PWM
+PWM_FULL = 885                       # PWM at 100 % of the supply (Constants.PWM_FULL)
+CENTER_PULSE = 2048                  # [pulses] joint straight out (Constants.CENTER_PULSE)
+PULSES = 4096 / (2 * math.pi)        # [pulses/rad] (Constants.PULSES_PER_REV per rev)
+VEL_UNIT = 0.229 * 2 * math.pi / 60  # [rad/s] per velocity unit (Constants.VEL_UNIT_RPM)
 VOLT_UNIT = 0.1                      # [V] per Present Input Voltage unit
 MAX_TEMPERATURE = 65                 # [C] a servo this hot stops the run
 
@@ -136,7 +140,9 @@ KICK_PWM = 20
 KICK_TIME = 0.15                     # [s]
 
 # The servos' models, and their datasheet values at 12 V: stall
-# torque [N m] and no-load speed [rev/min].
+# torque [N m] and no-load speed [rev/min]. The MX-64(2.0)'s (311)
+# are Constants.MX64_STALL_TORQUE and MX64_NO_LOAD_RPM, the
+# voltage MX64_SUPPLY.
 MODELS = {311: "MX-64(2.0)", 321: "MX-106(2.0)", 30: "MX-28(2.0)", 1020: "XM430-W350",
           1120: "XM540-W270"}
 DATASHEET = {311: (6.0, 63), 321: (8.4, 45), 30: (2.5, 55), 1020: (4.1, 46),
@@ -145,7 +151,8 @@ DATASHEET_VOLTS = 12.0               # [V]
 NAMES = {1: "shoulder", 2: "elbow", 3: "wrist"}
 
 # How SPOT's old position-mode block set the servos up (its P/I/D
-# gains and profile), for holding joints and the steps test.
+# gains and profile), for holding joints and the steps test:
+# Constants.SERVO_POSITION_P/I/D and SERVO_PROFILE_VELOCITY.
 SPOT_POSITION = {"position_p": 400, "position_i": 0, "position_d": 200, "profile_velocity": 20,
                  "profile_acceleration": 0, "drive_mode": 0}
 SAVED_REGISTERS = ["operating_mode", "drive_mode", "pwm_limit", "velocity_limit", "velocity_i",
@@ -1086,6 +1093,7 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog=__doc__.split("\n", 1)[1])
+    # The U2D2's port and speed: Constants.SERVO_PORT, SERVO_BAUD.
     p.add_argument("--port", default="/dev/ttyUSB0")
     p.add_argument("--baud", type=int, default=1000000)
     p.add_argument("--joints", type=int, nargs="+", default=[1, 2, 3],
@@ -1122,6 +1130,8 @@ def parse_args():
                    help="stop the PWM step after this motion [deg]")
     p.add_argument("--inertia-time", type=float, default=1.0,
                    help="longest PWM step [s]")
+    # The steps test's goals and dwell: Constants.ARM_CAL_STEP_GOALS,
+    # ARM_CAL_STEP_TIME (the Calibration tab's rehearsal draws the same).
     p.add_argument("--step-deg", type=float, nargs="+", default=[10, 0, -10, 20, 0, -20, 5, 0],
                    help="position steps [deg]")
     p.add_argument("--step-time", type=float, default=2.5, help="time at each position step [s]")

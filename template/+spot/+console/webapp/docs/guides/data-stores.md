@@ -2,7 +2,7 @@
 
 The diagram's subsystems share their results through **data stores**: 49 named global variables, each declared by a *Data Store Memory* block at the top level (the small blocks along the bottom of [the top level](page:diagram-overview)) and read or written anywhere with *Data Store Read* / *Data Store Write* blocks. This page lists them: what each holds, who writes it and who reads it. `X` stands for `RED`, `BLACK` or `BLUE`; the arm's stores are separate.
 
-Units are SI: metres, radians, seconds, newtons, newton-metres. States are in the **table frame** (origin at a table corner, x along 3.5 m, y along 2.4 m, θ counter-clockwise from +x), controls `[Fx Fy Tz]` too; only inside [Thruster & Float Control Code](page:diagram-thrusters) are forces rotated into the body frame.
+Units are SI: metres, radians, seconds, newtons, newton-metres. States are in the **table frame** (origin at a table corner, x along 3.51155 m, y along 2.41935 m (about 3.5 × 2.4; `Constants.TABLE_X`, `TABLE_Y`), θ counter-clockwise from +x), controls `[Fx Fy Tz]` too; only inside [Thruster & Float Control Code](page:diagram-thrusters) are forces rotated into the body frame.
 
 ## The flags and the clock
 
@@ -33,9 +33,9 @@ Units are SI: metres, radians, seconds, newtons, newton-metres. States are in th
 
 | Store | Size | Initial | Written by | Read by | Meaning |
 |---|---|---|---|---|---|
-| `ARM_Measured_States` | 6 | zeros | [Robotic Arm Code](page:diagram-arm-code) (experiment) or Simulate Plant Dynamics (simulation) | 4 - Control, Data Logger | `[θ1 θ2 θ3 θ̇1 θ̇2 θ̇3]` as the servos report them (encoder counts, 0.229 rpm units) |
+| `ARM_Measured_States` | 6 | zeros | [Robotic Arm Code](page:diagram-arm-code) (experiment) or Simulate Plant Dynamics (simulation) | 4 - Control, Data Logger | `[θ1 θ2 θ3 θ̇1 θ̇2 θ̇3]` as the servos report them (encoder counts, 0.229 rpm units; `VEL_UNIT_RPM`) |
 | `ARM_True_States` | 6 | zeros | Simulate Plant Dynamics | nobody | the simulated truth |
-| `ARM_Measured_PWM` | 3 | zeros | Robotic Arm Code / the plant | Data Logger | the PWM each servo applies (its Present PWM) [885 = 100 %] |
+| `ARM_Measured_PWM` | 3 | zeros | Robotic Arm Code / the plant | Data Logger | the PWM each servo applies (its Present PWM) [885 = 100 %, `PWM_FULL`] |
 | `ARM_Servo_Status` | 5 | zeros | Robotic Arm Code | Data Logger | servos read this step, read duration [ms], USB latency [ms], reads missed, alert |
 | `ARM_Desired_States` | 3 | zeros | 1 - Experiment Logic | 3 - Guidance, Data Logger | the phase's goal: joint angles [rad] (or speeds / PWM, for those controllers) |
 | `ARM_Path` | 3 | zeros | 3 - Guidance | 4 - Control, Data Logger | what the arm controller tracks now |

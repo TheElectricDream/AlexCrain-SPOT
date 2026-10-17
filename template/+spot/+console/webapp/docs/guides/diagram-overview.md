@@ -57,9 +57,9 @@ The one wire at the top level: **Arm PWM (After Control)** outputs the `ARM_Cont
 
 ## Rates and sizes
 
-- `baseRate` = 1 / Sample Rate (the Scenario pane's **Sample Rate**, 20 Hz → 0.05 s by default). Everything in the diagram runs at this rate (except the arm plant's own 1 ms sub-steps).
+- `baseRate` = 1 / Sample Rate (the Scenario pane's **Sample Rate**, 20 Hz → 0.05 s by default; `Constants.SAMPLE_RATE`). Everything in the diagram runs at this rate (except the arm plant's own 1 ms sub-steps, `ARM_PLANT_INNER_STEP`).
 - `dataRate` = 1 / Data Rate: the period of the PhaseSpace packets (the camera stream's rate; the Experiment tab starts the stream at it). The simulation holds its measurements at this period ([Simulate Plant Dynamics](page:diagram-plant)) so the controller sees data like the camera's. It is locked behind a padlock on the Scenario pane, because the LQR gains are designed at it and the cameras stream at it.
-- `PWMFreq`: the thrusters' PWM frequency (5 Hz): the duty cycles are held for a PWM period and valve opening times shorter than 7 ms are dropped ([Thruster & Float Control Code](page:diagram-thrusters)).
+- `PWMFreq`: the thrusters' PWM frequency (5 Hz, `TEENSY_PWM_FREQUENCY`): the duty cycles are held for a PWM period and valve opening times shorter than 7 ms (`VALVE_OPEN_TIME`) are dropped ([Thruster & Float Control Code](page:diagram-thrusters)).
 - Platform states are 9-vectors `[x y θ ẋ ẏ θ̇ ẍ ÿ θ̈]` in metres, radians and seconds in the table frame; controls are `[Fx Fy Tz]` in the table frame (N, N, N·m); duty cycles are 8-vectors in 0–1 (0–100 % when sent); the arm's states are `[θ1 θ2 θ3 θ̇1 θ̇2 θ̇3]` and its controls three torques (N·m).
 
 ## The pictures

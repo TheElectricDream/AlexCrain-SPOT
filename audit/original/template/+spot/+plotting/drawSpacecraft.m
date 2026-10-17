@@ -30,7 +30,7 @@ function sc = shape(id)
 
     %% Dimensions [m]
     cm = 1 / 100;
-    r = 0.15;                           % half side
+    r = Constants.BODY_HALF_SIDE;  % half side
     excess = 2.477 * cm;
     shrink = 1 * cm;
     bracket = 6.5 * cm;

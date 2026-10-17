@@ -11,9 +11,10 @@
 import { platformName, COLORS } from './platforms.js';
 import {
   drawTable, heightGrid, colorBar, deviationColor, thrustBars, burnPaths, decayPlot, decayFormula,
-  frictionPlot, stepsPlot, THRUSTERS,
+  frictionPlot, stepsPlot, thrusterNozzles,
 } from './calviz.js';
 import { THRUSTERS as THRUSTER_MAP } from './hardware.js';
+import { constant, constantPlatform } from './constants.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
@@ -49,10 +50,10 @@ const TABLE_STEPS = [
 ];
 
 // The thruster calibration's three steps, for each thruster in turn (1 to 8, and each repeat).
-const THRUSTER_STEPS = [
+const thrusterSteps = () => [
   ['Centre', 'The diagram\'s controller flies it to the table\'s centre, where every burn starts.',
    '<path d="M19 12a7 7 0 1 1-2-4.9"/><path d="M17 3v4h-4"/>'],
-  ['Rest', 'Pucks off for 5 s: it stops on the table.',
+  ['Rest', `Pucks off for ${constant('CAL_BURN_REST')} s: it stops on the table.`,
    '<path d="M4 17h16M7 17v-3h10v3"/>'],
   ['Fire', 'Pucks on and one thruster at full thrust at the same moment, for the burn time; ' +
    'PhaseSpace records the push.',
@@ -60,12 +61,13 @@ const THRUSTER_STEPS = [
 ];
 
 // The second stage, thrusters together: 1, then 1-2, ... 1-8, each firing as one burn above.
-const DECAY_STEPS = [
+const decaySteps = () => [
   ['Centre', 'The diagram\'s controller flies it to the table\'s centre.',
    '<path d="M19 12a7 7 0 1 1-2-4.9"/><path d="M17 3v4h-4"/>'],
-  ['Rest', 'Pucks off for 5 s: it stops on the table.', '<path d="M4 17h16M7 17v-3h10v3"/>'],
-  ['Fire Together', 'Pucks on and thrusters 1 to N at full thrust at once (N = 1, 2, … 8); ' +
-   'PhaseSpace records the push.',
+  ['Rest', `Pucks off for ${constant('CAL_BURN_REST')} s: it stops on the table.`,
+   '<path d="M4 17h16M7 17v-3h10v3"/>'],
+  ['Fire Together', 'Pucks on and thrusters 1 to N at full thrust at once (N = 1, 2, … ' +
+   `${constant('NUM_THRUSTERS')}); PhaseSpace records the push.`,
    '<rect x="6" y="8" width="10" height="8" rx="1"/>' +
    '<path d="M16 10h5M16 14h5M18 8l3 2-3 2M18 12l3 2-3 2"/>'],
   ['Fit', 'Each firing\'s push against what its thrusters give alone (the first stage); how the ' +
@@ -76,14 +78,9 @@ const DECAY_STEPS = [
 // The section a run of KIND shows in.
 const sectionOf = kind => (kind === 'decay' ? 'thrusters' : kind);
 
-// The thrust decay a platform takes until its own is measured (control.py's DEFAULTS,
-// spot.params.defaults: the Obstacle's, 2026-10-14); the lab console says it with each
-// platform's mass properties (S.assumed).
-const DEFAULT_DECAY = 0.112;
-
 // The arm calibration's four tests (calibrate_arm.py), each on one joint while the others hold,
 // with the servos in PWM (voltage) control as SPOT drives them: [key, title, text].
-const ARM_TESTS = [
+const armTests = () => [
   ['breakaway', 'Breakaway', 'The PWM creeps up from zero until the joint moves, three times ' +
    'each way: the static friction (breakaway torque).'],
   ['sweep', 'Speed Sweep', 'The joint turns back and forth at fixed PWM levels about its ' +
@@ -91,13 +88,18 @@ const ARM_TESTS = [
    'how the back-EMF and viscous friction brake it.'],
   ['inertia', 'Inertia', 'A PWM step from rest, each way: how fast it gets up to speed gives the ' +
    'joint\'s inertia (link and rotor).'],
-  ['steps', 'Position Steps', 'Goals of 10, 0, -10, 20, 0, -20, 5, 0° with SPOT\'s servo ' +
-   'settings, for spot.arm.compareSteps to check the model.'],
+  ['steps', 'Position Steps', `Goals of ${constant('ARM_CAL_STEP_GOALS').join(', ')}° with ` +
+   'SPOT\'s servo settings, for spot.arm.compareSteps to check the model.'],
 ];
 const JOINTS = { 1: 'Shoulder', 2: 'Elbow', 3: 'Wrist' };
 
 // The arm values a project can override (calibration.py's ARM_FIELDS).
 const ARM_FIELDS = ['static', 'coulomb', 'stribeck', 'viscous', 'armature', 'back_emf'];
+
+// The placeholder arm's drawn position steps: a point every PLACEHOLDER_DT [s], the measured
+// angle following the goal with the time constant PLACEHOLDER_TAU [s].
+const PLACEHOLDER_DT = 0.05;
+const PLACEHOLDER_TAU = 0.25;
 
 /**
  * Whether an arm calibration was measured in PWM control (calibrate_arm.py's version 2; an older
@@ -106,7 +108,10 @@ const ARM_FIELDS = ['static', 'coulomb', 'stribeck', 'viscous', 'armature', 'bac
  * @return {boolean}
  */
 const pwmArm = arm => Boolean(arm && arm.control === 'pwm' && (arm.version || 0) >= 2);
-const ARM_MINUTES = { breakaway: 1.5, sweep: 2.5, inertia: 0.5, steps: 0.5 };   // per joint, about
+
+// About how long each test takes per joint [min] (CAL_ARM_MINUTES, in the tests' order).
+const armMinutes = () =>
+  Object.fromEntries(armTests().map(([key], k) => [key, constant('CAL_ARM_MINUTES')[k]]));
 
 /**
  * Sets up the Calibration tab.
@@ -126,12 +131,20 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     run: null, active: false,              // the lab console's run (lab console only)
     lab: null, labCal: null,               // local console: the lab console and its calibration
     platform: storage.get('spot.calibration.platform', 'RED'),
-    form: storage.get('spot.calibration.table',
-      { nx: 3, ny: 2, drift: 12, margin: 0.35, model: 'auto' }),
-    thrForm: storage.get('spot.calibration.thrusters', { repeats: 2, burn: 2, margin: 0.35 }),
+    form: storage.get('spot.calibration.table', {
+      nx: constant('CAL_TABLE_GRID')[0], ny: constant('CAL_TABLE_GRID')[1],
+      drift: constant('CAL_DRIFT_TIME'), margin: constant('CAL_EDGE_MARGIN'), model: 'auto',
+    }),
+    thrForm: storage.get('spot.calibration.thrusters', {
+      repeats: constant('CAL_BURN_REPEATS'), burn: constant('CAL_BURN_TIME'),
+      margin: constant('CAL_EDGE_MARGIN'),
+    }),
     // The Thrusters Run card: one at a time, or together; and together's settings.
     thrStage: storage.get('spot.calibration.thrStage', 'single'),
-    decayForm: storage.get('spot.calibration.decay', { repeats: 1, burn: 2, margin: 0.35 }),
+    decayForm: storage.get('spot.calibration.decay', {
+      repeats: constant('CAL_DECAY_REPEATS'), burn: constant('CAL_BURN_TIME'),
+      margin: constant('CAL_EDGE_MARGIN'),
+    }),
     armForm: storage.get('spot.calibration.arm', {
       joints: [1, 2, 3], tests: ['breakaway', 'sweep', 'inertia', 'steps'], simulate: false,
     }),
@@ -337,7 +350,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         : run.steps[run.step] && run.steps[run.step].name === 'Fit' ? 3
         : -1;
       title = 'Thrusters Together';
-      html = stepList(DECAY_STEPS,
+      html = stepList(decaySteps(),
         k => (k === stage ? 'now' : run && run.state === 'done' ? 'done' : '')) +
         `<p class="hint">Opened together, each thruster gives less than it does alone: the valves share one regulated supply. The
           platform's push with thrusters 1 to N open is compared with the sum of what each gives alone (the one-at-a-time
@@ -356,7 +369,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         : /firing/.test(msg) ? 2
         : -1;
       title = 'Thruster Calibration';
-      html = stepList(THRUSTER_STEPS,
+      html = stepList(thrusterSteps(),
         k => (k === stage ? 'now' : run && run.state === 'done' ? 'done' : '')) +
         `<p class="hint">Each burn's thrust comes from the push it gave: the platform's mass times its acceleration, with the
           table's slope (its calibration) taken out. So the platform's mass, inertia and centre of gravity must be right: the
@@ -364,8 +377,9 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     } else {
       const now = running && run.step != null ? run.steps[run.step] : null;
       title = 'Arm Calibration';
-      html = stepList(ARM_TESTS.map(([, t, text], k) => [t, text, ARM_ICONS[k]]),
-        k => (now && now.test === ARM_TESTS[k][0] ? 'now' : '')) +
+      const tests = armTests();
+      html = stepList(tests.map(([, t, text], k) => [t, text, ARM_ICONS[k]]),
+        k => (now && now.test === tests[k][0] ? 'now' : '')) +
         `<p class="hint">For each joint in turn, the other joints hold their position. The script
           (+spot/+arm/calibration/calibrate_arm.py) runs on the Chaser, which has the arm's U2D2; it drives the servos with PWM,
           as SPOT does, and measures with PWM and the encoders only (the servos' current readings are too coarse at these
@@ -399,7 +413,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       `<span>${label}</span><b>${value}</b><i>${unit}</i></div>`;
     const dir = t.downhill_deg;
     return `<div class="cal-tiles">
-        ${tile('Tilt at Centre', fmt(t.tilt_centre_mrad, 3), 'mrad', 'The slope at the table\'s centre: 1 mrad is a 1 mm drop per metre, and pulls a floating platform at 0.0098 m/s²')}
+        ${tile('Tilt at Centre', fmt(t.tilt_centre_mrad, 3), 'mrad', 'The slope at the table\'s centre: 1 mrad is a 1 mm drop per metre, and pulls a floating platform at ' + fmt(constant('MRAD_PULL'), 4) + ' m/s²')}
         ${tile('Steepest', fmt(t.tilt_max_mrad, 3), 'mrad', 'The steepest slope anywhere on the table')}
         ${tile('Downhill', `<svg class="cal-dir" viewBox="-10 -10 20 20" aria-hidden="true"><g transform="rotate(${-dir})"><path d="M-7 0H6M2-4l4 4-4 4" /></g></svg>${fmt(dir, 0)}°`, 'from +x', 'Which way is downhill at the centre, from +x towards +y')}
         ${tile('Fit Residual', fmt(t.rms_mm, 2), 'mm', 'How far the drifts are from the fitted model (the cameras\' own noise is ' + fmt(t.noise_mm, 2) + ' mm)')}
@@ -422,20 +436,23 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         <i class="swatch" style="background:${COLORS[n]}"></i>${platformName(n)}</button>`).join('');
     const field = (key, label, min, max, step, unit, title) => `<label class="field" title="${esc(title)}"><span class="field-label">${label}${unit ? ` [${unit}]` : ''}</span>
         <input type="number" class="input" data-calform="${key}" min="${min}" max="${max}" step="${step}" value="${f[key]}" ${running ? 'disabled' : ''}></label>`;
+    const gridMax = constant('CAL_TABLE_GRID_MAX');
+    const [driftMin, driftMax] = constant('CAL_DRIFT_TIME_RANGE');
+    const [marginMin, marginMax] = constant('CAL_EDGE_MARGIN_RANGE');
     return `<section class="card">
         <div class="card-head"><h2>Run</h2>${runPill(running, streaming)}</div>
         <div class="segmented cal-plat" role="group" aria-label="Platform">${plat}</div>
         <div class="cal-form">
-          ${field('nx', 'Grid Columns', 1, 5, 1, '', 'How many start points along x')}
-          ${field('ny', 'Grid Rows', 1, 4, 1, '', 'How many start points along y')}
-          ${field('drift', 'Drift Time', 4, 40, 1, 's', 'How long each drift is recorded (at most)')}
-          ${field('margin', 'Edge Margin', 0.25, 0.8, 0.05, 'm', 'A drift ends (pucks off) when the platform\'s centre comes this close to an edge')}
+          ${field('nx', 'Grid Columns', 1, gridMax[0], 1, '', 'How many start points along x')}
+          ${field('ny', 'Grid Rows', 1, gridMax[1], 1, '', 'How many start points along y')}
+          ${field('drift', 'Drift Time', driftMin, driftMax, 1, 's', 'How long each drift is recorded (at most)')}
+          ${field('margin', 'Edge Margin', marginMin, marginMax, 0.05, 'm', 'A drift ends (pucks off) when the platform\'s centre comes this close to an edge')}
           <label class="field" title="Quadratic: a smooth surface (needs 3+ drifts over most of the table). Plane: one tilt everywhere. Auto: chooses."><span class="field-label">Model</span>
             <select class="input" data-calform="model" ${running ? 'disabled' : ''}>
               ${['auto', 'quadratic', 'plane'].map(m => `<option value="${m}" ${f.model === m ? 'selected' : ''}>${{ auto: 'Auto', quadratic: 'Surface', plane: 'Plane' }[m]}</option>`).join('')}
             </select></label>
         </div>
-        <p class="hint" title="Clear the table around the grid; other platforms may stay where they are (points next to them are skipped).">${f.nx * f.ny + 1} drifts · about ${Math.round((f.nx * f.ny + 1) * (Number(f.drift) + 35) / 60)} min</p>
+        <p class="hint" title="Clear the table around the grid; other platforms may stay where they are (points next to them are skipped).">${f.nx * f.ny + 1} drifts · about ${Math.round((f.nx * f.ny + 1) * (Number(f.drift) + constant('CAL_DRIFT_OVERHEAD')) / 60)} min</p>
         <div class="cal-actions">
           ${running ? '<button type="button" class="btn btn-stop" data-cal="stop">Stop (Esc)</button>'
                     : `<button type="button" class="btn btn-go" data-cal="start-table" ${!streaming ? 'disabled title="Start PhaseSpace first"' : busyOther() ? 'disabled title="Another calibration is running"' : ''}>Start Table Calibration</button>`}
@@ -562,8 +579,12 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         <i class="swatch" style="background:${COLORS[n]}"></i>${platformName(n)}</button>`).join('');
     const field = (key, label, min, max, step, unit, title) => `<label class="field" title="${esc(title)}"><span class="field-label">${label}${unit ? ` [${unit}]` : ''}</span>
         <input type="number" class="input" data-thrform="${key}" min="${min}" max="${max}" step="${step}" value="${f[key]}" ${running ? 'disabled' : ''}></label>`;
-    // Each burn: a flight to the centre, 5 s rest, the burn.
-    const minutes = Math.round(8 * f.repeats * (Number(f.burn) + 20) / 60);
+    // Each burn: a flight to the centre, the rest, the burn (CAL_BURN_OVERHEAD beyond the burn).
+    const minutes =
+      Math.round(8 * f.repeats * (Number(f.burn) + constant('CAL_BURN_OVERHEAD')) / 60);
+    const [repeatsMin, repeatsMax] = constant('CAL_BURN_REPEATS_RANGE');
+    const [burnMin, burnMax] = constant('CAL_BURN_TIME_RANGE');
+    const [marginMin, marginMax] = constant('CAL_EDGE_MARGIN_RANGE');
     const table = S.cal && S.cal.table;
     const stage = running ? run.kind : S.thrStage;
     const single = (S.cal && S.cal.thrusters || {})[chosen];
@@ -586,9 +607,9 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         </div>
         <div class="segmented cal-plat" role="group" aria-label="Platform">${plat}</div>
         <div class="cal-form">
-          ${field('repeats', 'Repeats', 1, 3, 1, '', stage === 'decay' ? 'How many times each firing is made (their ratios are fitted together)' : 'How many burns of each thruster (their thrusts are averaged)')}
-          ${field('burn', 'Burn Time', 0.5, 3, 0.5, 's', 'How long each thruster fires (longer: more motion to measure, but more room needed)')}
-          ${field('margin', 'Edge Margin', 0.25, 0.8, 0.05, 'm', 'A burn ends early when the platform comes this close to an edge')}
+          ${field('repeats', 'Repeats', repeatsMin, repeatsMax, 1, '', stage === 'decay' ? 'How many times each firing is made (their ratios are fitted together)' : 'How many burns of each thruster (their thrusts are averaged)')}
+          ${field('burn', 'Burn Time', burnMin, burnMax, 0.5, 's', 'How long each thruster fires (longer: more motion to measure, but more room needed)')}
+          ${field('margin', 'Edge Margin', marginMin, marginMax, 0.05, 'm', 'A burn ends early when the platform comes this close to an edge')}
         </div>
         <p class="hint" title="${table ? `The table's slope (calibrated ${esc(String(table.updated).slice(0, 10))}) is taken out of each burn.` : 'Calibrate the table first for the best thrusts.'}">${8 * f.repeats} ${stage === 'decay' ? 'firings' : 'burns'} · about ${minutes} min${table ? '' : ' · <span class="warn-text">no table calibration</span>'}${stage === 'decay' && !canTogether ? ' · <span class="warn-text">one at a time first</span>' : ''}</p>
         <div class="cal-actions">
@@ -609,13 +630,15 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         <i class="swatch" style="background:${COLORS[n]}"></i>${platformName(n)}</button>`).join('');
     const head = `<div class="card-head"><h2>Thrusters</h2>${res.placeholder ? `<span class="pill tip" title="No thruster calibration for the ${platformName(name)} yet${S.local ? ' (the lab console measures it; Update from Lab brings it here)' : ''}: the nominal thrust for all eight, as simulations use until it is calibrated, and the burns it would give">Placeholder · Nominal</span>` : ''}
         <div class="segmented cal-plat" role="group" aria-label="Platform">${picker}</div></div>`;
-    const nominal = res.nominal || 0.2825;
+    const nominal = res.nominal || constant('THRUST_NOMINAL');
+    const warn = constant('CAL_THRUST_WARN_FRACTION');
+    const torqueWarn = constant('CAL_TORQUE_RATIO_WARN');
     const f = res.thrust;
     const row = k => `<tr><td>T${k + 1}${res.valid[k] ? '' : ' <span class="warn-text" title="No good burn: the nominal thrust is used">·</span>'}</td>
         <td>${fmt(f[k], 4)}</td><td>${res.thrust_sd[k] != null ? fmt(res.thrust_sd[k], 4) : '—'}</td>
-        <td style="color:${f[k] / nominal < 0.97 || f[k] / nominal > 1.03 ? 'var(--warn)' : 'inherit'}">${res.valid[k] ? `${f[k] >= nominal ? '+' : ''}${fmt(100 * (f[k] / nominal - 1), 1)} %` : '—'}</td>
+        <td style="color:${Math.abs(f[k] / nominal - 1) > warn ? 'var(--warn)' : 'inherit'}">${res.valid[k] ? `${f[k] >= nominal ? '+' : ''}${fmt(100 * (f[k] / nominal - 1), 1)} %` : '—'}</td>
         <td>${res.angle[k] != null ? `${fmt(res.angle[k], 1)}°` : '—'}</td>
-        <td style="color:${res.torque_ratio[k] != null && Math.abs(res.torque_ratio[k] - 1) > 0.1 ? 'var(--warn)' : 'inherit'}">${res.torque_ratio[k] != null ? fmt(res.torque_ratio[k], 2) : '—'}</td></tr>`;
+        <td style="color:${res.torque_ratio[k] != null && Math.abs(res.torque_ratio[k] - 1) > torqueWarn ? 'var(--warn)' : 'inherit'}">${res.torque_ratio[k] != null ? fmt(res.torque_ratio[k], 2) : '—'}</td></tr>`;
     const bad = res.valid.filter(v => !v).length;
     const a = res.params && res.params.assumed;
     return `<section class="card">${head}
@@ -640,9 +663,10 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   function decayCard(name, single) {
     const dec = single && single.decay;
 
-    // Not measured: the decay simulations and the controller use until it is (the setting's
-    // default, the Obstacle's).
-    const m = Number(((S.assumed || {})[name] || {}).thrust_decay) || DEFAULT_DECAY;
+    // Not measured: the decay simulations and the controller use until it is (the lab console
+    // says it with each platform's mass properties, S.assumed; else the default, the Obstacle's).
+    const m = Number(((S.assumed || {})[name] || {}).thrust_decay) ||
+      constant('THRUST_DECAY_DEFAULT');
     const d = dec || {
       model: 'linear', slope: m, k: 0, scale: 1, firings: [], placeholder: true,
       drop_pct: Array.from({ length: 8 }, (_, i) => 100 * Math.min(1, m * i)),
@@ -688,7 +712,9 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
 
   // The thrusters on the platform seen from above, as on the Hardware tab: each one's thrust
   // (coloured by how far it is from nominal), or the one firing lit.
-  function thrusterMap({ thrust = null, nominal = 0.2825, firing = null } = {}) {
+  function thrusterMap({
+    thrust = null, nominal = constant('THRUST_NOMINAL'), firing = null,
+  } = {}) {
     const tags = Object.entries(THRUSTER_MAP).map(([n, [side, x, y]]) => {
       const f = thrust ? thrust[n - 1] : null;
       const c = f != null ? deviationColor(f / nominal) : null;
@@ -700,14 +726,14 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   }
 
   // No calibration yet: what one looks like, with the nominal thrust (the controller's) for all
-  // eight, each burn the push that thrust would give the platform (its assumed mass) over the
-  // burn time.
+  // eight, each burn the push that thrust would give the platform (its assumed mass, else the
+  // platform's measured one) over the burn time.
   function placeholderThrust(name) {
     const a = (S.assumed || {})[name] || {};
-    const F = Number([].concat(a.thrust || [])[0]) || 0.2825;
-    const mass = Number(a.mass) || 13.5;
-    const T = Number(S.thrForm.burn) || 2;
-    const burns = THRUSTERS.map(([, push], k) => ({
+    const F = Number([].concat(a.thrust || [])[0]) || constant('THRUST_NOMINAL');
+    const mass = Number(a.mass) || constantPlatform('MASS', name);
+    const T = Number(S.thrForm.burn) || constant('CAL_BURN_TIME');
+    const burns = thrusterNozzles().map(([, push], k) => ({
       thruster: k + 1, thrust: F,
       points: Array.from({ length: 16 }, (_, i) => {
         const t = T * i / 15;
@@ -844,12 +870,12 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       `<button type="button" class="cal-chip${on ? ' on' : ''}" data-arm${kind}="${value}" ` +
       `${running ? 'disabled' : ''}>${label}</button>`;
     const minutes =
-      Math.max(1, Math.round(f.joints.length * f.tests.reduce((m, t) => m + ARM_MINUTES[t], 0)));
+      Math.max(1, Math.round(f.joints.length * f.tests.reduce((m, t) => m + armMinutes()[t], 0)));
     const ready = S.armCheck && S.armCheck.ok;
     return `<section class="card">
         <div class="card-head"><h2>Run</h2>${running ? '<span class="pill live">Running</span>' : busyOther() ? '<span class="pill warn">Another Calibration Runs</span>' : ''}</div>
         <span class="field-label">Joints</span><div class="cal-chips">${[1, 2, 3].map(j => chip('joint', j, JOINTS[j], f.joints.includes(j))).join('')}</div>
-        <span class="field-label">Tests</span><div class="cal-chips">${ARM_TESTS.map(([k, t]) => chip('test', k, t, f.tests.includes(k))).join('')}</div>
+        <span class="field-label">Tests</span><div class="cal-chips">${armTests().map(([k, t]) => chip('test', k, t, f.tests.includes(k))).join('')}</div>
         <label class="toggle" title="Run the script with its simulated servos instead: it needs no hardware, moves nothing, and its result is shown but never becomes the lab's"><input type="checkbox" data-armsim ${f.simulate ? 'checked' : ''} ${running ? 'disabled' : ''}><span></span>Rehearse (Simulated Servos)</label>
         <p class="hint">${f.simulate ? 'A rehearsal takes under a minute.' : `About ${minutes} min with the real servos.`}</p>
         <div class="cal-actions">
@@ -882,22 +908,28 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     return S.cal && S.cal.arm;
   }
 
-  // No arm calibration yet: what one looks like, with SPOT's arm model defaults
-  // (spot.arm.defaults: its placeholder friction, the MX-64's datasheet back-EMF, and the rotor
-  // and gear inertia), and the position-steps test's goals (10, 0, -10, 20, 0, -20, 5, 0°, 2 s
-  // each) with a first-order response (0.25 s) for the measured angle.
+  // No arm calibration yet: what one looks like, with SPOT's arm model defaults (the ARM_*
+  // constants: one MX-64(2.0)'s friction, back-EMF and inertia, measured unloaded on the bench,
+  // for every joint), and the position-steps test's goals (ARM_CAL_STEP_GOALS, ARM_CAL_STEP_TIME
+  // each) with a first-order response (PLACEHOLDER_TAU) for the measured angle, drawn every
+  // PLACEHOLDER_DT.
   function placeholderArm() {
     const joints = [1, 2, 3].map(index => ({
-      index, name: JOINTS[index], static: 0.30, static_pos: 0.30, static_neg: 0.30,
-      coulomb: 0.20, stribeck: 0.05, viscous: 0.10, back_emf: 1.819, inertia: 3.5e-3,
+      index, name: JOINTS[index], static: constant('ARM_STATIC'),
+      static_pos: constant('ARM_STATIC_POS'), static_neg: constant('ARM_STATIC_NEG'),
+      coulomb: constant('ARM_COULOMB'), stribeck: constant('ARM_STRIBECK'),
+      viscous: constant('ARM_VISCOUS'), back_emf: constant('ARM_BACK_EMF'),
+      inertia: constant('ARM_ARMATURE'),
     }));
-    const goals = [10, 0, -10, 20, 0, -20, 5, 0].map(d => d * Math.PI / 180);
+    const goals = constant('ARM_CAL_STEP_GOALS').map(d => d * Math.PI / 180);
+    const stepTime = constant('ARM_CAL_STEP_TIME');
+    const steps = Math.round(goals.length * stepTime / PLACEHOLDER_DT);
     const rows = [];
     let q = 0;
-    for (let i = 0; i <= 320; i++) {
-      const t = i * 0.05;
-      const g = goals[Math.min(goals.length - 1, Math.floor(t / 2))];
-      q += (g - q) * (1 - Math.exp(-0.05 / 0.25));
+    for (let i = 0; i <= steps; i++) {
+      const t = i * PLACEHOLDER_DT;
+      const g = goals[Math.min(goals.length - 1, Math.floor(t / stepTime))];
+      q += (g - q) * (1 - Math.exp(-PLACEHOLDER_DT / PLACEHOLDER_TAU));
       rows.push([t, g, q]);
     }
     return {
@@ -925,8 +957,9 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     const label = res.placeholder
       ? '<span class="pill tip" title="No arm calibration yet' +
         `${S.local ? ' (the lab console measures it; Update from Lab brings it here)' : ''}: ` +
-        'SPOT\'s arm model defaults (spot.arm.defaults), which simulations use until it is ' +
-        'calibrated. The steps show the test\'s goals with an assumed response.">' +
+        'SPOT\'s arm model defaults (spot.arm.defaults: a bench-measured MX-64 for every ' +
+        'joint), which simulations use until it is calibrated. The steps show the test\'s ' +
+        'goals with an assumed response.">' +
         'Placeholder · Defaults</span>'
       : res.simulated ? '<span class="pill warn">Rehearsal · Not Saved</span>'
       : !pwmArm(res) ? '<span class="pill warn tip" title="Measured with the motor current, ' +
@@ -976,7 +1009,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       return act(async () => onRun(await api('/api/calibration/arm/start', { ...f })));
     }
     const minutes =
-      Math.max(1, Math.round(f.joints.length * f.tests.reduce((m, t) => m + ARM_MINUTES[t], 0)));
+      Math.max(1, Math.round(f.joints.length * f.tests.reduce((m, t) => m + armMinutes()[t], 0)));
     $('#calArmTime').textContent =
       `${f.joints.map(j => JOINTS[j]).join(', ')}: ${f.tests.join(', ')}; about ${minutes} min.`;
     $('#calArmAck').checked = false;
@@ -1194,7 +1227,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
       if (key === 'joints') {
         f.joints.sort();
       } else {
-        f.tests = ARM_TESTS.map(t => t[0]).filter(t => f.tests.includes(t));
+        f.tests = armTests().map(t => t[0]).filter(t => f.tests.includes(t));
       }
       storage.set('spot.calibration.arm', f);
       render();

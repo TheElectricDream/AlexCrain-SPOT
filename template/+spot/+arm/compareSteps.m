@@ -28,8 +28,8 @@ function r = compareSteps(folder, armModel, show)
 
     %% Constants
     GOAL_STEP = 0.01;                   % [s] goals change every 10 ms (logs are faster, uneven)
-    PULSES_PER_RAD = 4096 / (2*pi);     % [pulses/rad] true encoder scale, used by the script
-    CMD_PULSES_PER_RAD = 651.74;        % [pulses/rad] SPOT's goal conversion (PositionControl)
+    PULSES_PER_RAD = Constants.PULSES_PER_REV / (2*pi);   % [pulses/rad] the encoder's
+    CMD_PULSES_PER_RAD = Constants.CMD_PULSES_PER_RAD;    % [pulses/rad] SPOT's goals
 
     %% Step logs
     files = dir(fullfile(folder, 'steps_j*.csv'));

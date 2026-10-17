@@ -1,6 +1,6 @@
 # The Calibration Tab
 
-Measurements of the lab that make simulations behave as the experiments do. The **lab console** (the TX2) runs them on its Calibration tab and keeps the lab's calibration; each **project** keeps a copy, `spot_calibration.json`, which its simulations use. On the local console the same views are on the Simulation tab's **Calibration** pane ([The Simulation Tab](page:tab-simulation)). Code: [calibration.py](file:calibration.py) and [calfit.py](file:calfit.py) (server), [calibration.js and calviz.js](file:calibration.js) (page); the maths is on [The Calibration Fits](page:math-calibration).
+Measurements of the lab that make simulations behave as the experiments do. The **lab console** (the TX2) runs them on its Calibration tab and keeps the lab's calibration; each **project** keeps a copy, `spot_calibration.json`, which its simulations use. On the local console the same views are on the Simulation tab's **Calibration** pane ([The Simulation Tab](page:tab-simulation)). Code: [calibration.py](file:calibration.py) and [calfit.py](file:calfit.py) (server), [calibration.js and calviz.js](file:calibration.js) (page); the maths is on [The Calibration Fits](page:math-calibration). The runs' defaults, limits and thresholds quoted below are the calibration section of `Constants` ([Constants](page:dev-constants)), named in brackets.
 
 Three calibrations, chosen at the top right:
 
@@ -14,45 +14,45 @@ Three calibrations, chosen at the top right:
 
 **How It Works.** With PhaseSpace streaming and the platform resting on the table:
 
-1. **Rest.** PhaseSpace records the platform resting for 2 s: the cameras' noise.
+1. **Rest.** PhaseSpace records the platform resting for 2 s (`CAL_NOISE_TIME`): the cameras' noise.
 2. **Float.** The air bearings come on with the thrusters off: it drifts from where it is.
 3. **Drift Map.** It flies (the diagram's own controller, as [Interactive Mode](page:interactive-mode)) to each point of a grid over the table, settles, and drifts again with the thrusters off.
 4. **Fit.** The table's height surface and the air bearings' drag are fitted to every drift, and saved in the lab's calibration.
 
-A drift ends after its time, or **at once (pucks off)** when the platform's centre comes within the edge margin of an edge, within 0.45 m of another platform, or goes faster than 0.15 m/s; the platform then stops on its pucks. Grid points next to other platforms (or whose path passes them) are skipped, so the other platforms may stay where they are.
+A drift ends after its time, or **at once (pucks off)** when the platform's centre comes within the edge margin of an edge (0.35 m by default, `CAL_EDGE_MARGIN`), within 0.45 m of another platform (`PLATFORM_CLEARANCE`), or goes faster than 0.15 m/s (`CAL_MAX_DRIFT_SPEED`); the platform then stops on its pucks. Grid points next to other platforms (or whose path passes them) are skipped, so the other platforms may stay where they are.
 
-**Run** (lab console): the platform, the grid (columns × rows), the drift time, the edge margin and the model (**Auto**, **Surface**, **Plane**), then **Start Table Calibration** (only while PhaseSpace streams). The default 3 × 2 grid with 12 s drifts takes about 4 minutes. **Stop** (or Esc on this tab) ends it at once with everything off; so does Esc or switching the platform off on the [Hardware tab](page:tab-hardware), where the platform shows as *Calibrating* while it runs.
+**Run** (lab console): the platform, the grid (columns × rows), the drift time, the edge margin and the model (**Auto**, **Surface**, **Plane**), then **Start Table Calibration** (only while PhaseSpace streams). The default 3 × 2 grid (`CAL_TABLE_GRID`) with 12 s drifts (`CAL_DRIFT_TIME`) takes about 4 minutes. **Stop** (or Esc on this tab) ends it at once with everything off; so does Esc or switching the platform off on the [Hardware tab](page:tab-hardware), where the platform shows as *Calibrating* while it runs.
 
 While it runs, the map shows the grid (the point under way in yellow), the drifts so far, the platform and its goal, and the steps tick off on the left.
 
 **The result.** The map shows the table's height in colour (blue low, red high; the colour bar gives the range in µm, the lowest point at 0), its contour lines, which way is downhill (the arrows, longer where it is steeper) and the drifts it was fitted to (a red cross where a drift was cut short). Below it:
 
-- **Tilt at Centre** and **Steepest** [mrad]: 1 mrad is a 1 mm drop per metre, and pulls a floating platform at 0.0098 m/s².
+- **Tilt at Centre** and **Steepest** [mrad]: 1 mrad is a 1 mm drop per metre, and pulls a floating platform at 0.0098 m/s² (`MRAD_PULL`, g/1000).
 - **Downhill**: which way at the centre, from +x towards +y.
 - **Fit Residual** [mm]: how far the drifts are from the fitted model; close to the cameras' noise means the model fits.
 - The air bearings' drag per platform [1/s]. Short drifts can't tell drag from slope; the drag then shows as *not resolved* and 0 is used. Longer drifts (12 s or more) resolve it.
 
 **When a run isn't saved.** A run replaces the lab's calibration only if its data can be trusted: one where PhaseSpace's positions jumped or went back in time (mis-tracking, or a second stream), or where the drifts don't follow the model at all, fails with the reason and leaves the lab's calibration as it was. A fit that follows the drifts less well than the cameras' noise suggests is kept, with a warning under the map.
 
-**Surface or plane.** A smooth surface (quadratic: tilt plus a bow in each direction) needs at least three drifts that between them cover at least 40 % of the table each way; with fewer, Auto fits a plane (one tilt everywhere).
+**Surface or plane.** A smooth surface (quadratic: tilt plus a bow in each direction) needs at least three drifts (`CAL_SURFACE_MIN_DRIFTS`) that between them cover at least 40 % of the table each way (`CAL_SURFACE_COVERAGE`); with fewer, Auto fits a plane (one tilt everywhere).
 
 ## Thrusters
 
 **How It Works.** With PhaseSpace streaming and the platform resting on the table, for each thruster 1 to 8 (and each repeat):
 
 1. **Centre.** The pucks come on and the diagram's own controller flies the platform to the table's centre.
-2. **Rest.** Pucks off: the platform sets down and comes to rest for 5 s.
-3. **Fire.** The pucks come on with the thruster firing at full thrust for the burn time (2 s by default); PhaseSpace records every frame of the push.
+2. **Rest.** Pucks off: the platform sets down and comes to rest for 5 s (`CAL_BURN_REST`).
+3. **Fire.** The pucks come on with the thruster firing at full thrust for the burn time (2 s by default, `CAL_BURN_TIME`); PhaseSpace records every frame of the push.
 
 Clear the table around the centre before starting.
 
 Each burn's thrust is worked out from the push it gave: the platform's mass times its acceleration, with the table's slope (the table calibration) taken out, and the turn it gave against its inertia. So the result is only as good as the platform's **mass, inertia and centre of gravity**: before it starts, the tab asks you to confirm them (SPOT's defaults, as the lab console's controller uses them, which you can change for this run) and tick **I understand**.
 
-**Run** (lab console): the platform, the repeats (2 by default: their thrusts are averaged, and their spread shown), the burn time and the edge margin, then **Start Thruster Calibration…**. Eight thrusters with two repeats take about 4 minutes. If there is no table calibration yet, the tab says so: calibrate the table first for the best thrusts. A burn ends early near an edge; **Stop** (Esc), the Hardware tab and losing PhaseSpace stop it as for the table.
+**Run** (lab console): the platform, the repeats (2 by default, `CAL_BURN_REPEATS`: their thrusts are averaged, and their spread shown), the burn time and the edge margin, then **Start Thruster Calibration…**. Eight thrusters with two repeats take about 4 minutes. If there is no table calibration yet, the tab says so: calibrate the table first for the best thrusts. A burn ends early near an edge; **Stop** (Esc), the Hardware tab and losing PhaseSpace stop it as for the table.
 
 **The result**, for the platform picked at the top right:
 
-- **The platform from above**, with each thruster's push as an arrow onto its nozzle: its length is the thrust, its direction the way it really pushes, and its colour how it compares with nominal (green within 3 %, amber or red weaker, blue stronger).
+- **The platform from above**, with each thruster's push as an arrow onto its nozzle: its length is the thrust, its direction the way it really pushes, and its colour how it compares with nominal (green within 3 %, `CAL_THRUST_WARN_FRACTION`; amber or red weaker, blue stronger).
 - **The bars**: each thruster's thrust with its spread, against nominal (dashed).
 - **The table**: thrust, ±, against nominal, **Turned** (how far the push is turned from the thruster's direction) and **Torque Ratio** (the torque the burn gave over the torque the mixer expects from that thrust: far from 1, the CG or the inertia is off).
 - **Each burn's path** from where the platform started, at one scale.
@@ -69,7 +69,7 @@ The result is the straight line
 
 $$r(N) = s\,\bigl(1 - m\,(N - 1)\bigr),$$
 
-where $r$ is the push with $N$ valves open over the sum of their single pushes and $m$ is the **thrust decay**, the fraction lost per extra valve open. All eight together give no net push (opposite thrusters cancel), so that firing is only a check, and firings whose pushes cancel are left out. The decay is kept with the platform's thruster calibration and used by Interactive Mode, the mixer and the simulation ([The Thruster Mixer](page:math-mixer)). Until a platform's decay is measured, the Obstacle's (11.2 % per extra valve, measured 2026-10-14) is used.
+where $r$ is the push with $N$ valves open over the sum of their single pushes and $m$ is the **thrust decay**, the fraction lost per extra valve open. All eight together give no net push (opposite thrusters cancel), so that firing is only a check, and firings whose pushes cancel are left out. The decay is kept with the platform's thruster calibration and used by Interactive Mode, the mixer and the simulation ([The Thruster Mixer](page:math-mixer)). Until a platform's decay is measured, the Obstacle's (11.2 % per extra valve, measured 2026-10-14; `THRUST_DECAY_DEFAULT`) is used.
 
 ## Previous Runs
 
@@ -77,7 +77,7 @@ Every run's raw data is kept on the lab console, so a table, thruster or Togethe
 
 ## Arm
 
-The arm calibration runs [calibrate_arm.py](file:calibrate_arm.py) on the Chaser, which has the arm's U2D2, from this tab. It drives the servos as SPOT does, in **PWM (voltage) control**, and measures with PWM and the encoders only: the servos' current readings are too coarse and noisy at the arm's small torques ([The Arm](page:math-arm)). Torques come from the PWM through the datasheet's torque per volt (0.5 N m/V for an MX-64). Each joint in turn, while the others hold:
+The arm calibration runs [calibrate_arm.py](file:calibrate_arm.py) on the Chaser, which has the arm's U2D2, from this tab. It drives the servos as SPOT does, in **PWM (voltage) control**, and measures with PWM and the encoders only: the servos' current readings are too coarse and noisy at the arm's small torques ([The Arm](page:math-arm)). Torques come from the PWM through the datasheet's torque per volt (0.5 N m/V for an MX-64, `TORQUE_PER_VOLT_MX64`). Each joint in turn, while the others hold:
 
 1. **Breakaway.** The PWM creeps up from zero until the joint moves, three times each way: the static friction (breakaway torque).
 2. **Speed Sweep.** The joint turns back and forth at fixed PWM levels about its breakaway, each started with a short kick; the speed it settles at shows the friction at that speed (Coulomb, Stribeck) and the speed coefficient: the back-EMF and viscous friction, which brake it alike and so can't be told apart; the datasheet's back-EMF splits them.
@@ -86,7 +86,7 @@ The arm calibration runs [calibrate_arm.py](file:calibrate_arm.py) on the Chaser
 
 The figure at the top of How It Works shows what the test picked (click one) does to a joint; during a run, the test under way.
 
-**The Chaser's Setup.** Opening the section asks the Chaser what the script needs (**Check Again** asks again): Python 3, the Dynamixel SDK, the U2D2 at `/dev/ttyUSB0`, access to it, and nothing else holding it; each missing item says what to do (`pip3 install --user dynamixel-sdk`; `setup_arm_serial.sh` for the access and the 1 ms latency timer). A real run can't start until they are all there. If the Chaser's agent is older than the console, the check says to run `setup_hardware_link.sh`.
+**The Chaser's Setup.** Opening the section asks the Chaser what the script needs (**Check Again** asks again): Python 3, the Dynamixel SDK, the U2D2 at `/dev/ttyUSB0`, access to it, and nothing else holding it; each missing item says what to do (`pip3 install --user dynamixel-sdk`; `setup_arm_serial.sh` for the access and the 1 ms latency timer, `SERVO_LATENCY_TIMER_MS`). A real run can't start until they are all there. If the Chaser's agent is older than the console, the check says to run `setup_hardware_link.sh`.
 
 **Run** (lab console): the joints and tests (all by default), then **Start Arm Calibration…**; a dialog asks you to confirm that the Chaser rests on the table, the arm is clear (each joint moves up to 25° either way) and someone has the power switch at hand. All three joints and all four tests take about 15 minutes. While it runs the console keeps the Chaser resting (the Hardware tab shows it as *Calibrating*, and nothing can float it); **Stop** (or Esc) switches the servos' torque off at once and restores their settings, and so does switching the Chaser off on the Hardware tab.
 
@@ -95,7 +95,7 @@ The figure at the top of How It Works shows what the test picked (click one) doe
 **The result.** Each joint's static friction (and each way), Coulomb friction, Stribeck speed, viscous friction, back-EMF and inertia; the friction against speed for every joint (the measured points, what the motor gave at each steady speed, and the fitted curve); and each joint's position steps (goal and measured). The script warns about unreliable speed sweeps and one-sided inertia results, and its setup check scans the bus for the servos. The run's raw data stays on the lab console (`~/SPOTCalibration/<stamp>_arm_RED/`). Projects take it with **Update from Lab**, and the simulated arm uses it when the Arm card's **Use** switch is on (the newer of it and an `arm_calibration.json` copied by hand into the project folder).
 
 > [!NOTE]
-> Until October 2026 the servos ran in current (torque) control, and the calibration measured the friction from their current readings. Those readings proved unusable at the arm's torques (the wrist servo, ID 3, even read differently in each direction), so SPOT moved to PWM control. A calibration from before (version 1) is marked *Current Control · Not Used*: simulations ignore it (and warn), and projects aren't offered it. Until the arm is calibrated again, its friction values are placeholders.
+> Until October 2026 the servos ran in current (torque) control, and the calibration measured the friction from their current readings. Those readings proved unusable at the arm's torques (the wrist servo, ID 3, even read differently in each direction), so SPOT moved to PWM control. A calibration from before (version 1) is marked *Current Control · Not Used*: simulations ignore it (and warn), and projects aren't offered it. Until the arm is calibrated again, every joint uses one MX-64(2.0)'s friction and inertia measured unloaded on the bench with this script (2026-10-17; `ARM_STATIC`, `ARM_COULOMB`, `ARM_STRIBECK`, `ARM_BACK_EMF` and `ARM_ARMATURE`, which `spot.arm.defaults` reads).
 
 ## The 3D view
 

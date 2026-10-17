@@ -1,6 +1,6 @@
 # The Vision Tab
 
-The lab console's **Vision** tab streams the cameras plugged into the **Jetson Orin** (`192.168.1.115`): the ZED 2i stereo camera, the Intel RealSense L515 LiDAR camera, the iniVation DVXplorer event camera, and any USB camera. The Orin runs **SPOT Vision** ([spot_vision.py](file:spot_vision.py)), a small web service on port 8090; the lab console only tells the page where it is ([vision.py](file:vision.py)), and the video goes from the Orin straight to your browser, so it never loads the TX2. The page's code is [vision.js](file:vision.js).
+The lab console's **Vision** tab streams the cameras plugged into the **Jetson Orin** (`192.168.1.115`, `Constants.IP_ORIN`): the ZED 2i stereo camera, the Intel RealSense L515 LiDAR camera, the iniVation DVXplorer event camera, and any USB camera. The Orin runs **SPOT Vision** ([spot_vision.py](file:spot_vision.py)), a small web service on port 8090 (`PORT_VISION`); the lab console only tells the page where it is ([vision.py](file:vision.py)), and the video goes from the Orin straight to your browser, so it never loads the TX2. The page's code is [vision.js](file:vision.js).
 
 ## Using it
 

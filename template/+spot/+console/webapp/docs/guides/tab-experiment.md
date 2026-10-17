@@ -4,7 +4,7 @@ Running the diagram **on the platforms**, from your MATLAB, through the lab cons
 
 ## Lab
 
-- **Lab Console (TX2) Address**: where the lab console is (`192.168.1.116` by default). It is a setting (`labConsoleAddress`): the diagram compiles it in as `labConsoleIP`, the address every platform sends its clock, messages and streams to, so **after changing it, build again**. The pill says **Connected**, **Needs Update** (the lab console runs an older console than yours; update it with the deploy script) or **Not Reachable** with the reason; the local server keeps retrying every 3 s.
+- **Lab Console (TX2) Address**: where the lab console is (`192.168.1.116` by default, `Constants.IP_LAB_CONSOLE`). It is a setting (`labConsoleAddress`): the diagram compiles it in as `labConsoleIP`, the address every platform sends its clock, messages and streams to, so **after changing it, build again**. The pill says **Connected**, **Needs Update** (the lab console runs an older console than yours; update it with the deploy script) or **Not Reachable** with the reason; the local server keeps retrying every 3 s.
 
 ### PhaseSpace
 
@@ -28,7 +28,7 @@ The **Deploy & Run** card says whether a program for this diagram already exists
 ## Deploy & Run
 
 - **Deploy**: the lab console copies the program (and the shared libraries it needs) to each platform over SSH.
-- **Start Experiment** (enabled once this diagram is deployed): the lab console checks that the cameras stream and every Teensy is free, starts each program, and waits until all of them report their clock; then it arms the clock in the PhaseSpace stream and **three seconds later all platforms leave phase 0 together**. The status line tells the story (waiting for which platforms, counting down, running since). Use the lab's **E-stop** if anything looks wrong; the Teensies also shut their valves after 2 s without a packet.
+- **Start Experiment** (enabled once this diagram is deployed): the lab console checks that the cameras stream and every Teensy is free, starts each program, and waits until all of them report their clock; then it arms the clock in the PhaseSpace stream and **three seconds later all platforms leave phase 0 together** (`SYNC_COUNTDOWN`). The status line tells the story (waiting for which platforms, counting down, running since). Use the lab's **E-stop** if anything looks wrong; the Teensies also shut their valves after 2 s without a packet (`TEENSY_WATCHDOG`).
 - **Stop**: stops every program and sends the Teensies an all-off.
 
 Under the 3D view, each platform's experiment clock is shown, with how far apart the clocks are (network delays included).

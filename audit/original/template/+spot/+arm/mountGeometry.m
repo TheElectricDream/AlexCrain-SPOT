@@ -16,8 +16,9 @@ function arm = mountGeometry(arm)
     %   See also spot.arm.parameters.
 
     %% Constants
-    FACE = 0.15;          % [m] face distance from the centre (CAD: info.mount.face)
-    LATERAL = 0.082735;   % [m] place offset from the face's centre line (CAD: info.mount.lateral)
+    FACE = Constants.BODY_HALF_SIDE;         % [m] face distance from the centre
+    LATERAL = Constants.ARM_MOUNT_LATERAL;   % [m] place offset from the face's centre line
+    USUAL = struct('face', Constants.ARM_MOUNT_FACE, 'side', Constants.ARM_MOUNT_SIDE);
 
     %% Mount
     % Each face's angle, keyed by face name with +/- spelled p/m (valid field names).
@@ -25,7 +26,7 @@ function arm = mountGeometry(arm)
     key = @(f) strrep(strrep(f, '+', 'p'), '-', 'm');
 
     % The requested mount, or the usual one.
-    place = struct('face', '+y', 'side', 'left');
+    place = USUAL;
     if isfield(arm, 'mount') && isstruct(arm.mount)
         place = arm.mount;
     end
@@ -45,9 +46,9 @@ function arm = mountGeometry(arm)
     rot = @(a) [cos(a) -sin(a); sin(a) cos(a)];
 
     % The shoulder in the usual mount's frame.
-    a0 = pi/2;                                               % usual mount: +y, left
+    a0 = angles.(key(USUAL.face));                           % the usual mount's face
     s0 = arm.b0 * [cos(arm.Phi), sin(arm.Phi)];              % shoulder there
-    inMount = rot(-a0) * (s0 - origin(a0, 'left')).';        % ... in the mount's frame
+    inMount = rot(-a0) * (s0 - origin(a0, USUAL.side)).';    % ... in the mount's frame
 
     % The same point in the requested mount's frame, back on the platform.
     a = angles.(key(char(place.face)));

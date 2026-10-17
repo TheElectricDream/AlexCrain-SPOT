@@ -25,7 +25,9 @@ folder). Below is how to run it by hand.
 
    Other options: `--joints 3` (one joint), `--tests breakaway sweep` (some tests), `--window 15` (a
    smaller range), `--max-pwm 200` (a lower cap), `--port /dev/ttyUSB1`, `--help` for the rest.
-   `--simulate` rehearses without hardware; `--yes` starts without asking for Enter.
+   `--simulate` rehearses without hardware; `--yes` starts without asking for Enter. The script runs on its own
+   on the Chaser, so it keeps copies of the servo units and SPOT's servo settings; `Constants.verify`
+   checks them against `Constants.m`, where SPOT keeps every such number.
 5. Copy `runs/<date_time>/arm_calibration.json` to the SPOT project's folder (next to
    `spot_settings.json`). The next simulation uses it (the newer of it and the Calibration tab's). Keep
    the whole `runs/<date_time>` folder with the raw data.

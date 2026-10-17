@@ -33,7 +33,7 @@ Everything is saved as you type, and put into MATLAB's workspace for the diagram
 
 ## 4. Run
 
-Press **Run Simulation**. The status line follows the run; a full 275 s run of the template typically takes under a minute. When it finishes:
+Press **Run Simulation**. The status line follows the run; a full 275 s run of the template (the default phases, `Constants.PHASE0_DURATION` … `PHASE5_DURATION`) typically takes under a minute. When it finishes:
 
 - the 3D view replays it (Space plays and pauses; drag the scrubber);
 - the **Messages** panel on the right shows what each platform was doing;
@@ -46,7 +46,7 @@ Press **Run Simulation**. The status line follows the run; a full 275 s run of t
 
 - On the **Control** pane, change the LQR weights; the gains under them update as you type ([Platform Dynamics and LQR](page:math-dynamics-lqr)). Run again, and use **Compare** on the playback bar to lay the earlier run over the new one.
 - Open the diagram (**Open in Simulink** on the Scenario pane) and look at [1 - Experiment Logic](page:diagram-experiment-logic): each phase sets where each platform should be and which controller flies it. Your own guidance and control go in the numbered subsystems ([Writing Your Own Guidance and Control](page:diagram-your-code)).
-- Your own MATLAB variables go in `SPOT_User_Parameters.m` ([Your Own Parameters](page:user-parameters)).
+- Your own values go in `Constants.m`, which the diagram reads as `Constants.NAME` ([Constants](page:dev-constants)).
 
 ## Next
 

@@ -1,7 +1,7 @@
 function packet = packCommand(duty, pucks)
     %PACKCOMMAND Command packet for a platform's Teensy (firmware: teensy/teensy_pwm_control.ino).
     %   packet = spot.hardware.packCommand(duty, pucks). The Teensy switches everything off when
-    %   no packet has arrived for 2 s.
+    %   no packet has arrived for TEENSY_WATCHDOG (Constants).
     %
     %   Inputs
     %     duty    8 thruster duty cycles [%] (0-100)
@@ -13,10 +13,11 @@ function packet = packCommand(duty, pucks)
     %   See also spot.hardware.udpSend.
 
     %% Constants
-    HEADER = 170;   % 0xAA, start of packet
+    HEADER = Constants.TEENSY_SYNC_BYTE;        % 0xAA, start of packet
+    NUM_THRUSTERS = Constants.NUM_THRUSTERS;
 
-    if numel(duty) ~= 8
-        error('spot:hardware:packCommand', 'Give 8 thruster duty cycles.');
+    if numel(duty) ~= NUM_THRUSTERS
+        error('spot:hardware:packCommand', 'Give %d thruster duty cycles.', NUM_THRUSTERS);
     end
 
     % Values as single bytes; MATLAB runs little-endian on all its platforms.

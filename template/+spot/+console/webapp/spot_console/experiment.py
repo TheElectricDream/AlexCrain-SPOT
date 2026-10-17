@@ -19,8 +19,9 @@ import time
 from pathlib import Path
 
 from .common import ApiError, decode, shown, shown_list
+from .constants import C
 from .events import hub, settings
-from .hardware import StepFailed, hardware, in_parallel, platform_run
+from .hardware import TEENSY_PORT, StepFailed, hardware, in_parallel, platform_run
 from .phasespace import streamer
 
 
@@ -30,29 +31,33 @@ EXP_BUILD_ROOT = Path.home() / "ExperimentSoftware" / "MATLAB_ws"
 
 EXP_DATA_ROOT = Path.home() / "ExperimentData"
 
-# Each platform sends its experiment time here.
-EXP_CLOCK_PORTS = {"RED": 48720, "BLACK": 48721, "BLUE": 48722}
+# Each platform sends its experiment time here (PORT_EXP_CLOCK_*).
+EXP_CLOCK_PORTS = C.per_platform("PORT_EXP_CLOCK")
 
 # The agreed start: once every platform's program is running (each
 # sends its clock, still 0), StreamData is told to start the experiment
 # clock this many seconds later, in the PhaseSpace stream all platforms
 # receive (spot.hardware.experimentTime), so they start together.
-SYNC_COUNTDOWN = 3.0
+SYNC_COUNTDOWN = float(C.SYNC_COUNTDOWN)   # [s]
 SYNC_READY_TIMEOUT = 90.0   # [s] for every program to start sending its clock
 
 # The platforms' debug messages (spot.hardware.debugMessages):
-# [experiment time, double][text], each platform on its own port. The
-# original diagram broadcast the bare text to 55000 instead; that is
-# still understood (the platform is known from its address).
-EXP_DEBUG_PORTS = {"RED": 55001, "BLACK": 55002, "BLUE": 55003}
-EXP_DEBUG_LEGACY_PORT = 55000
+# [experiment time, double][text], each platform on its own port
+# (PORT_DEBUG_*). The original diagram broadcast the bare text to
+# PORT_DEBUG_LEGACY instead; that is still understood (the platform is
+# known from its address).
+EXP_DEBUG_PORTS = C.per_platform("PORT_DEBUG")
+EXP_DEBUG_LEGACY_PORT = C.int("PORT_DEBUG_LEGACY")
 DEBUG_KEEP = 300   # messages kept per platform (only changes are kept)
 DEBUG_SHOW = 100   # of which the status carries the newest
 
 # The Live Stream blocks' signals (spot.hardware.liveStream), for the
-# Live Plot, one port per platform: [uint8 version 1][uint8 name length
-# L][uint16 count n][double t][L name characters][n doubles].
-EXP_LIVE_PORTS = {"RED": 55011, "BLACK": 55012, "BLUE": 55013}
+# Live Plot, one port per platform (PORT_LIVE_*): [uint8 version
+# LIVE_PACKET_VERSION][uint8 name length L][uint16 count n][double t]
+# [L name characters][n doubles].
+EXP_LIVE_PORTS = C.per_platform("PORT_LIVE")
+LIVE_PACKET_VERSION = C.int("LIVE_PACKET_VERSION")
+LIVE_HEADER_BYTES = 12   # version, length, count and t
 LIVE_KEEP = 12000      # samples kept per stream (10 min at 20 Hz)
 LIVE_PUBLISH = 0.2     # [s] new samples go to the pages this often
 
@@ -307,7 +312,7 @@ class Experiment:
             if probe["state"] != "ok":
                 raise ApiError("%s: %s" % (shown(n), probe["detail"] or probe["state"]))
             if not probe["teensy"]:
-                raise ApiError("The %s has no Teensy at /dev/ttyACM0." % shown(n))
+                raise ApiError("The %s has no Teensy at %s." % (shown(n), TEENSY_PORT))
             if probe["others"]:
                 raise ApiError("The %s's Teensy is already in use by %s."
                                % (shown(n), ", ".join(probe["others"])))
@@ -766,17 +771,18 @@ def parse_live(data):
         (name, t, [values]), non-finite values as None; None if it
         isn't a valid packet.
     """
-    # Version 1, and the length the header says.
-    if len(data) < 12 or data[0] != 1:
+    # The version this console reads, and the length the header says.
+    head = LIVE_HEADER_BYTES
+    if len(data) < head or data[0] != LIVE_PACKET_VERSION:
         return None
     length = data[1]
     n = struct.unpack("<H", data[2:4])[0]
-    if len(data) != 12 + length + 8 * n:
+    if len(data) != head + length + 8 * n:
         return None
 
-    t = struct.unpack("<d", data[4:12])[0]
-    name = data[12:12 + length].decode("ascii", "replace").strip() or "stream"
-    values = list(struct.unpack("<%dd" % n, data[12 + length:]))
+    t = struct.unpack("<d", data[4:head])[0]
+    name = data[head:head + length].decode("ascii", "replace").strip() or "stream"
+    values = list(struct.unpack("<%dd" % n, data[head + length:]))
     if not math.isfinite(t):
         return None
     return name, t, [v if math.isfinite(v) else None for v in values]

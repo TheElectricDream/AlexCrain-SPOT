@@ -19,7 +19,7 @@ out = spot.sim.run(s, root);                    % simulates; dataClass is in the
 fprintf('%g s simulated in %.1f s\n', out.tsim, out.seconds);
 ```
 
-`spot.sim.run` applies the settings, runs `SPOT_User_Parameters.m`, simulates without changing the diagram file, and leaves `dataClass`, `dataPacket` and `simOut` in the base workspace. The settings are an ordinary struct: `spot.params.defaults` lists every field with its unit ([The Settings File](page:settings-file)). When Simulink stops with an error, `spot.sim.run` throws a `spot.sim.SimulationFailed` whose message is the root cause; `spot.sim.errorDetails(err)` gives the whole chain.
+`spot.sim.run` applies the settings, simulates without changing the diagram file, and leaves `dataClass`, `dataPacket` and `simOut` in the base workspace. The settings are an ordinary struct: `spot.params.defaults` lists every field with its unit ([The Settings File](page:settings-file)). When Simulink stops with an error, `spot.sim.run` throws a `spot.sim.SimulationFailed` whose message is the root cause; `spot.sim.errorDetails(err)` gives the whole chain.
 
 ## Looking at the results
 

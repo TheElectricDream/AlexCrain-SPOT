@@ -12,6 +12,7 @@
 // its mount, s.mass.arm.mount), and the Simulation tab's Arm switch picks or drops the arm here.
 
 import { platformName, COLORS } from './platforms.js';
+import { constant } from './constants.js';
 
 const NAMES = ['RED', 'BLACK', 'BLUE'];
 
@@ -23,7 +24,8 @@ const FACES = [
 
 // Seen from outside a face, which faces its left and right edges meet.
 const EDGES = { '+x': ['−Y', '+Y'], '+y': ['+X', '−X'], '-x': ['+Y', '−Y'], '-y': ['−X', '+X'] };
-const ARM_MOUNT = { face: '+y', side: 'left' };   // the Chaser's arm coupler (info.mount.armMount)
+// The Chaser's arm coupler (info.mount.armMount): ARM_MOUNT_FACE, ARM_MOUNT_SIDE.
+const armMount = () => ({ face: constant('ARM_MOUNT_FACE'), side: constant('ARM_MOUNT_SIDE') });
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const $ = s => document.querySelector(s);
@@ -261,7 +263,7 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
       return;
     }
     const dock = S.design.platforms.RED.dock;
-    const mount = (s.mass && s.mass.arm && s.mass.arm.mount) || ARM_MOUNT;
+    const mount = (s.mass && s.mass.arm && s.mass.arm.mount) || armMount();
     if (s.platforms.ARM && (dock.type !== 'arm' || !same(dock, mount))) {
       await change(p => {
         Object.assign(p.dock, { type: 'arm', face: mount.face, side: mount.side });

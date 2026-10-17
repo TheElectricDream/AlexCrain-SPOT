@@ -38,10 +38,10 @@ Start with what the consoles say: most problems show up as a status with its rea
 | **Offline** | the platform doesn't answer: switched off, still booting, or not on the network. Check its power and Wi-Fi; wait a minute after power-on. A platform that drops off now and then may have Wi-Fi power saving on: run `setup_hardware_link.sh` in a terminal for it ([Lab Administration](page:lab-admin)) |
 | **No Access** | the platform doesn't accept the lab console's key (a reinstalled platform, or a new one): **Lab Setup › Link the Platforms** |
 | host key changed | the platform was reinstalled; on the TX2 run the `ssh-keygen -R <address>` the message gives |
-| **No Teensy** | the Jetson is up, but there is no Teensy at `/dev/ttyACM0`: check its USB cable, and power-cycle the platform |
+| **No Teensy** | the Jetson is up, but there is no Teensy at `/dev/ttyACM0` (`Constants.TEENSY_PORT`): check its USB cable, and power-cycle the platform |
 | **In Use** | another program has the Teensy's port (usually an experiment still running): stop it on the Experiment tab |
 | pucks or a thruster don't respond | check that the E-stop is released (blue light), that the tank valve is open and the gauges read pressure, and the connections to the valves on the bottom level; power-cycle the platform |
-| a thruster stays open | switch everything off (Esc on the Hardware tab), then toggle the pucks and fire each thruster once; if it persists, power-cycle the platform. The Teensy shuts every valve 2 s after its commands stop, so a stuck valve after that is electrical: press the E-stop and look at the valve's driver |
+| a thruster stays open | switch everything off (Esc on the Hardware tab), then toggle the pucks and fire each thruster once; if it persists, power-cycle the platform. The Teensy shuts every valve 2 s after its commands stop (`TEENSY_WATCHDOG`), so a stuck valve after that is electrical: press the E-stop and look at the valve's driver |
 
 ## PhaseSpace
 

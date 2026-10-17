@@ -13,9 +13,9 @@ classdef VelocityControl < matlab.System
     %        Limit [885 = 100 %], in whole units:
     %          PWM = P/128 e + I/65536 sum(e),  e in velocity units
     %
-    %   At StepTime = ServoPeriod = 1 ms this is the servo's own velocity control. The
-    %   defaults are retuned for the diagram's 20 Hz; a joint with stiction well above the
-    %   default friction can take a second or more to break away.
+    %   At StepTime = ServoPeriod this is the servo's own velocity control. The defaults
+    %   (Constants' ARM_VELOCITY_P/I) are retuned for the diagram's SAMPLE_RATE; a joint
+    %   with stiction well above the default friction can take a second or more to break away.
     %
     %   Each gain is one value for all three servos, or [shoulder elbow wrist].
     %
@@ -35,13 +35,13 @@ classdef VelocityControl < matlab.System
     %#codegen
 
     properties (Nontunable)
-        StepTime = 0.05                 % [s] controller period (the diagram's baseRate)
-        ServoPeriod = 1e-3              % [s] servo's control period, which its gains are per
-        VelocityP = [160 70 30]         % Velocity P Gain [shoulder elbow wrist] (servo had 100)
-        VelocityI = [220 1500 300]      % Velocity I Gain (servo had 1920)
-        ProfileAcceleration = 0         % [214.577 rev/min^2], 0 = none
-        VelocityLimit = 1023            % Velocity Limit [0.229 rev/min]
-        PWMLimit = 885                  % PWM Limit
+        StepTime = 1 / Constants.SAMPLE_RATE           % [s] controller period (baseRate)
+        ServoPeriod = Constants.SERVO_PERIOD           % [s] the servo's; its gains are per it
+        VelocityP = Constants.ARM_VELOCITY_P           % Velocity P Gain [shoulder elbow wrist]
+        VelocityI = Constants.ARM_VELOCITY_I           % Velocity I Gain
+        ProfileAcceleration = Constants.ARM_VELOCITY_PROFILE_ACCELERATION   % 0 = none
+        VelocityLimit = Constants.VELOCITY_LIMIT       % Velocity Limit [velocity units]
+        PWMLimit = Constants.ARM_VELOCITY_PWM_LIMIT    % PWM Limit
     end
 
     properties (Access = private)
@@ -51,12 +51,12 @@ classdef VelocityControl < matlab.System
     end
 
     properties (Constant, Access = private)
-        VEL_UNIT = 0.229 * 2*pi/60      % [rad/s] per velocity unit
-        ACC_UNIT = 214.577 * 2*pi/3600  % [rad/s^2] per profile acceleration unit
-        RADPS_TO_RPM = 9.549296585513702    % [rev/min per rad/s] = 60/(2*pi)
-        RPM_TO_VEL_UNITS = 4.366756307      % [units per rev/min] = 1/0.229
-        P_SCALE = 128                   % Dynamixel gain scalings: PWM per gain unit
-        I_SCALE = 65536
+        VEL_UNIT = Constants.VEL_UNIT_RPM * 2*pi/60      % [rad/s] per velocity unit
+        ACC_UNIT = Constants.ACC_UNIT_RPM2 * 2*pi/3600   % [rad/s^2] per profile accel. unit
+        RADPS_TO_RPM = Constants.CMD_RADPS_TO_RPM        % [rev/min per rad/s] (old hw code)
+        RPM_TO_VEL_UNITS = Constants.CMD_RPM_TO_VEL_UNITS   % [units per rev/min] (old hw code)
+        P_SCALE = Constants.GAIN_SCALE_P                 % gain scalings: PWM per gain unit
+        I_SCALE = Constants.GAIN_SCALE_I
     end
 
     methods

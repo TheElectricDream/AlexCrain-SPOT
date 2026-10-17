@@ -5,10 +5,11 @@ function r = centerOfGravity(scales, leds)
     %
     %   Inputs
     %     scales  the three scale readings [kg] (layout of 2025-08-29, relative to the centre of
-    %             the 0.3 m body; the Mass Properties guide's COMConfig.png):
-    %               A  left-middle edge   at body (x, y) = (0, 0.15) m
-    %               B  right-back corner  at (-0.15, -0.15) m
-    %               C  right-front corner at ( 0.15, -0.15) m
+    %             the body; the Mass Properties guide's COMConfig.png; Constants.SCALE_A,
+    %             SCALE_B, SCALE_C):
+    %               A  left-middle edge   at body (x, y) = (0, BODY_HALF_SIDE)
+    %               B  right-back corner  at (-BODY_HALF_SIDE, -BODY_HALF_SIDE)
+    %               C  right-front corner at ( BODY_HALF_SIDE, -BODY_HALF_SIDE)
     %     leds    4x2 [x y] of each LED from the body centre [m], corners in the order
     %             (+x,+y), (+x,-y), (-x,-y), (-x,+y) (optional: spot.massprops.markerLayout's)
     %
@@ -29,8 +30,11 @@ function r = centerOfGravity(scales, leds)
     end
 
     %% Constants
-    HALF_SIDE = 0.15;         % [m] body centre to edge
-    THRUSTER_INSET = 0.081;   % [m] thrusters in from the edge (measured 2025-08-29)
+    % The scales' positions and the thrusters' line of action, from the body centre.
+    SCALE_A = Constants.SCALE_A;             % [m] [x y] left-middle edge
+    SCALE_B = Constants.SCALE_B;             % [m] right-back corner
+    SCALE_C = Constants.SCALE_C;             % [m] right-front corner
+    THRUSTER_ARM = Constants.THRUSTER_ARM;   % [m] a thruster's line from the centre
     MM_PER_M = 1000;
 
     %% Mass and centre of gravity
@@ -44,11 +48,11 @@ function r = centerOfGravity(scales, leds)
     end
 
     % Readings weighted by each scale's position.
-    X = (A*0 + B*(-HALF_SIDE) + C*HALF_SIDE) / M;
-    Y = (A*HALF_SIDE + B*(-HALF_SIDE) + C*(-HALF_SIDE)) / M;
+    X = (A*SCALE_A(1) + B*SCALE_B(1) + C*SCALE_C(1)) / M;
+    Y = (A*SCALE_A(2) + B*SCALE_B(2) + C*SCALE_C(2)) / M;
 
     %% Thruster offsets from the CG [mm]
-    e = HALF_SIDE - THRUSTER_INSET;
+    e = THRUSTER_ARM;
     thrusters = [ e - Y
                  -(e + Y)
                   e - X

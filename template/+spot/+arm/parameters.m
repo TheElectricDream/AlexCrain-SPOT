@@ -19,12 +19,12 @@ function a = parameters(v, root)
     %           a.calibrationIgnored names one left out because it was measured with the
     %           motor current (calibration version 1), '' if none
     %
-    %   Change it in SPOT_User_Parameters.m, e.g. armModel.friction.static = [0.4 0.3 0.2];
+    %   Change the project's Constants.m to change it (ARM_STATIC, ARM_COULOMB, ...).
     %
     %   See also spot.arm.defaults, spot.arm.loadCalibration, spot.params.apply.
 
     %% Constants
-    PWM_FORMAT = 2;   % first arm calibration version measured in PWM control
+    PWM_FORMAT = Constants.ARM_CALIBRATION_FORMAT;   % first version measured in PWM control
 
     %% Model from the workspace
     a = spot.arm.defaults();
@@ -45,7 +45,7 @@ function a = parameters(v, root)
     a.x0 = [v.init_states_RED(:); v.init_states_ARM(:)];
 
     % Table slope and air-bearing drag under the Chaser (spot.sim.tableSlope); level by default.
-    a.tableSlope = [0 0 0 0 0 1.75 1.2];
+    a.tableSlope = Constants.LEVEL_TABLE;
     a.tableDamping = 0;
     if isfield(v, 'tableSlope')
         a.tableSlope = v.tableSlope;

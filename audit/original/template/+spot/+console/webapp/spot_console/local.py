@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from .common import ApiError
+from .constants import C
 from .events import DEFAULT_PLATFORMS, hub
 from .experiment import NAME_RE
 
@@ -445,7 +446,7 @@ class LabLink:
     # GET requests the page may make through the local server.
     READS = ("experiment/build", "experiment/live", "calibration")
 
-    PORT = 8080   # the lab console's web port
+    PORT = C.int("PORT_LAB_CONSOLE")   # the lab console's web port
 
     def __init__(self, url):
         """Start following nothing yet (see start)."""
@@ -491,8 +492,8 @@ class LabLink:
         """
         parts = str(address).strip().split(".")
         if len(parts) != 4 or not all(part.isdigit() and int(part) <= 255 for part in parts):
-            raise ApiError("The lab console address must be an IPv4 address such as "
-                           "192.168.1.116.")
+            raise ApiError("The lab console address must be an IPv4 address such as %s."
+                           % C.IP_LAB_CONSOLE)
         return "http://%s:%d" % (".".join(str(int(part)) for part in parts), LabLink.PORT)
 
     def set_address(self, address):

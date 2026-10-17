@@ -1,7 +1,8 @@
 #ifndef SPOT_ARM_PWM_H
 #define SPOT_ARM_PWM_H
 /* The arm's three Dynamixel MX-64(2.0) servos (IDs 1-3) in PWM (voltage) control, for
-   spot.hardware.ArmPWM. Self-contained (protocol 2.0, Linux serial); see arm_pwm.cpp. */
+   spot.hardware.ArmPWM. Self-contained (protocol 2.0, Linux serial); see arm_pwm.cpp. The units
+   below are Constants.CENTER_PULSE, VEL_UNIT_RPM and PWM_FULL (Constants.m). */
 #ifdef __cplusplus
 extern "C" {
 #endif

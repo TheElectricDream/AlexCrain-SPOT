@@ -38,7 +38,6 @@
       {"id": "matlab-without-console", "file": "guides/matlab-without-console.md", "summary": "Simulations, sweeps, figures and builds from scripts."},
       {"id": "settings-file", "file": "guides/settings-file.md", "summary": "Every key of spot_settings.json."},
       {"id": "workspace-variables", "file": "guides/workspace-variables.md", "summary": "What the diagram reads from MATLAB's workspace."},
-      {"id": "user-parameters", "file": "guides/user-parameters.md", "summary": "SPOT_User_Parameters.m: your own variables."},
       {"id": "logged-signals", "file": "guides/logged-signals.md", "summary": "The 108 signals every run records."}
     ]},
     {"title": "The Simulink Diagram", "pages": [
@@ -72,6 +71,7 @@
     {"title": "For Developers", "pages": [
       {"id": "dev-console-code", "file": "guides/dev-console-code.md", "summary": "The console's server and page, module by module; adding routes, commands and tabs."},
       {"id": "dev-code-standard", "file": "guides/dev-code-standard.md", "summary": "CODE_TEMPLATE.md in short, and how the editor checks it."},
+      {"id": "dev-constants", "file": "guides/dev-constants.md", "summary": "Constants: every parameter in one file, read by MATLAB, the diagram, the consoles and the firmware's checks."},
       {"id": "dev-documentation", "file": "guides/dev-documentation.md", "summary": "How the Reference is read from the code; the guides and notes."}
     ]}
   ]

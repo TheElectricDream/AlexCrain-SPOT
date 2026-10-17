@@ -14,6 +14,7 @@ import { initCalibration } from './calibration.js';
 import { initVision } from './vision.js';
 import { initLabSetup } from './labsetup.js';
 import { initDocs } from './docs.js';
+import { constant, setConstants } from './constants.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -21,6 +22,7 @@ const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 const S = {
   host: {}, settings: {}, toolchains: { checking: true }, build: {}, stream: {}, monitor: {},
   ledOwner: {}, lastFrameAt: 0, lastTelemetryAt: 0, historyUntil: 0, monitorErrorShown: null,
+  constants: null,   // Constants, as the state brings them (constants.js has them too)
 };
 let viewer = null;
 
@@ -79,6 +81,63 @@ async function api(path, body) {
   }
   return data;
 }
+
+// The page's first state: the constants (Constants.m) that every part of the page reads
+// come with it, so nothing below runs until it has arrived. The server that sent this page
+// answers; while it restarts, keep asking.
+const STATE_RETRY_MS = 1000;
+
+/**
+ * Keeps the state's constants where the page reads them (S.constants and constants.js).
+ * @param {!Object} st The state from /api/state.
+ */
+function keepConstants(st) {
+  S.constants = st.constants || S.constants;
+  setConstants(st.constants);
+}
+
+/**
+ * What index.html says with a constant in it: an element's data-constants names the attributes
+ * (or "text", its text) whose {NAME} tokens are replaced with Constants.NAME ({NAME:2}: to
+ * 2 decimals).
+ */
+function fillConstants() {
+  const value = (name, digits) =>
+    digits === undefined ? String(constant(name)) : constant(name).toFixed(Number(digits));
+  for (const el of $$('[data-constants]')) {
+    for (const attr of el.dataset.constants.split(' ')) {
+      const text = attr === 'text' ? el.textContent : el.getAttribute(attr);
+      const filled =
+        text.replace(/\{([A-Z0-9_]+)(?::(\d))?\}/g, (_, name, digits) => value(name, digits));
+      if (attr === 'text') {
+        el.textContent = filled;
+      } else {
+        el.setAttribute(attr, filled);
+      }
+    }
+  }
+}
+
+/**
+ * The first state, asked for until the server answers (a toast says what went wrong meanwhile).
+ * @return {!Promise<!Object>} The state.
+ */
+async function firstState() {
+  let warned = false;
+  for (;;) {
+    try {
+      return await api('/api/state');
+    } catch (e) {
+      if (!warned) {
+        warned = true;
+        toast(`Waiting for the server: ${e.message}`, 'error', 20 * STATE_RETRY_MS);
+      }
+      await new Promise(resolve => setTimeout(resolve, STATE_RETRY_MS));
+    }
+  }
+}
+keepConstants(await firstState());
+fillConstants();
 
 // A message in the corner for MS milliseconds.
 function toast(message, kind = 'info', ms = 6000) {
@@ -425,7 +484,8 @@ function showTab(tab) {
 // computer this page is open on (as the server sees it).
 function renderDestinations() {
   const extras = S.settings.extra_destinations || [];
-  $('#destsLabel').title = 'Computers that get the packets on UDP port 31534. Always sent to: ' +
+  $('#destsLabel').title = 'Computers that get the packets on UDP port ' +
+    `${constant('PORT_PHASESPACE_CLIENT')}. Always sent to: ` +
     `${(S.baseDestinations || []).join(', ') || 'none'}`;
   const box = $('#extraDests');
   box.textContent = '';
@@ -465,6 +525,7 @@ async function addDestination(ip) {
 // The whole state from the server: the local console's pages, or the lab console's.
 async function loadState() {
   const st = await api('/api/state');
+  keepConstants(st);
   S.features = st.features || { mode: 'lab', phasespace: true, hardware: true, simulation: false };
   applyFeatures(st);
   if (S.features.mode === 'local') {

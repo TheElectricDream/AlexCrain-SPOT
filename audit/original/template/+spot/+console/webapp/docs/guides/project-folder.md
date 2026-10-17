@@ -5,7 +5,7 @@ What is in a SPOT project, and what each part is for. Paths are relative to the 
 ```text
 <Project>/
 ├── SPOT.m                     start, reopen or stop the console (type SPOT in MATLAB)
-├── SPOT_User_Parameters.m     your own workspace variables (runs after the settings)
+├── Constants.m                every parameter of SPOT (and your own values), as Constants.NAME
 ├── <Project>.slx              the Simulink diagram, named after the project
 ├── spot_settings.json         the console's settings (created on the first start)
 ├── spot_design.json           the Spacecraft Designer's choices (created on the first change)
@@ -64,7 +64,7 @@ Per-computer state the console keeps; nothing in it needs to be kept or committe
 
 The lab measures the table's slope, each thruster's thrust and thrust decay, and the arm's friction on the lab console's [Calibration Tab](page:tab-calibration). The local console offers to copy a newer calibration into this file when it can see the lab console, and the Simulation tab's Calibration pane shows what simulations will use. Any value you override there is kept in the same file (`overrides`), so updating from the lab doesn't lose it.
 
-The file also holds where each platform's PhaseSpace LEDs are (`markers`: each LED's id and its x and y in millimetres from the body centre), set in the Platforms pane's **Thruster and LED Layout** window; until then, the default layout (13 mm in from each corner). Updating from the lab keeps them too. MATLAB works out each LED's position from the platform's centre of gravity, and the Experiment tab's **Start Cameras** sends that marker file to the lab console, which writes it next to StreamData.
+The file also holds where each platform's PhaseSpace LEDs are (`markers`: each LED's id and its x and y in millimetres from the body centre), set in the Platforms pane's **Thruster and LED Layout** window; until then, the default layout (13 mm in from each corner, `Constants.LED_INSET`). Updating from the lab keeps them too. MATLAB works out each LED's position from the platform's centre of gravity, and the Experiment tab's **Start Cameras** sends that marker file to the lab console, which writes it next to StreamData.
 
 `spot.params.loadCalibration` reads the file. A project made before the file moved to the top of the project kept it in a `resources/` folder; the console moves it across the first time it starts.
 

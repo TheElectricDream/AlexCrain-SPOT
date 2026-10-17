@@ -24,7 +24,7 @@ The consoles stop a platform in several ways, but the E-stop is the one that doe
 - **Stop** on the Experiment tab stops the programs and sends every Teensy an all-off.
 - **Esc** on the lab console's Hardware tab switches everything off on every platform; **Esc** on the PhaseSpace tab ends Interactive Mode; **Stop** (or Esc) on the Calibration tab ends a calibration with everything off.
 - Interactive Mode and the calibrations stop a platform PhaseSpace loses, or one that leaves the table.
-- Each **Teensy** shuts every valve when no command has arrived for 2 s: a crashed program, a lost network or an unplugged cable ends with the thrusters off.
+- Each **Teensy** shuts every valve when no command has arrived for 2 s (`Constants.TEENSY_WATCHDOG`): a crashed program, a lost network or an unplugged cable ends with the thrusters off.
 
 ## Looking after the air bearings
 

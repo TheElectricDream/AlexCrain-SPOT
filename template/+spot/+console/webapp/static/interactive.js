@@ -7,13 +7,18 @@
 // and shows what the loops are doing.
 
 import { COLORS, platformName } from './platforms.js';
+import { constant } from './constants.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
 const NAMES = ['RED', 'BLACK', 'BLUE'];
-const HEARTBEAT_MS = 500;     // the lab console stops the flight after 3 s without one
-const GOAL_SEND_MS = 100;     // goal updates while dragging, at most this often (per platform)
+
+// The page's heartbeat while it flies (the lab console stops the flight after
+// INTERACTIVE_HEARTBEAT_TIMEOUT without one) and how often a dragged goal is sent, at most, per
+// platform [ms].
+const heartbeatMs = () => 1000 * constant('INTERACTIVE_HEARTBEAT_PERIOD');
+const goalSendMs = () => 1000 * constant('INTERACTIVE_GOAL_PERIOD');
 
 // An angle in degrees, in [-180, 180).
 const wrapDeg = rad => {
@@ -116,7 +121,7 @@ export function initInteractive({ api, act, toast, viewer, isShown }) {
   // The first pair of goals (or a goal and a platform resting on the table) too close together,
   // as a sentence, or null. The lab console checks the same.
   function separation() {
-    const min = S.info ? S.info.min_separation : 0.45;
+    const min = S.info ? S.info.min_separation : constant('PLATFORM_CLEARANCE');
 
     // Each platform's goal, or where it rests.
     const pts = [];
@@ -356,7 +361,7 @@ export function initInteractive({ api, act, toast, viewer, isShown }) {
     if (!mine() || !flying(n) || !S.goals[n]) {
       return;
     }
-    const wait = GOAL_SEND_MS - (performance.now() - q.at);
+    const wait = goalSendMs() - (performance.now() - q.at);
     if (!final && wait > 0) {
       q.timer = setTimeout(() => sendGoal(n, false), wait);
       return;
@@ -410,7 +415,7 @@ export function initInteractive({ api, act, toast, viewer, isShown }) {
     if (on && !S.beat) {
       S.beat = setInterval(() => {
         api('/api/interactive/heartbeat', { client: CLIENT }).catch(() => {});
-      }, HEARTBEAT_MS);
+      }, heartbeatMs());
     } else if (!on && S.beat) {
       clearInterval(S.beat);
       S.beat = null;

@@ -4,10 +4,10 @@ function debugMessages(whoAmI, isSim, t, red, black, blue, labConsoleIP)
     %   diagram writes a short text to RED_Logger, BLACK_Logger and BLUE_Logger (e.g. "Chaser:
     %   Running Phase 1"); the Debugger subsystem turns them into character codes and calls
     %   this every step, in simulations and experiments alike.
-    %     Experiment  the platform's own message goes to the lab console (UDP 55001 RED, 55002
-    %                 BLACK, 55003 BLUE) as one packet: experiment time (double) then the text.
-    %                 Sent when it changes and every 0.5 s while unchanged, so a lost packet
-    %                 only delays it.
+    %     Experiment  the platform's own message goes to the lab console (UDP
+    %                 Constants.PORT_DEBUG_RED, _BLACK, _BLUE) as one packet: experiment
+    %                 time (double) then the text. Sent when it changes and every
+    %                 DEBUG_REPEAT_PERIOD while unchanged, so a lost packet only delays it.
     %     Simulation  every change of each platform's message is recorded with its time
     %                 (spot.sim.debugLog); the console shows them live and with the replay
     %
@@ -17,7 +17,7 @@ function debugMessages(whoAmI, isSim, t, red, black, blue, labConsoleIP)
     %     t                 experiment time [s] (Univ_Time)
     %     red, black, blue  messages as uint8 character codes; zeros after the text are ignored
     %     labConsoleIP      the lab console's address, four numbers (block parameter
-    %                       labConsoleIP); without it, 192.168.1.116
+    %                       labConsoleIP); without it, Constants.IP_LAB_CONSOLE
     %
     %   Example (inside the block)
     %     function sendDebugMessages(whoAmI, isSim, t, red, black, blue, labConsoleIP)
@@ -31,14 +31,14 @@ function debugMessages(whoAmI, isSim, t, red, black, blue, labConsoleIP)
     %% Constants
     % The lab console's address; older blocks don't pass it.
     if nargin < 7
-        LAB_CONSOLE = '192.168.1.116';
+        LAB_CONSOLE = Constants.IP_LAB_CONSOLE;
     else
         LAB_CONSOLE = labConsoleIP;
     end
-    REPEAT = 0.5;       % [s] resend an unchanged message this often
-    PORT_RED = 55001;
-    PORT_BLACK = 55002;
-    PORT_BLUE = 55003;
+    REPEAT = Constants.DEBUG_REPEAT_PERIOD;    % [s] resend an unchanged message this often
+    PORT_RED = Constants.PORT_DEBUG_RED;
+    PORT_BLACK = Constants.PORT_DEBUG_BLACK;
+    PORT_BLUE = Constants.PORT_DEBUG_BLUE;
     coder.extrinsic('spot.sim.debugLog');   % simulations only (not in the generated code)
 
     %% Last messages and send time, between steps

@@ -51,6 +51,7 @@ import time
 
 from . import control
 from .common import ApiError, shown, shown_list
+from .constants import C
 from .control import DEFAULTS, Controller, platform_gains
 from .events import hub
 from .experiment import experiment
@@ -58,14 +59,20 @@ from .hardware import NUM_THRUSTERS, hardware, hw_log
 from .phasespace import monitor, streamer
 
 
-TABLE = (3.5, 2.4)        # [m] the table top, as the 3D view draws it (static/viewer.js)
-MARGIN = 0.2              # [m] goals stay this far inside the edges (half a platform + 5 cm)
-MIN_SEPARATION = 0.45     # [m] between goals, centre to centre (0.3 m square platforms,
-                          # 0.42 m across the corners)
-STALE_HOLD = 0.25         # [s] no fresh PhaseSpace pose this long: thrusters off, pucks stay on
-LOST_TIMEOUT = 1.0        # [s] ... this long: that platform stops
-HEARTBEAT_TIMEOUT = 3.0   # [s] the flying page sends one every 0.5 s (a background tab's
-                          # timers may only run once a second)
+# The lab's parameters (Constants.m): the table top [m]; how far
+# inside its edges goals stay [m] (half a platform + 5 cm); the least
+# distance between goals, centre to centre [m] (0.3 m square platforms,
+# 0.42 m across the corners); how long without a fresh PhaseSpace pose
+# the thrusters go off (pucks stay on) and, longer, the platform stops
+# [s]; and how long without a heartbeat from the flying page everything
+# stops [s] (it sends one every INTERACTIVE_HEARTBEAT_PERIOD; a
+# background tab's timers may only run once a second).
+TABLE = (C.TABLE_X, C.TABLE_Y)
+MARGIN = C.INTERACTIVE_MARGIN
+MIN_SEPARATION = C.PLATFORM_CLEARANCE
+STALE_HOLD = float(C.INTERACTIVE_STALE_HOLD)
+LOST_TIMEOUT = float(C.INTERACTIVE_LOST_TIMEOUT)
+HEARTBEAT_TIMEOUT = float(C.INTERACTIVE_HEARTBEAT_TIMEOUT)
 PUBLISH_PERIOD = 0.2      # [s] how often the pages get the loops' status
 ENDED_KEPT = 6            # how many recent endings the status lists
 START_TIMEOUT = 15.0      # [s] for a controller process to start

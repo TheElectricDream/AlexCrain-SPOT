@@ -6,8 +6,7 @@ function d = apply(s, root)
     %   d = spot.params.apply(s, root) also uses the project's calibration of the lab
     %   (spot.params.loadCalibration), each part when its s.calibration switch is on: the
     %   table's slope, each thruster's thrust and decay, and the arm's friction and inertia,
-    %   with the values the project overrides; and where the project's LEDs are. It then runs
-    %   root/SPOT_User_Parameters.m, where users define their own variables or override these.
+    %   with the values the project overrides; and where the project's LEDs are.
     %
     %   Inputs
     %     s     settings
@@ -16,8 +15,8 @@ function d = apply(s, root)
     %   Outputs
     %     d     derived values for display: tsim, timing, rates, mass properties, the PhaseSpace
     %           marker file (trackerPositions), arm geometry, calibration used
-    %           (d.calibration.inUse: the calibrated values in the workspace, after
-    %           SPOT_User_Parameters.m), LQR gains, warnings, the variables assigned
+    %           (d.calibration.inUse: the calibrated values in the workspace), LQR gains,
+    %           warnings, the variables assigned
     %
     %   Example (no GUI needed)
     %     s = spot.params.load('spot_settings.json');
@@ -28,11 +27,11 @@ function d = apply(s, root)
     %   See also spot.params.defaults, spot.params.timing, spot.sim.run.
 
     %% Constants
-    MAX_DATA_RATE = 960;                    % [Hz] PhaseSpace
-    TEENSY_PWM_FREQUENCY = 5;               % [Hz] PWM_FREQUENCY in teensy_pwm_control.ino
-    TABLE_X = 3.51155;                      % [m] table size
-    TABLE_Y = 2.41935;                      % [m]
-    LEVEL_TABLE = [0 0 0 0 0 1.75 1.2];     % tableSlope of a level table
+    MAX_DATA_RATE = Constants.MAX_DATA_RATE;                   % [Hz] PhaseSpace
+    TEENSY_PWM_FREQUENCY = Constants.TEENSY_PWM_FREQUENCY;     % [Hz] the firmware's
+    TABLE_X = Constants.TABLE_X;                               % [m] table size
+    TABLE_Y = Constants.TABLE_Y;                               % [m]
+    LEVEL_TABLE = Constants.LEVEL_TABLE;                       % tableSlope of a level table
 
     d = struct();
     ws = struct();   % name -> value, assigned to the base workspace at the end
@@ -59,7 +58,7 @@ function d = apply(s, root)
     if ~(isscalar(s.dataRate) && s.dataRate >= 1 && s.dataRate <= MAX_DATA_RATE ...
          && s.dataRate == round(s.dataRate))
         error('spot:params:apply', ...
-            'The PhaseSpace data rate must be a whole number of Hz, 1 to 960.');
+            'The PhaseSpace data rate must be a whole number of Hz, 1 to %d.', MAX_DATA_RATE);
     end
     ws.baseRate = 1 / s.sampleRate;
     ws.dataRate = 1 / s.dataRate;            % [s] the setting is in Hz
@@ -78,9 +77,10 @@ function d = apply(s, root)
     if s.pwmFrequency ~= TEENSY_PWM_FREQUENCY
         pwmWarning = sprintf( ...
             ['The thrusters'' PWM frequency is %g Hz, but the Teensy firmware runs its PWM at ' ...
-             '5 Hz (PWM_FREQUENCY in +spot/+hardware/teensy/teensy_pwm_control.ino): flash it ' ...
-             'with the same value, or the duty cycles won''t mean what the diagram assumes.'], ...
-            s.pwmFrequency);
+             '%g Hz (PWM_FREQUENCY in +spot/+hardware/teensy/teensy_pwm_control.ino): ' ...
+             'flash it with the same value, or the duty cycles won''t mean what the diagram ' ...
+             'assumes.'], ...
+            s.pwmFrequency, TEENSY_PWM_FREQUENCY);
     end
 
     % Four numbers, for the diagram's UDP blocks.
@@ -284,44 +284,15 @@ function d = apply(s, root)
     end
     d.variables = fieldnames(ws);
 
-    % The user's own variables (they may override any of the above).
-    if nargin > 1
-        script = fullfile(root, 'SPOT_User_Parameters.m');
-        if isfile(script)
-            evalin('base', sprintf('run(''%s'');', strrep(script, '''', '''''')));
-            d.userScript = script;
-        end
-    end
-
-    % The calibrated values the simulation will use, as the workspace has them now.
+    % The calibrated values the simulation will use.
     d.calibration.inUse = inUse(ws);
 end
 
 function u = inUse(ws)
-    % The calibrated values in the base workspace (after SPOT_User_Parameters.m), and which of
-    % them that script changed (u.changedBy: the variables' names).
+    % The calibrated values put in the base workspace, for the Simulation tab's cards.
     u = struct('tableSlope', [], 'tableDamping', struct(), 'thrust', struct(), ...
-               'decay', struct(), 'arm', [], 'changedBy', {{}});
-    names = {'tableSlope'};
-    for name = {'RED', 'BLACK', 'BLUE'}
-        names = [names, {['tableDamping_' name{1}], ['F_thrusters_' name{1}], ...
-                         ['thrust_decay_' name{1}]}]; %#ok<AGROW>
-    end
-    names{end + 1} = 'armModel';
-
-    % Each variable as the workspace has it (as assigned, if the script cleared it).
-    values = struct();
-    for k = 1:numel(names)
-        try
-            values.(names{k}) = evalin('base', names{k});
-        catch
-            values.(names{k}) = ws.(names{k});
-        end
-        if ~isequal(values.(names{k}), ws.(names{k}))
-            u.changedBy{end + 1} = names{k};
-        end
-    end
-
+               'decay', struct(), 'arm', []);
+    values = ws;
     u.tableSlope = values.tableSlope;
     for name = {'RED', 'BLACK', 'BLUE'}
         key = name{1};
@@ -338,9 +309,9 @@ end
 function gains = armGains(arm)
     % The arm controllers' settings, checked against the servos' register ranges; per-joint
     % gains (one value for all three, or three) expanded to [shoulder elbow wrist].
-    MAX_GAIN = 16383;
-    MAX_PROFILE = 32767;
-    MAX_PWM = 885;
+    MAX_GAIN = Constants.MAX_GAIN;         % the gain registers' range
+    MAX_PROFILE = Constants.MAX_PROFILE;   % the profile registers' range
+    MAX_PWM = Constants.PWM_FULL;          % PWM at 100 % of the supply
 
     gains = arm;
 
@@ -355,8 +326,8 @@ function gains = armGains(arm)
         if ~(isnumeric(value) && any(numel(value) == [1 3]) && all(isfinite(value)) ...
              && all(value >= 0) && all(value <= MAX_GAIN))
             error('spot:params:apply', ...
-                ['The arm''s %s control %s gain must be 0 to 16383 (one value, or one per ' ...
-                 'joint).'], checks{k, 1}, checks{k, 2});
+                ['The arm''s %s control %s gain must be 0 to %d (one value, or one per ' ...
+                 'joint).'], checks{k, 1}, checks{k, 2}, MAX_GAIN);
         end
         gains.(checks{k, 1}).(checks{k, 2}) = double(value(:)).' .* ones(1, 3);
     end
