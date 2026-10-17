@@ -55,8 +55,9 @@ supply. At rest a voltage is a torque; turning, the back-EMF brakes the joint li
 Torques come from the datasheet's torque per volt (MX-64(2.0): 6.0 N m / 12 V = 0.5 N m/V). The
 back-EMF and viscous friction both brake in proportion to speed, so PWM control measures only their sum
 (the speed coefficient); the datasheet's back-EMF (MX-64(2.0): 12 V at 63 rev/min, 1.82 V s/rad) is
-taken as the back-EMF, the rest as viscous friction. Below the breakaway a joint stick-slips at the
-slowest speeds; those levels are left out of the fit. The wrist settles within a few milliseconds of a
+taken as the back-EMF, the rest as viscous friction; a speed coefficient below the datasheet's (an
+MX-64(2.0) on the bench gave 1.49 V s/rad) is taken as all back-EMF. Below the breakaway a joint
+stick-slips at the slowest speeds; those levels are left out of the fit. The wrist settles within a few milliseconds of a
 PWM step, close to the time between reads, so its inertia is only roughly known (the result says so).
 
 Calibrations from before (version 1) measured the motor current under current control; SPOT no longer

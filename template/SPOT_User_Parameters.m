@@ -12,10 +12,10 @@
 % are the diagram's Default Position/Velocity Control (ARM) blocks. The friction and back-EMF
 % come from the arm calibration when there is one (the Simulation tab's Calibration pane;
 % +spot/+arm/calibration/calibrate_arm.py). Change any of it here, e.g.:
-% armModel.friction.static  = [0.30 0.30 0.30];   % breakaway torque [N m] (shoulder, elbow, wrist)
-% armModel.friction.coulomb = [0.20 0.20 0.20];   % sliding friction [N m]
-% armModel.armature = [3.5e-3 3.5e-3 3.5e-3];     % rotor inertia at the joint [kg m^2]
-% armModel.motor.backEMF = [1.82 1.82 1.82];      % back-EMF at the joint [V s/rad]
+% armModel.friction.static  = [0.163 0.163 0.163]; % breakaway torque [N m] (shoulder, elbow, wrist)
+% armModel.friction.coulomb = [0.123 0.123 0.123]; % sliding friction [N m]
+% armModel.armature = [0.0115 0.0115 0.0115];      % rotor inertia at the joint [kg m^2]
+% armModel.motor.backEMF = [1.485 1.485 1.485];    % back-EMF at the joint [V s/rad]
 % armModel.motor.voltage = 12;                    % servo supply [V]
 
 %% Robotic arm: transpose-Jacobian controller gains
