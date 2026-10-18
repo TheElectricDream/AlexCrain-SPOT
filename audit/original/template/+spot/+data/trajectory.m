@@ -106,7 +106,7 @@ function r = trajectory(ds, maxRate)
         end
 
         % The arm's geometry: the dataset's settings, else the defaults.
-        arm = spot.params.defaults().mass.arm;
+        arm = spot.params.fromConstants().mass.arm;
         if isstruct(ds.settings)
             arm = ds.settings.mass.arm;
         end

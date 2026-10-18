@@ -163,6 +163,11 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
 
   // Rendering
 
+  // The calibration the main area shows: this console's; on the local console, the lab
+  // console's when it can be seen (it has the records: the drifts, burns and sweeps; the
+  // project keeps the numbers, in Constants.m), else the project's numbers.
+  const shownCal = () => (S.local && S.labCal ? S.labCal : S.cal);
+
   // The section chosen.
   function render() {
     renderSync();
@@ -272,7 +277,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     return `<section class="card cal-sync">
       <div class="card-head"><h2>This Project and the Lab</h2><span class="pill ${pill[1]}">${pill[0]}</span></div>
       <div class="cal-sync-row">
-        <div title="spot_calibration.json, in the project folder"><span class="field-label">This Project</span><b>${when(mine.updated)}</b></div>
+        <div title="The numbers this project took, in its Constants.m (LAB_*)"><span class="field-label">This Project</span><b>${when(mine.updated)}</b></div>
         <div title="Calibrations run on the lab console (its Calibration tab)"><span class="field-label">Lab Console</span><b>${reach && lab ? when(lab.updated) : '—'}</b></div>
         <div class="cal-sync-actions">
           <button type="button" class="btn btn-sm btn-primary" data-cal="take" ${canTake ? '' : 'disabled'}
@@ -280,13 +285,15 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
           <label class="toggle" title="When this computer sees the lab console and its calibration is newer than this project's, offer it"><input type="checkbox" data-cal="ask" ${ask ? 'checked' : ''}><span></span>Ask When the Lab's Is Newer</label>
         </div>
       </div>
+      ${S.labCal ? '<p class="hint">The records below (drifts, burns, sweeps) are the lab console\'s; this project keeps the numbers it took, in Constants.m.</p>' : ''}
     </section>`;
   }
 
   // The Table Slope section's parts (renderTable): the left column, and the 3D view card's head
   // and what is under the view.
   function tableSection() {
-    const t = S.cal && S.cal.table;
+    const c = shownCal();
+    const t = c && c.table;
     const run = S.run && S.run.kind === 'table' ? S.run : null;
     const running = run && ['running', 'stopping'].includes(run.state);
     return {
@@ -551,7 +558,8 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         : [Number(m[1])])
       : [];
     const viewing = running ? run.platform : S.platform;
-    const res = (S.cal && S.cal.thrusters || {})[viewing];
+    const shown = shownCal();
+    const res = (shown && shown.thrusters || {})[viewing];
     const left = S.local ? '' : `<div class="cal-col">
         ${thrustRunCard(run, running) + savedRunsCard(running ? run.kind : S.thrStage === 'decay' ? 'decay' : 'thrusters', running)}
         ${run ? progressCard(run) : ''}
@@ -641,6 +649,9 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
         <td style="color:${res.torque_ratio[k] != null && Math.abs(res.torque_ratio[k] - 1) > torqueWarn ? 'var(--warn)' : 'inherit'}">${res.torque_ratio[k] != null ? fmt(res.torque_ratio[k], 2) : '—'}</td></tr>`;
     const bad = res.valid.filter(v => !v).length;
     const a = res.params && res.params.assumed;
+    // The lab console's record carries the burns; a project's copy (Constants.LAB_THRUST_*) the
+    // numbers only, so the paths and the run's details are left out rather than drawn empty.
+    const record = Array.isArray(res.burns) && res.burns.length > 0;
     return `<section class="card">${head}
         <div class="cal-thr-grid">
           ${thrusterMap({ thrust: f, nominal })}
@@ -651,9 +662,11 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
           <th title="The torque it gave over the torque the mixer expects from it (moment arm × thrust): far from 1, the CG or the inertia is off">Torque Ratio</th></tr></thead>
           <tbody>${f.map((_, k) => row(k)).join('')}</tbody></table>
         ${bad ? `<p class="hint warn-text">${bad} thruster${bad > 1 ? 's' : ''} had no good burn and keep${bad > 1 ? '' : 's'} the nominal thrust.</p>` : ''}
-        ${burnPaths(res.burns || [])}
-        ${res.placeholder ? `<p class="hint">Not measured yet: ${fmt(nominal, 4)} N for each thruster.</p>` : `<p class="hint">Measured ${when(res.updated)} by ${esc(res.by || '?')}, assuming ${a ? `${fmt(a.mass, 2)} kg, ${fmt(a.inertia, 4)} kg m², CG (${fmt(a.cg_mm[0], 1)}, ${fmt(a.cg_mm[1], 1)}) mm${a.changed ? ' (changed from the defaults)' : ''}` : '—'};
-          ${res.table_used ? 'the table\'s slope taken out' : 'no table calibration then'}. Simulations and the lab console's controller use these thrusts (Scenario: Calibrated Thrust).</p>`}
+        ${record ? burnPaths(res.burns || []) : ''}
+        ${res.placeholder ? `<p class="hint">Not measured yet: ${fmt(nominal, 4)} N for each thruster.</p>`
+          : record ? `<p class="hint">Measured ${when(res.updated)} by ${esc(res.by || '?')}, assuming ${a ? `${fmt(a.mass, 2)} kg, ${fmt(a.inertia, 4)} kg m², CG (${fmt(a.cg_mm[0], 1)}, ${fmt(a.cg_mm[1], 1)}) mm${a.changed ? ' (changed from the defaults)' : ''}` : '—'};
+          ${res.table_used ? 'the table\'s slope taken out' : 'no table calibration then'}. Simulations and the lab console's controller use these thrusts (Scenario: Calibrated Thrust).</p>`
+          : `<p class="hint">Measured ${when(res.updated)}: the numbers this project took (Constants.m, LAB_THRUST_${name}). The burns' paths, the spread of each thrust and what the run assumed are in the lab console's record, shown here when it can be reached. Simulations use these thrusts (Scenario: Calibrated Thrust).</p>`}
         ${S.local || res.placeholder ? '' : `<div class="cal-actions"><button type="button" class="btn btn-sm" data-cal="clear-thrusters" title="Remove the ${platformName(name)}'s thruster calibration from the lab console's file">Remove</button></div>`}
       </section>`;
   }
@@ -667,10 +680,15 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     // says it with each platform's mass properties, S.assumed; else the default, the Obstacle's).
     const m = Number(((S.assumed || {})[name] || {}).thrust_decay) ||
       constant('THRUST_DECAY_DEFAULT');
-    const d = dec || {
-      model: 'linear', slope: m, k: 0, scale: 1, firings: [], placeholder: true,
-      drop_pct: Array.from({ length: 8 }, (_, i) => 100 * Math.min(1, m * i)),
-    };
+    // A project's copy holds the numbers only (Constants.LAB_THRUST_DECAY_*: the model and
+    // the slope), so the curve and the fit's details are filled in from the slope where the
+    // lab console's record has them.
+    const drop = slope => Array.from({ length: 8 }, (_, i) => 100 * Math.min(1, slope * i));
+    const d = dec
+      ? { k: 0, scale: 1, firings: [], ...dec,
+          drop_pct: dec.drop_pct || drop(Number(dec.slope) || 0) }
+      : { model: 'linear', slope: m, k: 0, scale: 1, firings: [], placeholder: true,
+          drop_pct: drop(m) };
 
     // Fitted before the straight line was settled on.
     const unused = !d.placeholder && d.model !== 'linear';
@@ -905,7 +923,8 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     if (run && run.result && run.result.format === 'spot-arm-calibration' && run.result.simulated) {
       return run.result;
     }
-    return S.cal && S.cal.arm;
+    const shown = shownCal();
+    return shown && shown.arm;
   }
 
   // No arm calibration yet: what one looks like, with SPOT's arm model defaults (the ARM_*

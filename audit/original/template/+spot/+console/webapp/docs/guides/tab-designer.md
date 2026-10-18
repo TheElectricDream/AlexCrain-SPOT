@@ -1,6 +1,6 @@
 # The Spacecraft Designer
 
-What is mounted on each platform: the docking cone, the arm, the solar panels, and where. It changes two things: how the platforms look in the 3D view (with **Use CAD**) and, through the Arm, what the simulation includes. The code is [designer.js](file:designer.js) in the page and [design.py](file:design.py) in the server; the design is saved in `spot_design.json` next to the settings.
+What is mounted on each platform: the docking cone, the arm, the solar panels, and where. It changes two things: how the platforms look in the 3D view (with **Use CAD**) and, through the Arm, what the simulation includes. The code is [designer.js](file:designer.js) in the page and [design.py](file:design.py) in the server; the design is the `DOCK_*` and `SOLAR_*` constants in the project's `Constants.m`, written through MATLAB, next to the settings.
 
 ## The sidebar
 

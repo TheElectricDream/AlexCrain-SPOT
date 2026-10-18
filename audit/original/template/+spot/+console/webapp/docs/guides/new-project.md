@@ -31,7 +31,7 @@ The name is also the **Simulink model's name**, so it must be a valid MATLAB nam
 
 Everything at the top of the template, except:
 
-- its state: `.spot_cache`, `spot_settings.json` and `spot_design.json` (a new project starts from the default settings), and `Saved Data/` (a new, empty one is made);
+- its state: `.spot_cache`, and `Saved Data/` (a new, empty one is made). `Constants.m` is copied, so a new project starts from the template's values;
 - Simulink's build files (`slprj`, `*.slxc`, `*.autosave`, `*_ert_rtw`), Python's `__pycache__` folders and the lab console's StreamData builds;
 - the developers' `documentation/` sources and `STATUS.md`.
 
@@ -39,4 +39,4 @@ The diagram is copied as `<name>.slx`; Simulink takes a model's name from its fi
 
 ## Moving your work to a newer template
 
-A project keeps the `+spot` it was made with. To use a newer version of SPOT, make a new project from the updated template and copy your own work across: your diagram's custom subsystems, the values you changed or added in `Constants.m`, `spot_settings.json` (or load it with **Load…**), and `Saved Data/`.
+A project keeps the `+spot` it was made with. To use a newer version of SPOT, make a new project from the updated template and copy your own work across: your diagram's custom subsystems, the values you changed or added in `Constants.m` (every setting, the Designer's choices and the calibration you took are constants there too), and `Saved Data/`.

@@ -43,20 +43,21 @@ the project's copy, backing the old one up first; a file edited in the project s
 is marked so you look at it before applying. Chunk keys are hashes of the chunk's file and text,
 so progress survives a new snapshot wherever the text is unchanged.
 
-Not covered: third-party code (`static/vendor`, `libowl-src-410`), the calibration data
-(`spot_calibration.json`), images, the diagram and other binaries.
+Not covered: third-party code (`static/vendor`, `libowl-src-410`), images, the diagram and other
+binaries.
 
 ## Chapters
 
 1. Documentation: the guides in the Documentation tab's order, the notes on the code, the project's
    README-type files, the release notes (`changes/patch-notes.tex`).
-2. MATLAB: the project root (`SPOT.m`, `SPOT_User_Parameters.m`, `New_SPOT_Project.m`) and every
-   `+spot` package.
+2. MATLAB: the project root (`SPOT.m`, `Constants.m`, `New_SPOT_Project.m`) and every `+spot`
+   package.
 3. Python: the console server, SPOT Vision, the arm calibration, the CAD tools.
 4. JavaScript and the page: the console's scripts, `index.html`, the stylesheets, the editor bundle.
 5. Shell scripts: deployment, the platforms' agent and serial links, builds, services.
 6. Arduino and C/C++: the Teensy firmware, the platforms' C code, StreamData.
-7. Configuration: the settings, design and table-of-contents files, `package.json`.
+7. Configuration: the table-of-contents file and `package.json` (the settings are constants in
+   `Constants.m`, audited with the MATLAB).
 
 ## Code
 

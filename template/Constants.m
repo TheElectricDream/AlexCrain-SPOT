@@ -1,35 +1,56 @@
 classdef Constants
     %CONSTANTS Every parameter of SPOT, in one place.
-    %   Constants (Constants.m, next to SPOT.m) holds every number that describes the lab, the platforms, the arm's
-    %   servos, the network, the defaults a project starts from and the limits the consoles
-    %   check against. Nothing else in SPOT types these numbers: the MATLAB code reads them
-    %   here (Constants.NAME), the Simulink diagram's blocks reference them the same way,
-    %   and the consoles' Python (spot_console/constants.py) reads this file at startup for
-    %   the lab console and the page, which have no MATLAB. The Teensy firmware and the
-    %   platforms' C code can't read it: their copies name the constant they mirror, and
-    %   Constants.verify compares them with this file.
+    %   Constants (Constants.m, next to SPOT.m) holds every number that describes the lab, the
+    %   platforms, the arm's servos, the network, the limits the consoles check against, and
+    %   every choice this project makes: the Simulation tab's settings, the Spacecraft Designer's
+    %   design and the lab calibration's values the project took. It is the project's only
+    %   configuration file: there is no settings, design or calibration file beside it. Nothing
+    %   else in SPOT types these numbers: the MATLAB code reads them here (Constants.NAME), the
+    %   Simulink diagram's blocks reference them the same way, the local console's Python reads
+    %   them from this MATLAB session (the MATLAB Engine for Python; SPOT shares the session),
+    %   and the lab console (the TX2, no MATLAB) reads this file with spot_console/constants.py.
+    %   The Teensy firmware and the platforms' C code can't read it: their copies name the
+    %   constant they mirror, and Constants.verify compares them with this file.
+    %
+    %   The console writes this file: a value changed on the Simulation tab, in the Designer or
+    %   by Update from Lab rewrites that constant's line (spot.params.writeConstants), keeping
+    %   its comment. Edit it by hand too: MATLAB re-reads it when the file changes.
     %
     %   Rules (the Coding Standard, +spot/CODE_TEMPLATE.md):
     %     - UPPER_SNAKE_CASE, with the unit in brackets in the trailing comment.
-    %     - Values are numbers, 'strings', row vectors [a b c] (matrices with ;) or arithmetic
-    %       on earlier constants (Constants.NAME) and pi: the Python reader parses no
-    %       more than that. No structs, cells or function calls.
+    %     - Values are numbers, 'strings', true/false, NaN, row vectors [a b c] (matrices with
+    %       ;, [] for none) or arithmetic on earlier constants (Constants.NAME) and pi, a
+    %       scalar times a vector included: the lab console's reader parses no more than that.
+    %       No structs, cells or function calls.
     %     - Per-platform values carry the platform's suffix: _RED, _BLACK, _BLUE (_ARM).
-    %     - A value changed by a user is a setting, not a constant: its default lives here and
-    %       spot.params.defaults builds the settings from it. A value measured in the lab is a
-    %       calibration (spot_calibration.json); its placeholder lives here.
+    %     - A value the lab measures (LAB_*) is written by Update from Lab; its placeholder
+    %       (THRUST_NOMINAL, the ARM_* bench values) is what simulations use without one.
     %
-    %   Sections: the table and gravity; the network; the PhaseSpace packet; the platforms'
-    %   bodies, scales, inertia and LEDs; the thrusters, the Teensy and the mixer; rates,
-    %   phases and the solver; the initial poses; the LQR; the Dynamixel servos, the arm's
-    %   bench calibration, geometry and controllers; the calibrations' limits and defaults;
-    %   Interactive Mode and the Hardware tab; the experiment's streams.
+    %   Sections: the project (the diagram, the platforms); the table and gravity; the network;
+    %   the PhaseSpace packet; the platforms' bodies, scales, inertia and LEDs; the thrusters,
+    %   the Teensy and the mixer; rates, phases and the solver; the poses; the LQR; the
+    %   Dynamixel servos, the arm's bench calibration, geometry and controllers; the Spacecraft
+    %   Designer; the calibrations' limits and defaults; Interactive Mode; the experiment's
+    %   streams; the lab's calibration as this project took it.
     %
     %   Example
     %     g = Constants.TORQUE_PER_VOLT_MX64;     % [N m/V]
+    %     s = Constants.all();                    % every constant, as a struct
     %     Constants.verify                         % the firmware's copies against this file
     %
-    %   See also spot.params.defaults, spot.arm.defaults, spot.params.apply.
+    %   See also spot.params.fromConstants, spot.params.writeConstants, spot.arm.defaults,
+    %   spot.params.apply.
+
+    %% The project: the diagram and the platforms
+    % What the Simulation tab simulates and the Experiment tab builds. The console writes these.
+    properties (Constant)
+        DIAGRAM = 'Template_v5_0_0_2026a_Jetson_PSClock.slx'; % the diagram (.slx); '' = the project's one
+        USE_RED = true;                                 % the platforms taking part
+        USE_BLACK = false;
+        USE_BLUE = true;
+        USE_ARM = true;                                 % the Chaser's arm (with USE_RED)
+        REAL_TIME = false;                              % simulate at the clock's pace (Live Plot)
+    end
 
     %% The table and gravity
     % The table top, measured; the height-surface fits and the guidance circles are about its
@@ -139,6 +160,11 @@ classdef Constants
         LED_IDS_RED = [5 3 7 4];
         LED_IDS_BLACK = [13 11 9 15];
         LED_IDS_BLUE = [8 14 12 10];
+        % Where each LED is on this project's platforms [m] from the body centre (4x2, one row
+        % per LED in the order above); the Thruster and LED Layout window writes these.
+        LED_XY_RED = Constants.LED_DEFAULT_OFFSET * Constants.LED_CORNERS;
+        LED_XY_BLACK = Constants.LED_DEFAULT_OFFSET * Constants.LED_CORNERS;
+        LED_XY_BLUE = Constants.LED_DEFAULT_OFFSET * Constants.LED_CORNERS;
         % Scale positions from the body centre: A left-middle, B right-back, C right-front.
         SCALE_A = [0, Constants.BODY_HALF_SIDE];                                 % [m]
         SCALE_B = [-Constants.BODY_HALF_SIDE, -Constants.BODY_HALF_SIDE];   % [m]
@@ -159,6 +185,7 @@ classdef Constants
         INERTIA_BLACK = 0.24318079735046158;            % [kg m^2]
         INERTIA_BLUE = 0.22150412995888016;             % [kg m^2]
         PLATFORM_CLEARANCE = 0.45;                      % [m] centre to centre, platforms apart
+        MASS_OVERRIDE = false;                          % use MASS_* and INERTIA_* as typed, not the scales
     end
 
     %% The thrusters, the Teensy and the mixer
@@ -172,8 +199,17 @@ classdef Constants
         THRUSTER_DIRECTION_Y = [0 0 1 1 0 0 -1 -1];     % ... and body y
         THRUST_NOMINAL = 0.2825;                        % [N] one thruster, until calibrated
         THRUST_DECAY_DEFAULT = 0.112;                   % per extra valve (Obstacle, 2026-10-14)
+        % This project's thrust of one thruster and thrust decay per platform (the Platforms
+        % pane), used where there is no thruster calibration or CAL_USE_THRUSTERS is off.
+        THRUST_RED = Constants.THRUST_NOMINAL;          % [N]
+        THRUST_BLACK = Constants.THRUST_NOMINAL;
+        THRUST_BLUE = Constants.THRUST_NOMINAL;
+        THRUST_DECAY_RED = Constants.THRUST_DECAY_DEFAULT;
+        THRUST_DECAY_BLACK = Constants.THRUST_DECAY_DEFAULT;
+        THRUST_DECAY_BLUE = Constants.THRUST_DECAY_DEFAULT;
         VALVE_OPEN_TIME = 0.007;                        % [s] the shortest opening a valve gives
         TEENSY_PWM_FREQUENCY = 5;                       % [Hz] PWM_FREQUENCY in the firmware
+        PWM_FREQUENCY = Constants.TEENSY_PWM_FREQUENCY; % [Hz] the diagram's PWMFreq: keep them equal
         TEENSY_PWM_TICK = 10000;                        % [Hz] PWM_TICK_HZ in the firmware
         TEENSY_SYNC_BYTE = 170;                         % 0xAA, SYNC_BYTE in the firmware
         TEENSY_PACKET_FLOATS = 9;                       % 8 duty cycles + pucks, NUM_FLOATS
@@ -210,11 +246,18 @@ classdef Constants
         SUB_PHASE_DURATIONS = [10 10 30 120];           % [s] Experiment sub-phases 1-4
         PHASE4_DURATION = 30;                           % [s] Return Home
         PHASE5_DURATION = 20;                           % [s] Hold Home
+        PHASE2_ON = true;                               % the segments that run (0, 1 and 5 always do)
+        SUB_PHASES_ON = [true true true true];
+        PHASE4_ON = true;
         SYNC_COUNTDOWN = 3;                             % [s] from every program running to the go
         SOLVER_TYPE = 'Fixed-step';
         SOLVER_FIXED_STEP = 'ode4';
         SOLVER_VARIABLE_STEP = 'VariableStepAuto';
         SOLVER_REL_TOL = '1e-3';
+        SOLVER_ABS_TOL = 'auto';
+        SOLVER_MAX_STEP = 'auto';
+        SOLVER_MIN_STEP = 'auto';
+        SOLVER_INITIAL_STEP = 'auto';
         LOWPASS_TIME_CONSTANT = 0.1;                    % [s] the measured states' low-pass
         MEASUREMENT_NOISE_VARIANCE = 1e-9;              % the simulated states' noise (diagram)
         GUIDANCE_CIRCLE_RADIUS = 0.85;                  % [m] the example guidance's circle
@@ -238,6 +281,13 @@ classdef Constants
     properties (Constant)
         LQR_Q = [1 1 0.05 10 10 1];
         LQR_R = [6 6 6];
+        % This project's weights per platform (the Control pane).
+        LQR_Q_RED = Constants.LQR_Q;
+        LQR_Q_BLACK = Constants.LQR_Q;
+        LQR_Q_BLUE = Constants.LQR_Q;
+        LQR_R_RED = Constants.LQR_R;
+        LQR_R_BLACK = Constants.LQR_R;
+        LQR_R_BLUE = Constants.LQR_R;
     end
 
     %% The Dynamixel servos
@@ -351,6 +401,31 @@ classdef Constants
         ARM_PWM_ROUNDING = 0.5;                         % [PWM] a command this far off a unit rounds
     end
 
+    %% The Spacecraft Designer
+    % What is mounted on each platform (the Designer tab writes these): the dock, one of 'none',
+    % 'male' (the cone), 'female' (the cup) or 'arm' (the Chaser only; its end effector is the
+    % cone), on a side face ('+x', '+y' or '-y'; not the back, where the control panel is) and
+    % its 'left' or 'right' place seen from outside; and the solar panels, over the top, along
+    % the x or y faces. As in the lab: the Chaser's cone on its arm coupler, the Target's cup at
+    % the same place. The Chaser's arm and ARM_MOUNT_FACE/SIDE follow each other in the console.
+    properties (Constant)
+        DOCK_RED = 'arm';
+        DOCK_FACE_RED = '+y';
+        DOCK_SIDE_RED = 'left';
+        SOLAR_RED = false;
+        SOLAR_AXIS_RED = 'x';
+        DOCK_BLACK = 'female';
+        DOCK_FACE_BLACK = '+y';
+        DOCK_SIDE_BLACK = 'left';
+        SOLAR_BLACK = false;
+        SOLAR_AXIS_BLACK = 'x';
+        DOCK_BLUE = 'none';
+        DOCK_FACE_BLUE = '+y';
+        DOCK_SIDE_BLUE = 'left';
+        SOLAR_BLUE = false;
+        SOLAR_AXIS_BLUE = 'x';
+    end
+
     %% The calibrations: limits, defaults and fit thresholds
     % What a calibrated value may be (spot.params.loadCalibration, the lab console's file
     % checks), the Calibration tab's run defaults and the fits' thresholds (calibration.py,
@@ -441,7 +516,102 @@ classdef Constants
         LIVE_PACKET_VERSION = 1;                        % spot.hardware.liveStream's format
     end
 
+    %% The lab's calibration, as this project took it
+    % The numbers the lab console measured (its Calibration tab), copied here by Update from Lab
+    % (the Simulation tab's Calibration pane): the table's height surface and each platform's
+    % air-bearing drag, each platform's eight thrusts and thrust decay, each joint's friction,
+    % back-EMF and rotor inertia [shoulder elbow wrist]. [] or NaN: not measured. The raw runs
+    % (drifts, burns, sweeps) stay on the lab console. CAL_USE_* say whether simulations use each
+    % part; an OVERRIDE_* value (NaN: none) replaces the measured one while the part is used.
+    % The sections' times are ISO 8601 UTC ('' = none).
+    properties (Constant)
+        CAL_USE_TABLE = true;                           % the measured slope and drag (off: level)
+        CAL_USE_THRUSTERS = true;                       % the measured thrusts and decay (off: THRUST_*)
+        CAL_USE_ARM = true;                             % the measured joints (off: the ARM_* bench values)
+        LAB_SYNC_ASK = true;                            % offer the lab's calibration when it is newer
+        LAB_SYNC_DECLINED = '';                         % the lab calibration's time declined with Not Now
+        LAB_TABLE_UPDATED = '2026-10-14T14:52:08Z';
+        LAB_TABLE_MODEL = 'quadratic';                  % 'quadratic' or 'plane'
+        LAB_TABLE_HEIGHT = [-3.0271816981657004e-05 -3.601790542353335e-05 ... % [a1 a2 a3 a4 a5] about LAB_TABLE_CENTRE
+                            -7.097653036182514e-06 -1.020925661181953e-05 1.541462231499134e-05];
+        LAB_TABLE_CENTRE = [1.75 1.2];                  % [m] [xc yc]
+        LAB_TABLE_DAMPING_RED = NaN;                    % [1/s] air-bearing drag
+        LAB_TABLE_DAMPING_BLACK = NaN;
+        LAB_TABLE_DAMPING_BLUE = 0;
+        LAB_TABLE_TILT_CENTRE_MRAD = 0.0470496802802052; % [mrad] the slope at the centre (for display)
+        LAB_TABLE_TILT_MAX_MRAD = 0.10047995863820404;  % [mrad]
+        LAB_TABLE_DOWNHILL_DEG = 49.954097484440815;    % [deg] from +x
+        LAB_THRUST_UPDATED_RED = '';
+        LAB_THRUST_UPDATED_BLACK = '';
+        LAB_THRUST_UPDATED_BLUE = '2026-10-14T16:01:40Z';
+        LAB_THRUST_RED = [];                            % [N] thrusters 1-8
+        LAB_THRUST_BLACK = [];
+        LAB_THRUST_BLUE = [0.4236068394531058 0.44956738236908395 0.4458700991245686 ...
+                           0.41298725924960106 0.4549356796566134 0.42997061286621885 ...
+                           0.42129554713719425 0.4513611000444936];
+        LAB_THRUST_DECAY_RED = NaN;                     % per extra valve open at once
+        LAB_THRUST_DECAY_BLACK = NaN;
+        LAB_THRUST_DECAY_BLUE = 0.1118794201729616;
+        LAB_THRUST_ANGLE_RED = [];                      % [deg] how far each thrust is turned
+        LAB_THRUST_ANGLE_BLACK = [];
+        LAB_THRUST_ANGLE_BLUE = [0.25620485968328954 -0.03407973608628069 2.1206754720677194 ...
+                                 3.692636566886689 1.892311928105987 -2.9313949612410948 ...
+                                 3.551080492974271 3.0223470314028607];
+        LAB_TORQUE_RATIO_RED = [];                      % each thruster's torque against the expected
+        LAB_TORQUE_RATIO_BLACK = [];
+        LAB_TORQUE_RATIO_BLUE = [0.8967376585751481 1.0935788236914519 0.9959286756260053 ...
+                                 1.0079427060204047 1.1198719016044238 0.9482753710547183 ...
+                                 0.8660302061449543 1.3542417114326435];
+        LAB_ARM_UPDATED = '';
+        LAB_ARM_STATIC = [NaN NaN NaN];                 % [N m] breakaway
+        LAB_ARM_COULOMB = [NaN NaN NaN];                % [N m]
+        LAB_ARM_STRIBECK = [NaN NaN NaN];               % [rad/s]
+        LAB_ARM_VISCOUS = [NaN NaN NaN];                % [N m s/rad]
+        LAB_ARM_BACK_EMF = [NaN NaN NaN];               % [V s/rad]
+        LAB_ARM_TORQUE_PER_VOLT = [NaN NaN NaN];        % [N m/V]
+        LAB_ARM_ARMATURE = [NaN NaN NaN];               % [kg m^2] rotor and gears at the joint
+        OVERRIDE_TABLE_HEIGHT = [NaN NaN NaN NaN NaN];
+        OVERRIDE_TABLE_DAMPING_RED = NaN;               % [1/s]
+        OVERRIDE_TABLE_DAMPING_BLACK = NaN;
+        OVERRIDE_TABLE_DAMPING_BLUE = NaN;
+        OVERRIDE_THRUST_RED = [NaN NaN NaN NaN NaN NaN NaN NaN];   % [N]
+        OVERRIDE_THRUST_BLACK = [NaN NaN NaN NaN NaN NaN NaN NaN];
+        OVERRIDE_THRUST_BLUE = [NaN NaN NaN NaN NaN NaN NaN NaN];
+        OVERRIDE_THRUST_DECAY_RED = NaN;
+        OVERRIDE_THRUST_DECAY_BLACK = NaN;
+        OVERRIDE_THRUST_DECAY_BLUE = NaN;
+        OVERRIDE_ARM_STATIC = [NaN NaN NaN];            % [N m]
+        OVERRIDE_ARM_COULOMB = [NaN NaN NaN];           % [N m]
+        OVERRIDE_ARM_STRIBECK = [NaN NaN NaN];          % [rad/s]
+        OVERRIDE_ARM_VISCOUS = [NaN NaN NaN];           % [N m s/rad]
+        OVERRIDE_ARM_ARMATURE = [NaN NaN NaN];          % [kg m^2]
+        OVERRIDE_ARM_BACK_EMF = [NaN NaN NaN];          % [V s/rad]
+    end
+
     methods (Static)
+        function s = all()
+            %ALL Every constant, as a struct (the Python consoles read this through the engine).
+            %   s = Constants.all() returns a struct with one field per constant property, in the
+            %   file's order. The local console reads jsonencode(Constants.all()) from the shared
+            %   MATLAB session; spot.params.writeConstants compares new values with it.
+            %
+            %   Outputs
+            %     s  struct, NAME -> value
+            %
+            %   See also spot.params.fromConstants, spot.params.writeConstants.
+            s = struct();
+            for p = meta.class.fromName('Constants').PropertyList.'
+                if p.Constant
+                    s.(p.Name) = Constants.(p.Name);
+                end
+            end
+        end
+
+        function file = file()
+            %FILE This class's file (the project's Constants.m).
+            file = [mfilename('fullpath') '.m'];
+        end
+
         function report = verify(root)
             %VERIFY The firmware's and the scripts' copies of these constants against this file.
             %   report = Constants.verify() checks the files that can't read this class
@@ -540,12 +710,117 @@ classdef Constants
                     end
                 end
             end
+
+            %% The lab console's reader
+            % The TX2 has no MATLAB: spot_console/constants.py parses this file. Read it here
+            % the same way and compare every value, so a line outside its grammar is caught
+            % before deploy_tx2.sh sends the file.
+            [pyOk, pyLines] = Constants.verifyReader(root);
+            report = [report, pyLines];
+            ok = ok && pyOk;
+
             if nargout == 0
                 fprintf('%s\n', report{:});
             end
             if ~ok
                 error('spot:Constants:verify', ...
                       'A mirrored constant differs from Constants (see the report).');
+            end
+        end
+
+        function [ok, lines] = verifyReader(root)
+            %VERIFYREADER The Python reader's values of this file against MATLAB's.
+            %   [ok, lines] = Constants.verifyReader(root) runs spot_console/constants.py on the
+            %   project's Constants.m with the Python the console uses, and compares what it read
+            %   with Constants.all(). Without a Python, one line says so and ok is true.
+            %
+            %   Inputs
+            %     root   project folder (default: this file's)
+            %
+            %   Outputs
+            %     ok     whether every value agrees (or Python is missing)
+            %     lines  cell array of report lines
+            %
+            %   See also Constants.verify.
+
+            %% Constants
+            TOLERANCE = 1e-9;   % relative, for numbers
+
+            if nargin < 1
+                root = fileparts(mfilename('fullpath'));
+            end
+            lines = {};
+            try
+                python = spot.console.findPython();
+            catch
+                lines{end + 1} = 'python reader: not checked (no Python 3 found)';
+                ok = true;
+                return
+            end
+            webapp = fullfile(root, '+spot', '+console', 'webapp');
+            cmd = sprintf('%s "%s" --json "%s"', python, ...
+                          fullfile(webapp, 'spot_console', 'constants.py'), ...
+                          fullfile(root, 'Constants.m'));
+            [status, out] = system(cmd);
+            if status ~= 0
+                lines{end + 1} = sprintf('DIFFERENT: python reader failed: %s', strtrim(out));
+                ok = false;
+                return
+            end
+            read = jsondecode(out);
+            mine = Constants.all();
+            ok = true;
+            for f = fieldnames(mine).'
+                name = f{1};
+                if ~isfield(read, name)
+                    lines{end + 1} = sprintf('DIFFERENT: python reader has no %s', name); %#ok<AGROW>
+                    ok = false;
+                    continue
+                end
+                if ~Constants.sameValue(mine.(name), read.(name), TOLERANCE)
+                    lines{end + 1} = sprintf('DIFFERENT: python reader reads %s as %s', ...
+                                             name, jsonencode(read.(name))); %#ok<AGROW>
+                    ok = false;
+                end
+            end
+            if ok
+                lines{end + 1} = sprintf('same: python reader, %d constants', ...
+                                         numel(fieldnames(mine)));
+            end
+        end
+
+        function same = sameValue(a, b, tolerance)
+            %SAMEVALUE Whether a value read back (through JSON) equals the constant.
+            %   Numbers within tolerance (NaN equal to NaN, [] to []), logicals and text equal;
+            %   a row vector against a column (jsondecode's) counts as the same.
+            if ischar(a) || isstring(a)
+                same = ischar(b) && strcmp(char(a), b);
+            elseif islogical(a)
+                same = (islogical(b) || isnumeric(b)) && isequal(size(a(:)), size(b(:))) ...
+                       && all(a(:) == logical(b(:)));
+            elseif isnumeric(a)
+                if isempty(a)
+                    same = isempty(b);
+                    return
+                end
+                if isempty(b)   % JSON's null for a lone NaN comes back as []
+                    same = isscalar(a) && isnan(a);
+                    return
+                end
+                if ~isnumeric(b) || numel(a) ~= numel(b)
+                    same = false;
+                    return
+                end
+                if ~isvector(a) && ~isequal(size(a), size(b))
+                    same = false;
+                    return
+                end
+                a = double(a(:));
+                b = double(b(:));
+                both = isnan(a) & isnan(b);
+                same = all(both | abs(a - b) <= tolerance * max(1, abs(a)));
+            else
+                same = isequal(a, b);
             end
         end
     end

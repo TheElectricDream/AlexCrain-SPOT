@@ -31,11 +31,10 @@
       <button type="button" data-page="docs" hidden title="Guides to SPOT and the lab, and a page for every function in the project, read from the code itself. Search it, and edit the code with its checks.">Documentation</button>
     </nav>
     <div id="settingsBar" class="settings-bar" role="group" aria-label="Simulation and experiment settings" hidden>
-      <span class="sb-label" title="The settings on the Simulation tab (scenario, timeline, initial conditions, platforms, control, solver), used for simulations and for building experiments. They are saved automatically to this file in the project folder.">
-        <span class="sb-title">Settings</span><span id="settingsFile" class="sb-file mono">spot_settings.json</span></span>
-      <button type="button" id="simOpen" class="btn btn-sm" title="Load settings from another file: a .json saved with Save As…, or a state saved by the old SPOT GUI (.mat). MATLAB's file dialog opens."><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Load…</span></button>
-      <button type="button" id="simSaveAs" class="btn btn-sm" title="Save a copy of the current settings to a .json file of your choice (MATLAB's file dialog opens)"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2zM8 3v5h7V3M8 21v-7h8v7"/></svg><span>Save As…</span></button>
-      <button type="button" id="simReset" class="btn btn-sm" title="Start from a clean slate: the template's default settings, the page's default view, no loaded results (you choose which)"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M4.6 15a8 8 0 1 0 1.9-8.3L4 9"/></svg><span>Reset…</span></button>
+      <span class="sb-label" title="The settings on the Simulation tab (scenario, timeline, initial conditions, platforms, control, solver), used for simulations and for building experiments. They are constants in this file in the project folder, next to every other parameter of SPOT, and written there on every change.">
+        <span class="sb-title">Settings</span><span id="settingsFile" class="sb-file mono">Constants.m</span></span>
+      <button type="button" id="simEdit" class="btn btn-sm" title="Every constant of this project's Constants.m, in its sections, with its unit and meaning: the settings, the Designer's choices, the calibration this project took and every parameter of SPOT. Edit them there; the console follows."><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg><span>Constants…</span></button>
+      <button type="button" id="simReset" class="btn btn-sm" title="Start from a clean slate: the template's values for every setting, the page's default view, no loaded results (you choose which)"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M4.6 15a8 8 0 1 0 1.9-8.3L4 9"/></svg><span>Reset…</span></button>
     </div>
     <div class="topstats">
       <button type="button" id="labSetupBtn" class="btn btn-sm" hidden>Lab Setup</button>
@@ -537,7 +536,7 @@
     <div id="calRoot" class="cal-scroll">
       <div class="cal-head">
         <div>
-          <h2 class="tip" title="Measurements of the lab that make simulations behave as the experiments do. The lab console runs them and keeps the lab's calibration; each project keeps a copy (spot_calibration.json, in the project folder), which its simulations use.">Calibration</h2>
+          <h2 class="tip" title="Measurements of the lab that make simulations behave as the experiments do. The lab console runs them and keeps the lab's calibration; each project takes the numbers into its Constants.m (LAB_*), which its simulations use.">Calibration</h2>
         </div>
         <div class="segmented cal-sections" role="group" aria-label="Calibration">
           <button type="button" data-calsec="table" class="active">Table Slope</button>
@@ -708,6 +707,31 @@
   </dialog>
 
 
+  <dialog id="constantsDialog" class="dialog constants-dialog" aria-labelledby="constantsTitle">
+    <div class="dialog-inner">
+      <div class="dialog-head">
+        <div class="const-title"><h2 id="constantsTitle">Constants</h2><span id="constFile" class="hint mono"></span></div>
+        <div class="const-tools">
+          <input type="search" id="constSearch" class="input" placeholder="Search names, values and comments" aria-label="Search the constants">
+          <label class="toggle" title="Only the values edited here and not saved yet"><input type="checkbox" id="constEdited"><span></span>Edited Only</label>
+          <button type="button" id="constClose" class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
+        </div>
+      </div>
+      <div class="const-body">
+        <nav id="constNav" class="const-nav" aria-label="Sections of Constants.m"></nav>
+        <div id="constList" class="const-list"></div>
+      </div>
+      <div class="dialog-foot">
+        <span id="constStatus" class="hint"></span>
+        <div>
+          <button type="button" id="constEditor" class="btn btn-sm" title="Open the file itself in MATLAB's editor">Open in MATLAB Editor</button>
+          <button type="button" id="constRevert" class="btn" title="Forget the values edited here">Revert</button>
+          <button type="button" id="constSave" class="btn btn-primary" title="Write the edited values into Constants.m (only those lines change; their comments stay), and apply them">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="resetDialog" class="dialog reset-dialog">
     <form method="dialog" class="dialog-inner">
       <div class="dialog-head">
@@ -717,14 +741,14 @@
       <div class="reset-body">
         <p class="hint">Start from a clean slate. Choose what goes back to its default:</p>
         <label class="reset-opt"><input type="checkbox" data-reset="settings" checked>
-          <span><b>Simulation Settings</b><span class="hint">Scenario, timeline, initial conditions, mass properties, control and solver, as in the template.
-            The diagram stays selected. The current settings are kept in .spot_cache, so Load… can bring them back.</span></span></label>
+          <span><b>Simulation Settings</b><span class="hint">Scenario, timeline, initial conditions, mass properties, control and solver, as the repository's template/Constants.m has them
+            (the project must sit in its projects folder). The diagram stays selected. A copy of the current Constants.m is kept in .spot_cache first.</span></span></label>
         <label class="reset-opt"><input type="checkbox" data-reset="view" checked>
           <span><b>Page and View</b><span class="hint">The tab shown, 3D view options, initial conditions shown, playback speed, and the Results tab's plots.
             The page reloads. (The MATLAB command history is kept.)</span></span></label>
         <label class="reset-opt"><input type="checkbox" data-reset="results" checked>
           <span><b>Loaded Results</b><span class="hint">Closes the datasets loaded for plotting and comparing. Nothing is deleted from Saved Data.</span></span></label>
-        <p class="hint">Your Constants.m and the files in Saved Data are not touched.</p>
+        <p class="hint">The other constants in Constants.m (your own values, the Designer, the calibration) and the files in Saved Data are not touched.</p>
       </div>
       <div class="dialog-foot">
         <div>
@@ -825,7 +849,7 @@
       <div class="reset-body">
         <p>The lab console has a newer calibration than this project:</p>
         <ul id="calSyncList" class="cal-sync-list"></ul>
-        <p class="hint">Updating copies it into this project's spot_calibration.json; the next simulation uses it (the
+        <p class="hint">Updating writes its numbers into this project's Constants.m (LAB_*); the next simulation uses it (the
           table's slope, the thrusters' thrust, the arm). Values you have overridden are kept. Not Now keeps this
           project's, and doesn't ask again until the lab's changes.</p>
         <label class="reset-opt"><input type="checkbox" id="calSyncNever"><span><b>Never Ask Again</b><span class="hint">For this project.

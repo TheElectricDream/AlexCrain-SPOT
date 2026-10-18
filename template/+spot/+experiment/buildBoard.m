@@ -6,7 +6,7 @@ function board = buildBoard(root, s)
     %
     %   Inputs
     %     root   project folder
-    %     s      settings (default: the project's spot_settings.json, else the defaults)
+    %     s      settings (default: the project's, spot.params.fromConstants)
     %
     %   Outputs
     %     board  address (the settings' labConsoleAddress), user, buildDir, workspaceDir
@@ -18,12 +18,7 @@ function board = buildBoard(root, s)
 
     %% Defaults
     if nargin < 2
-        file = fullfile(root, 'spot_settings.json');
-        if isfile(file)
-            s = spot.params.load(file);
-        else
-            s = spot.params.defaults();
-        end
+        s = spot.params.fromConstants();
     end
 
     %% Board

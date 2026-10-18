@@ -19,7 +19,7 @@ cd projects/MyProject
 SPOT
 ```
 
-The page *SPOT Local Simulations* opens in your browser on the **Simulation** tab. The first time, the console creates `spot_settings.json` from the defaults and picks the project's diagram.
+The page *SPOT Local Simulations* opens in your browser on the **Simulation** tab. Its settings are the constants in the project's `Constants.m` (the template's values at first); the console picks the project's diagram.
 
 ## 3. Set up the scenario
 

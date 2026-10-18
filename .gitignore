@@ -23,8 +23,10 @@ slprj/
 *_ert_rtw/
 *.elf
 *.autosave
-# Runs and figures (the console creates the folder)
-Saved Data/
+# Runs and figures (the console creates the folder); the template keeps the lab calibration's
+# record that goes with the LAB_* numbers in its Constants.m (spot.params.calibrationRecord)
+**/Saved Data/*
+!/template/Saved Data/Calibration/
 # The big CAD folder
 designs/
 

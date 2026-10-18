@@ -34,10 +34,11 @@ from .hardware import NUM_THRUSTERS, hardware, parse_platforms
 from .experiment import experiment
 from .interactive import interactive
 from . import local   # local.lab: the link to the lab console, set when the local console starts
-from .local import (LOCAL, LabLink, MATLAB_COMMANDS, build_runner, check_token, download_run,
+from .local import (CONSTANTS_COMMANDS, after_constants_change, LOCAL, LabLink, MATLAB_COMMANDS, build_runner, check_token, download_run,
                     matlab, sim_runner, write_ready_file)
 from .files import browse, make_folder
 from .design import design_store
+from .project import ProjectCalibration, ProjectDesign
 from .calibration import assumed_defaults, calibrator, saved_runs, store as calibration_store
 from . import vision
 from .deploy import deployer
@@ -65,28 +66,6 @@ CHECK_TIME_RANGE = C.THRUSTER_CHECK_TIME_RANGE
 
 
 # State and settings
-
-
-def open_project_calibration(root):
-    """Use the project's calibration, spot_calibration.json.
-
-    It sits next to spot_settings.json. A project made before it moved
-    keeps it in resources/: it is moved across the first time.
-
-    Args:
-        root: The project folder.
-    """
-    path = root / "spot_calibration.json"
-    old = root / "resources" / "spot_calibration.json"
-    if old.is_file() and not path.exists():
-        try:
-            old.replace(path)
-            hub.log("matlab", "Moved the project's calibration to %s" % path)
-        except OSError as e:
-            hub.log("matlab", "Could not move %s to %s (%s); using it where it is."
-                    % (old, path, e))
-            path = old
-    calibration_store.open(path, local=True)
 
 
 def features():
@@ -612,7 +591,10 @@ class Handler(BaseHTTPRequestHandler):
             if cmd == "experiment.connect" and not local.lab.status()["reachable"]:
                 raise ApiError("The lab console isn't reachable: connect to the lab network "
                                "first.")
-            return {"result": matlab.request(cmd, args, timeout=MATLAB_COMMANDS[cmd])}, 200
+            result = matlab.request(cmd, args, timeout=MATLAB_COMMANDS[cmd])
+            if cmd in CONSTANTS_COMMANDS:
+                after_constants_change()
+            return {"result": result}, 200
 
         # A simulation.
         if path == "/api/sim/run":
@@ -841,8 +823,8 @@ def main():
                         help="local mode: where to write the ports and token for MATLAB")
     parser.add_argument("--lab-url", default=os.environ.get("SPOT_LAB_URL"),
                         help="local mode: the lab console (default: the project's "
-                             "spot_settings.json labConsoleAddress, port %d; else "
-                             "$SPOT_LAB_URL or %s)" % (WEB_PORT, DEFAULT_LAB_URL))
+                             "Constants.IP_LAB_CONSOLE, port %d; else $SPOT_LAB_URL or %s)"
+                             % (WEB_PORT, DEFAULT_LAB_URL))
     args = parser.parse_args()
 
     # The local console, or the lab console (Linux only).
@@ -897,31 +879,34 @@ def main():
         server.server_close()
 
 
-def lab_url_from_settings(root):
-    """Return the lab console's URL from the settings, or the usual."""
+def lab_url_from_constants():
+    """Return the lab console's URL from the project's constants, or the usual."""
     try:
-        address = json.loads((root / "spot_settings.json").read_text(encoding="utf-8")).get(
-            "labConsoleAddress")
-        if address:
-            return LabLink.url_for(address)
-    except (OSError, ValueError, ApiError, AttributeError):
-        pass
-    return DEFAULT_LAB_URL
+        return LabLink.url_for(C.IP_LAB_CONSOLE)
+    except (ApiError, AttributeError):
+        return DEFAULT_LAB_URL
 
 
 def main_local(args):
     """Start the local console.
 
     Served to this computer only, with the MATLAB worker on another
-    port; the ports and token go to the ready file for SPOT.m.
+    port; the ports and token go to the ready file for SPOT.m. The
+    constants were read from the shared MATLAB session when this module
+    loaded (constants.py, SPOT_MATLAB_ENGINE).
     """
     # The project, the session token, the design and calibration.
     LOCAL.update(enabled=True, root=str(Path(args.root or os.getcwd()).resolve()),
                  token=os.environ.get("SPOT_TOKEN") or os.urandom(24).hex())
     LOCAL["ready_file"] = args.ready_file or str(Path(LOCAL["root"]) / ".spot_cache"
                                                  / "console.json")
-    design_store.open(Path(LOCAL["root"]) / "spot_design.json")
-    open_project_calibration(Path(LOCAL["root"]))
+
+    # The project's design and calibration live in its Constants.m, read
+    # from MATLAB (C) and written through the worker (project.py).
+    global design_store, calibration_store
+    design_store = ProjectDesign(matlab, after_constants_change)
+    calibration_store = ProjectCalibration(matlab, after_constants_change)
+    local.project.update(design=design_store, calibration=calibration_store)
 
     # The server, the MATLAB worker's port and the lab link.
     try:
@@ -931,7 +916,7 @@ def main_local(args):
     server.daemon_threads = True
     LOCAL["server"] = server
     matlab.listen(args.worker_port)
-    local.lab = LabLink(args.lab_url or lab_url_from_settings(Path(LOCAL["root"])))
+    local.lab = LabLink(args.lab_url or lab_url_from_constants())
     local.lab.start()
 
     # Tell SPOT.m, and open the page with the token.

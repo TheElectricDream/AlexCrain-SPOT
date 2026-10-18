@@ -6,7 +6,9 @@ Start with what the consoles say: most problems show up as a status with its rea
 
 | What you see | What to do |
 |---|---|
-| "needs Python 3.6 or newer" | **Install Python** in the dialog, or `spot.console.installPython`, or point MATLAB at a Python with `pyenv('Version', ...)` ([Setting Up Your Computer](page:installing)) |
+| "needs Python 3.9 or newer with the MATLAB Engine for Python" | **Install Python** in the dialog, or `spot.console.installPython`, or point MATLAB at a Python with `pyenv('Version', ...)` ([Setting Up Your Computer](page:installing)) |
+| "its Python needs the MATLAB Engine for Python" | accept the install `SPOT` offers (`spot.console.ensureEngine`), or run `python -m pip install --user "<matlabroot>/extern/engines/python"` with that Python; without pip, `python +spot/+console/install_engine.py <matlabroot>` copies the package instead. The engine supports Python 3.9 to 3.13 for R2026a |
+| "The SPOT Console did not start" and its log says it could not connect to the MATLAB session | the console reads `Constants` from your MATLAB session, which answers only when MATLAB is idle: let MATLAB return to its prompt (don't start `SPOT` from inside a script that keeps running), then `SPOT` again |
 | the page says it can't talk to MATLAB | open the page with the link MATLAB printed, or run `SPOT open`. The page only takes commands from a tab opened with that link |
 | **MATLAB Not Connected** on the Simulation tab | MATLAB was closed or the worker stopped: run `SPOT` again in the project folder |
 | MATLAB is busy | a simulation, a build, a file dialog or a command is still running in MATLAB; wait, or **Stop** the simulation |

@@ -18,7 +18,7 @@ function [duty, Fb, H] = thrusterDutyCycles(u, theta, thrusterDist, F, maxIters,
     %                   the diagram's mask)
     %     decay         thrust lost per extra valve open at once: with n open, each gives
     %                   1 - decay*(n - 1) of its thrust alone (thrust_decay_<PLATFORM>);
-    %                   default from spot.params.defaults
+    %                   default from spot.params.fromConstants
     %
     %   Outputs
     %     duty          8x1 duty cycles in [0, 1] (*_Duty_Cycle; x100 is the percentage sent to
@@ -43,7 +43,7 @@ function [duty, Fb, H] = thrusterDutyCycles(u, theta, thrusterDist, F, maxIters,
     %   function and the Python port against the diagram.
     %
     %   Example (the Chaser at 30 deg, pushed along the table's +x with 0.2 N)
-    %     s = spot.params.defaults();
+    %     s = spot.params.fromConstants();
     %     mp = spot.massprops.compute(s.mass);
     %     duty = spot.control.thrusterDutyCycles([0.2; 0; 0], pi/6, mp.RED.thrusters, ...
     %                                            s.thrusterForce.RED)
@@ -58,7 +58,7 @@ function [duty, Fb, H] = thrusterDutyCycles(u, theta, thrusterDist, F, maxIters,
         tol = Constants.MIXER_TOLERANCE;
     end
     if nargin < 7
-        defaults = spot.params.defaults();
+        defaults = spot.params.fromConstants();
         decay = defaults.thrusterDecay.RED;
     end
 

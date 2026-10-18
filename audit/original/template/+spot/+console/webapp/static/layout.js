@@ -2,7 +2,7 @@
 // view, to scale, with every dimension from its centre of gravity: the eight thrusters (each
 // one's line of action), the four PhaseSpace LEDs, and the CG the scales give. Beside it, the
 // scales (settings: mass.<PLATFORM>.scales) and where each LED is (the project's calibration
-// file, spot_calibration.json "markers", through /api/calibration/markers); the drawing follows
+// Constants.m, LED_XY_<PLATFORM>, through /api/calibration/markers); the drawing follows
 // as they are typed. MATLAB works out the same geometry for the simulation, and the marker file
 // the Experiment tab sends the lab console (spot.massprops.centerOfGravity,
 // spot.massprops.trackerPositions).
@@ -313,7 +313,7 @@ export function initLayout({ api, act, getSettings, getMarkers, setSetting }) {
       </section>
       <section class="ly-sec">
         <div class="ly-sec-head">
-          <span class="field-label tip" title="Where each PhaseSpace LED is on the platform's top, from the body centre (+x forward, +y left). Kept in this project's spot_calibration.json (markers).">LEDs from the Body Centre (mm)</span>
+          <span class="field-label tip" title="Where each PhaseSpace LED is on the platform's top, from the body centre (+x forward, +y left). Kept in this project's Constants.m (LED_XY_RED, _BLACK, _BLUE).">LEDs from the Body Centre (mm)</span>
           <button type="button" class="btn btn-sm" data-lreset title="Put the LEDs back where they sit by default: ${toMm(constant('LED_INSET'))} mm in from each corner">Default Layout</button>
         </div>
         <table class="gain-table ly-table"><thead><tr><th>LED</th><th>x</th><th>y</th>

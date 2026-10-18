@@ -6,7 +6,7 @@ Everything the console does is an ordinary MATLAB function in the `spot` package
 
 ```matlab
 root = pwd;                                     % the project folder
-s = spot.params.load('spot_settings.json');     % the console's settings (or spot.params.defaults())
+s = spot.params.fromConstants();                % the project's settings, from Constants.m
 s.diagram = 'MyProject.slx';
 s.platforms.RED = true;
 s.platforms.BLACK = false;
@@ -19,7 +19,7 @@ out = spot.sim.run(s, root);                    % simulates; dataClass is in the
 fprintf('%g s simulated in %.1f s\n', out.tsim, out.seconds);
 ```
 
-`spot.sim.run` applies the settings, simulates without changing the diagram file, and leaves `dataClass`, `dataPacket` and `simOut` in the base workspace. The settings are an ordinary struct: `spot.params.defaults` lists every field with its unit ([The Settings File](page:settings-file)). When Simulink stops with an error, `spot.sim.run` throws a `spot.sim.SimulationFailed` whose message is the root cause; `spot.sim.errorDetails(err)` gives the whole chain.
+`spot.sim.run` applies the settings, simulates without changing the diagram file, and leaves `dataClass`, `dataPacket` and `simOut` in the base workspace. The settings are an ordinary struct: `spot.params.fromConstants` lists every field with its unit, and the constant it comes from ([The Settings in Constants.m](page:settings-file)). When Simulink stops with an error, `spot.sim.run` throws a `spot.sim.SimulationFailed` whose message is the root cause; `spot.sim.errorDetails(err)` gives the whole chain.
 
 ## Looking at the results
 
@@ -45,7 +45,7 @@ A panel with `x = struct('signal', 'RED_Px_m', 'col', 1)` and `RED_Py_m` as its 
 MATLAB's `-batch` option runs a command without the desktop and exits when it ends. The same line works on Windows and Linux:
 
 ```bash
-matlab -batch "cd('C:/Users/you/SPOT/MyProject'); s = spot.params.load('spot_settings.json'); spot.sim.run(s, pwd); spot.data.saveSimulation(s, pwd);"
+matlab -batch "cd('C:/Users/you/SPOT/MyProject'); s = spot.params.fromConstants(); spot.sim.run(s, pwd); spot.data.saveSimulation(s, pwd);"
 ```
 
 For anything longer, put the commands in a script in the project folder (say `my_runs.m`) and run `matlab -batch "my_runs"`.
@@ -54,7 +54,7 @@ For anything longer, put the commands in a script in the project folder (say `my
 
 ```matlab
 root = pwd;
-s = spot.params.load('spot_settings.json');
+s = spot.params.fromConstants();
 s.solver = spot.sim.readSolver(s.diagram, root, s.solver);
 for q = [0.5 1 2 4]
     s.control.RED.lqr.Q(1:2) = q;               % position weights

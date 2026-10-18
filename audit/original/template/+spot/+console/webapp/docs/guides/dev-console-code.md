@@ -10,6 +10,7 @@ One Python module per area. `server.py` serves the page and the JSON API, routes
 |---|---|
 | [server.py](file:server.py) | the HTTP server: the page, the API (`do_GET`, `do_POST`, `_local_post`), the event stream, start-up |
 | [common.py](file:common.py) | project paths, the API error (`ApiError`, shown to the user), checking request values |
+| [constants.py](file:constants.py) | `Constants` (`Constants.m`) as `C`: read from the user's MATLAB session through the MATLAB Engine for Python on the local console, parsed from the file on the lab console ([Constants](page:dev-constants)) |
 | [events.py](file:events.py) | the lab console's settings, the event hub that feeds every open page, running commands |
 | [local.py](file:local.py) | the local console: the bridge to the MATLAB worker, simulation and build runs, the link to the lab console |
 | [phasespace.py](file:phasespace.py) | compiling and running StreamData, the packet monitor for the 3D view, the marker file |
@@ -17,8 +18,9 @@ One Python module per area. `server.py` serves the page and the JSON API, routes
 | [control.py](file:control.py) | the template diagram's LQR controller and thruster mixer, ported from `spot.control` |
 | [interactive.py](file:interactive.py) | Interactive Mode: flying platforms to goals |
 | [experiment.py](file:experiment.py) | deploying, starting, stopping and collecting experiments; the platforms' clocks, messages and streams |
-| [calibration.py](file:calibration.py), [calfit.py](file:calfit.py) | the calibrations and their fits; the calibration file |
-| [design.py](file:design.py) | the Spacecraft Designer's design |
+| [calibration.py](file:calibration.py), [calfit.py](file:calfit.py) | the calibrations and their fits; the lab console's calibration file |
+| [design.py](file:design.py) | the Spacecraft Designer's design (the lab console's file; the checks both consoles use) |
+| [project.py](file:project.py) | the local console's design and calibration: views over the constants (`DOCK_*`, `LAB_*`, `OVERRIDE_*`, `LED_XY_*`), with the lab's record (`spot.params.calibrationRecord`, read through the engine) under the numbers where the times match; written through the MATLAB worker (`constants.set`, `calibration.take`) |
 | [vision.py](file:vision.py) | where SPOT Vision is, for the Vision tab |
 | [deploy.py](file:deploy.py) | Lab Setup: the deployment scripts, run from the page |
 | [files.py](file:files.py) | the folder browser |
@@ -28,7 +30,7 @@ One Python module per area. `server.py` serves the page and the JSON API, routes
 
 **Events.** `GET /api/events` is a server-sent event stream: the server publishes each change (`hub.publish("stream_status", ...)`), and every open page receives it, so all pages show the same state. The local console relays the lab console's events, prefixed `lab_`.
 
-**MATLAB.** The worker (`spot.worker.Worker`) connects to the local console on a second local port and answers one JSON command per line (`sim.run`, `settings.set`, `data.series`, ...); `local.py`'s `MATLAB_COMMANDS` lists them with their time limits, and `Worker.dispatch` runs them.
+**MATLAB.** The worker (`spot.worker.Worker`) connects to the local console on a second local port and answers one JSON command per line (`sim.run`, `settings.set`, `data.series`, ...); `local.py`'s `MATLAB_COMMANDS` lists them with their time limits, and `Worker.dispatch` runs them. The worker is the only writer of the project's `Constants.m`: after a command that may have written it (`local.py`'s `CONSTANTS_COMMANDS`), the server reads the constants from MATLAB again through the engine (`C.reload()`) and sends `constants`, `design` and `calibration` events (`after_constants_change`). The engine only answers while MATLAB is idle, so never call it while a simulation runs.
 
 ## The page (`webapp/static/`)
 

@@ -2,17 +2,16 @@ function m = markerLayout()
     %MARKERLAYOUT Each platform's PhaseSpace LEDs: their ids and default positions.
     %   m = spot.massprops.markerLayout() returns, for RED, BLACK and BLUE, the ids of the four
     %   LEDs on the platform's top and where they sit when not measured: LED_INSET in from the
-    %   corners of the body (Constants). The project's calibration file holds the measured
-    %   positions (spot_calibration.json, "markers"; spot.params.loadCalibration), which the
-    %   Simulation tab's Thruster and LED Layout window edits. StreamData knows the LEDs by
-    %   these ids, so they are fixed.
+    %   corners of the body (Constants). Where a project has them is Constants.LED_XY_RED,
+    %   _BLACK and _BLUE (spot.params.labCalibration), which the Simulation tab's Thruster and
+    %   LED Layout window edits. StreamData knows the LEDs by these ids, so they are fixed.
     %
     %   Outputs
     %     m  struct with RED, BLACK, BLUE, each with:
     %          ids   1x4 LED ids, in the corner order (+x,+y), (+x,-y), (-x,-y), (-x,+y)
     %          leds  4x2 [x y] of each LED from the body centre [m]
     %
-    %   See also spot.params.loadCalibration, spot.massprops.centerOfGravity.
+    %   See also spot.params.labCalibration, spot.massprops.centerOfGravity.
 
     %% Constants
     EDGE = Constants.LED_DEFAULT_OFFSET;   % [m] LEDs from the body centre, each way

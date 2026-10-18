@@ -699,6 +699,13 @@ function connect() {
     calibration.onLab(l);
     labSetup.onLab(l);
   });
+  // Constants.m changed (a setting, the Designer, Update from Lab): every part of the page
+  // reads the constants anew.
+  on('constants', d => {
+    S.constants = d || S.constants;
+    setConstants(d);
+    document.dispatchEvent(new CustomEvent('spot-constants', { detail: d }));
+  });
   on('design', d => designer.onDesign(d));
   on('docs', d => docs.onSaved(d));
   on('lab_design', d => designer.onLabDesign(d));

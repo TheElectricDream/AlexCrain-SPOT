@@ -1,44 +1,50 @@
-function s = defaults()
-    %DEFAULTS Default SPOT settings.
-    %   s = spot.params.defaults() returns the settings struct the SPOT Console starts from (the
-    %   values the old GUI's "Reset GUI Parameters to Default" loaded). Every value comes from
-    %   Constants: this function only arranges them as settings. Settings are saved as
-    %   JSON (spot.params.save) and turned into workspace variables for the Simulink diagrams by
+function s = fromConstants()
+    %FROMCONSTANTS The project's settings, as Constants.m has them.
+    %   s = spot.params.fromConstants() returns the settings struct every spot.* function takes,
+    %   built from the project's Constants (the diagram, the platforms, the rates, the timeline,
+    %   the solver, the poses, the mass properties, the calibration switches, the thrusts and
+    %   the controllers' weights and gains). Constants.m is the only place these live: the
+    %   console changes them with spot.params.writeConstants (spot.params.toConstants maps the
+    %   struct back), and spot.params.apply turns them into the diagram's workspace variables.
+    %
+    %   Units: lengths in m, angles in degrees (as typed in the console), times in s, masses in
+    %   kg, inertias in kg m^2, forces in N.
+    %
+    %   Outputs
+    %     s  settings struct
+    %
+    %   See also Constants, spot.params.toConstants, spot.params.writeConstants,
     %   spot.params.apply.
-    %
-    %   Units: lengths in m, angles in degrees (as typed in the GUI), times in s, masses in kg,
-    %   inertias in kg m^2, forces in N.
-    %
-    %   See also Constants, spot.params.apply, spot.params.load, spot.params.save.
 
     s = struct();
-    s.version = 1;
 
     %% Diagram and platforms
-    % Simulink diagram (a .slx file in the project folder) and the platforms taking part.
-    s.diagram = '';
-    s.platforms = struct('RED', false, 'BLACK', false, 'BLUE', false, 'ARM', false);
+    % The Simulink diagram (a .slx file in the project folder; '' = the project's one, chosen
+    % by the worker) and the platforms taking part.
+    s.diagram = char(Constants.DIAGRAM);
+    s.platforms = struct('RED', logical(Constants.USE_RED), ...
+                         'BLACK', logical(Constants.USE_BLACK), ...
+                         'BLUE', logical(Constants.USE_BLUE), ...
+                         'ARM', logical(Constants.USE_ARM));
 
     %% Rates
-    % Controller sample rate: baseRate = 1/sampleRate.
+    % Controller sample rate: baseRate = 1/sampleRate. PhaseSpace data rate, a whole number of
+    % Hz (1 to MAX_DATA_RATE, the lab console's Frequency): the LQR gains are designed at its
+    % period, the workspace's dataRate.
     s.sampleRate = Constants.SAMPLE_RATE;                  % [Hz]
-
-    % PhaseSpace data rate, a whole number of Hz (1 to MAX_DATA_RATE, the lab console's
-    % Frequency). The LQR gains are designed at its period, the workspace's dataRate. Settings
-    % saved before it existed get sampleRate/2.
     s.dataRate = Constants.DATA_RATE;                      % [Hz]
 
     % Run simulations at the clock's pace (Simulink's simulation pacing), e.g. for Live Plot.
-    s.realTime = false;
+    s.realTime = logical(Constants.REAL_TIME);
 
     % Thrusters' PWM frequency (the workspace's PWMFreq). Keep it equal to the Teensy
     % firmware's PWM_FREQUENCY (Constants.TEENSY_PWM_FREQUENCY).
-    s.pwmFrequency = Constants.TEENSY_PWM_FREQUENCY;       % [Hz]
+    s.pwmFrequency = Constants.PWM_FREQUENCY;              % [Hz]
 
     %% Lab console
     % The Jetson TX2 that streams PhaseSpace, builds and deploys experiments, and receives the
     % platforms' clocks, debug messages and live streams (workspace: labConsoleIP).
-    s.labConsoleAddress = Constants.IP_LAB_CONSOLE;
+    s.labConsoleAddress = char(Constants.IP_LAB_CONSOLE);
 
     %% Phase durations
     % Phase 3 (the experiment) is the sum of its four sub-phases. on: which segments run (a
@@ -50,16 +56,21 @@ function s = defaults()
         'subPhases', Constants.SUB_PHASE_DURATIONS, ...     % phase 3 sub-phases [s]
         'phase4', Constants.PHASE4_DURATION, ...            % termination phases [s]
         'phase5', Constants.PHASE5_DURATION, ...
-        'on', struct('phase2', true, 'subPhases', true(1, 4), 'phase4', true));
+        'on', struct('phase2', logical(Constants.PHASE2_ON), ...
+                     'subPhases', logical(Constants.SUB_PHASES_ON), ...
+                     'phase4', logical(Constants.PHASE4_ON)));
 
     %% Solver
     % Selecting a diagram copies its own solver settings in here (spot.sim.readSolver).
     s.solver = struct( ...
-        'type', Constants.SOLVER_TYPE, ...
-        'fixedStepName', Constants.SOLVER_FIXED_STEP, ...
-        'variableStepName', Constants.SOLVER_VARIABLE_STEP, ...
-        'maxStep', 'auto', 'minStep', 'auto', 'initialStep', 'auto', ...
-        'relTol', Constants.SOLVER_REL_TOL, 'absTol', 'auto');
+        'type', char(Constants.SOLVER_TYPE), ...
+        'fixedStepName', char(Constants.SOLVER_FIXED_STEP), ...
+        'variableStepName', char(Constants.SOLVER_VARIABLE_STEP), ...
+        'maxStep', char(Constants.SOLVER_MAX_STEP), ...
+        'minStep', char(Constants.SOLVER_MIN_STEP), ...
+        'initialStep', char(Constants.SOLVER_INITIAL_STEP), ...
+        'relTol', char(Constants.SOLVER_REL_TOL), ...
+        'absTol', char(Constants.SOLVER_ABS_TOL));
 
     %% Initial conditions
     % [x y theta] [m, m, deg]: "initial" is where the platform starts (and phase 2 drives it),
@@ -75,10 +86,11 @@ function s = defaults()
 
     %% Mass properties
     % Mass and CG from the three scale readings [A B C] [kg]; inertia from a bifilar pendulum
-    % test (period T [s], string length L [m], spacing D [m]). With override, the typed-in mass
-    % and inertia are used instead.
+    % test (period T [s], string length L [m], spacing D [m]: the lab's one rig, so L and D are
+    % the same for every platform). With override, the typed-in mass and inertia are used
+    % instead.
     s.mass = struct();
-    s.mass.override = false;
+    s.mass.override = logical(Constants.MASS_OVERRIDE);
     s.mass.RED = platformMass(Constants.SCALES_RED, Constants.BIFILAR_PERIOD_RED, ...
                               Constants.MASS_RED, Constants.INERTIA_RED);
     s.mass.BLACK = platformMass(Constants.SCALES_BLACK, ...
@@ -104,35 +116,34 @@ function s = defaults()
         'IPROX', Constants.ARM_INERTIA_PROX, ...   % link inertias [kg m^2]
         'IDIST', Constants.ARM_INERTIA_DIST, ...
         'IEE', Constants.ARM_INERTIA_EE, ...
-        'mount', struct('face', Constants.ARM_MOUNT_FACE, ...
-                        'side', Constants.ARM_MOUNT_SIDE));
+        'mount', struct('face', char(Constants.ARM_MOUNT_FACE), ...
+                        'side', char(Constants.ARM_MOUNT_SIDE)));
 
     %% Calibration
-    % Which parts of the lab's calibration (the project's spot_calibration.json)
-    % simulations use: the table's slope (off: level), each thruster's thrust (off:
-    % thrusterForce for all eight), the arm's friction and inertia (off: its defaults).
-    s.calibration = struct('tableSlope', true, 'thrusters', true, 'arm', true);
+    % Which parts of the lab's calibration the project took (Constants.LAB_*) simulations use:
+    % the table's slope (off: level), each thruster's thrust (off: thrusterForce for all
+    % eight), the arm's friction and inertia (off: the ARM_* bench values).
+    s.calibration = struct('tableSlope', logical(Constants.CAL_USE_TABLE), ...
+                           'thrusters', logical(Constants.CAL_USE_THRUSTERS), ...
+                           'arm', logical(Constants.CAL_USE_ARM));
 
     %% Thrusters
-    % Thrust of one thruster [N], the same for every thruster until calibrated.
+    % Thrust of one thruster [N] per platform, the same for every thruster until calibrated.
     s.thrusterForce = struct( ...
-        'RED', Constants.THRUST_NOMINAL, ...
-        'BLACK', Constants.THRUST_NOMINAL, ...
-        'BLUE', Constants.THRUST_NOMINAL);
+        'RED', Constants.THRUST_RED, ...
+        'BLACK', Constants.THRUST_BLACK, ...
+        'BLUE', Constants.THRUST_BLUE);
 
     % Thrust decay: with n valves open at once each gives 1 - thrusterDecay*(n - 1) of its
     % thrust alone (thrust_decay_<PLATFORM>). The thruster calibration measures it per
     % platform; until then all use the Obstacle's (Constants.THRUST_DECAY_DEFAULT).
     s.thrusterDecay = struct( ...
-        'RED', Constants.THRUST_DECAY_DEFAULT, ...
-        'BLACK', Constants.THRUST_DECAY_DEFAULT, ...
-        'BLUE', Constants.THRUST_DECAY_DEFAULT);
+        'RED', Constants.THRUST_DECAY_RED, ...
+        'BLACK', Constants.THRUST_DECAY_BLACK, ...
+        'BLUE', Constants.THRUST_DECAY_BLUE);
 
     %% Controllers
-    % LQR weights Q = [x y theta dx/dt dy/dt dtheta/dt], R = [Fx Fy Tz]. (Settings saved with
-    % the old PD gains still load; the gains are dropped.)
-    lqr = struct('Q', Constants.LQR_Q, 'R', Constants.LQR_R);
-
+    % LQR weights Q = [x y theta dx/dt dy/dt dtheta/dt], R = [Fx Fy Tz], per platform.
     % The arm's controllers (spot.arm.PositionControl, spot.arm.VelocityControl): gains in the
     % servos' units [shoulder elbow wrist], retuned for SAMPLE_RATE; profile velocity
     % [VEL_UNIT_RPM rev/min], profile acceleration [ACC_UNIT_RPM2 rev/min^2] (0 = none), PWM
@@ -151,9 +162,9 @@ function s = defaults()
         'pwmLimit', Constants.ARM_VELOCITY_PWM_LIMIT);
 
     s.control = struct( ...
-        'RED', struct('lqr', lqr), ...
-        'BLACK', struct('lqr', lqr), ...
-        'BLUE', struct('lqr', lqr), ...
+        'RED', struct('lqr', struct('Q', Constants.LQR_Q_RED, 'R', Constants.LQR_R_RED)), ...
+        'BLACK', struct('lqr', struct('Q', Constants.LQR_Q_BLACK, 'R', Constants.LQR_R_BLACK)), ...
+        'BLUE', struct('lqr', struct('Q', Constants.LQR_Q_BLUE, 'R', Constants.LQR_R_BLUE)), ...
         'ARM', struct('position', armPosition, 'velocity', armVelocity));
 end
 

@@ -40,7 +40,7 @@ $$I_{zz} = \frac{T^2\, M g\, D^2}{16\,\pi^2\, L}, \qquad g = 9.80665\ \text{m/s}
 
 ## LED positions
 
-The four PhaseSpace LEDs are near the body's corners; the PhaseSpace server wants them **relative to the CG** (the point it will report as the platform's position). Where each LED is on the body, $(x_k, y_k)$ from the body centre, is kept in the project's `spot_calibration.json` (`markers`) and edited in the Simulation tab's **Thruster and LED Layout** window; by default they sit 13 mm in from each edge (`LED_INSET`), at $(\pm 0.137, \pm 0.137)$ m (`LED_DEFAULT_OFFSET`; `spot.massprops.markerLayout`). From the CG:
+The four PhaseSpace LEDs are near the body's corners; the PhaseSpace server wants them **relative to the CG** (the point it will report as the platform's position). Where each LED is on the body, $(x_k, y_k)$ from the body centre, is kept in the project's `Constants.m` (`LED_XY_RED`, `_BLACK`, `_BLUE`) and edited in the Simulation tab's **Thruster and LED Layout** window; by default they sit 13 mm in from each edge (`LED_INSET`), at $(\pm 0.137, \pm 0.137)$ m (`LED_DEFAULT_OFFSET`; `spot.massprops.markerLayout`). From the CG:
 
 $$\text{LED}_k = (x_k - X_{cg},\ y_k - Y_{cg}) .$$
 

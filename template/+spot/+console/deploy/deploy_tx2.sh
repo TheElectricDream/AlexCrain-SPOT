@@ -18,6 +18,10 @@ SERVICE="spot-phasespace-console"
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10)
 [ -f "$SSH_KEY" ] && ssh_opts+=(-i "$SSH_KEY" -o IdentitiesOnly=yes)
 
+# The TX2 has no MATLAB: its console parses Constants.m with spot_console/constants.py. Read the
+# file that way here first, so a line outside the reader's grammar never reaches the TX2.
+python3 webapp/spot_console/constants.py --json ../../Constants.m > /dev/null
+
 echo "== Copying files to $TX2:~/$DEST"
 # The console's three folders; --delete keeps each copy in sync. StreamData builds into output/.
 rsync -a --delete --relative --exclude '__pycache__' -e "ssh ${ssh_opts[*]}" \

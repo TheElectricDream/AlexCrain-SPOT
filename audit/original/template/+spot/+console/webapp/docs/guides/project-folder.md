@@ -5,17 +5,16 @@ What is in a SPOT project, and what each part is for. Paths are relative to the 
 ```text
 <Project>/
 ├── SPOT.m                     start, reopen or stop the console (type SPOT in MATLAB)
-├── Constants.m                every parameter of SPOT (and your own values), as Constants.NAME
+├── Constants.m                every parameter of SPOT and every choice of this project: the console's
+│                              settings, the Designer's, the lab calibration it took, your own values
 ├── <Project>.slx              the Simulink diagram, named after the project
-├── spot_settings.json         the console's settings (created on the first start)
-├── spot_design.json           the Spacecraft Designer's choices (created on the first change)
-├── spot_calibration.json      this project's copy of the lab's calibration, your overrides, the LEDs' positions
 ├── +spot/                     all of SPOT's code, as MATLAB packages (below)
-├── Saved Data/                saved simulations and collected experiments (one folder per run)
+├── Saved Data/                saved simulations and collected experiments (one folder per run), and
+│                              Calibration/, the lab calibration's record behind the LAB_* numbers
 └── .spot_cache/               the console's state on this computer (safe to delete)
 ```
 
-A project is made by [`New_SPOT_Project`](page:new-project), which copies the repository's `template/` folder and renames the diagram. The template's own settings, saved data, caches and documentation sources are not copied, so a new project starts from the default settings.
+A project is made by [`New_SPOT_Project`](page:new-project), which copies the repository's `template/` folder and renames the diagram. The template's saved data, caches and documentation sources are not copied; its `Constants.m` is, so a new project starts from the template's values and keeps every change of its own there ([The Settings in Constants.m](page:settings-file)).
 
 ## The `+spot` packages
 
@@ -60,13 +59,13 @@ Per-computer state the console keeps; nothing in it needs to be kept or committe
 | `stop_request` | written by Stop while a simulation runs; the worker checks for it |
 | `docs_backups/` | the previous version of every file saved from the Documentation tab's editor (the last 40 saves) |
 
-## `spot_calibration.json`
+## The lab's calibration, in `Constants.m`
 
-The lab measures the table's slope, each thruster's thrust and thrust decay, and the arm's friction on the lab console's [Calibration Tab](page:tab-calibration). The local console offers to copy a newer calibration into this file when it can see the lab console, and the Simulation tab's Calibration pane shows what simulations will use. Any value you override there is kept in the same file (`overrides`), so updating from the lab doesn't lose it.
+The lab measures the table's slope, each thruster's thrust and thrust decay, and the arm's friction on the lab console's [Calibration Tab](page:tab-calibration). The local console offers to take a newer calibration into this project when it can see the lab console (Update from Lab), and the Simulation tab's Calibration pane shows what simulations will use. The numbers land in the `LAB_*` constants at the end of `Constants.m`, which is all a simulation reads. The measurements behind them (the table's drift paths, each thruster's burns and spread, the arm's sweeps and steps) come along as a record in `Saved Data/Calibration/lab_calibration.mat` (`spot.params.calibrationRecord`), which the Calibration pane draws: measurement data, like a run, never edited and never read for a value. The pane draws a section of it only while its time matches the `LAB_*` constants', so a value you change in `Constants.m` never sits beside an old record. The Results page leaves that folder out. Any value you override there is an `OVERRIDE_*` constant, so updating from the lab doesn't lose it.
 
-The file also holds where each platform's PhaseSpace LEDs are (`markers`: each LED's id and its x and y in millimetres from the body centre), set in the Platforms pane's **Thruster and LED Layout** window; until then, the default layout (13 mm in from each corner, `Constants.LED_INSET`). Updating from the lab keeps them too. MATLAB works out each LED's position from the platform's centre of gravity, and the Experiment tab's **Start Cameras** sends that marker file to the lab console, which writes it next to StreamData.
+The same file holds where each platform's PhaseSpace LEDs are (`LED_XY_RED`, `_BLACK`, `_BLUE`: each LED's x and y in metres from the body centre), set in the Platforms pane's **Thruster and LED Layout** window; until then, the default layout (13 mm in from each corner, `Constants.LED_INSET`). MATLAB works out each LED's position from the platform's centre of gravity, and the Experiment tab's **Start Cameras** sends that marker file to the lab console, which writes it next to StreamData.
 
-`spot.params.loadCalibration` reads the file. A project made before the file moved to the top of the project kept it in a `resources/` folder; the console moves it across the first time it starts.
+`spot.params.labCalibration` reads these constants.
 
 ## What is not here
 

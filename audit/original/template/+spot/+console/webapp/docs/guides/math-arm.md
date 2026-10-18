@@ -30,7 +30,7 @@ Why PWM rather than current (torque) control: the servos measure their current i
 
 ## Friction with stiction
 
-Per joint, four parameters (the bench values `ARM_STATIC`, `ARM_COULOMB`, `ARM_STRIBECK` and `ARM_VISCOUS` through `spot.arm.defaults`, or the ones measured in PWM control: the lab's arm calibration from the [Calibration Tab](page:tab-calibration), or an `arm_calibration.json` in the project folder from [calibrate_arm.py](file:calibrate_arm.py), whichever is newer; `spot.arm.parameters`): breakaway torque $T_s$, Coulomb torque $T_c$, Stribeck velocity $v_s$, viscous coefficient $b$. Moving at speed $\omega$, the friction is
+Per joint, four parameters (the bench values `ARM_STATIC`, `ARM_COULOMB`, `ARM_STRIBECK` and `ARM_VISCOUS` through `spot.arm.defaults`, or the ones measured in PWM control: the lab's arm calibration from the [Calibration Tab](page:tab-calibration), as the project took it into `Constants.LAB_ARM_*` with Update from Lab; `spot.arm.parameters`): breakaway torque $T_s$, Coulomb torque $T_c$, Stribeck velocity $v_s$, viscous coefficient $b$. Moving at speed $\omega$, the friction is
 
 $$f(\omega) = \left[T_c + (T_s - T_c)\, e^{-(\omega/v_s)^2}\right] \operatorname{sign}(\omega) + b\,\omega ,$$
 

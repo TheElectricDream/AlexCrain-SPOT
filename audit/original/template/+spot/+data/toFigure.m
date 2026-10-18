@@ -215,7 +215,7 @@ function [handles, labels] = tablePlot(ax, panel, traces, lookup)
                 end
 
                 % The arm's geometry: the dataset's settings, else the defaults.
-                geometry = spot.params.defaults().mass.arm;
+                geometry = spot.params.fromConstants().mass.arm;
                 if isstruct(ds.settings)
                     geometry = ds.settings.mass.arm;
                 end

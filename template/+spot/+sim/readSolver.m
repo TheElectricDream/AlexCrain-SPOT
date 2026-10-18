@@ -10,7 +10,7 @@ function solver = readSolver(diagram, root, solver)
     %   Outputs
     %     solver   with the diagram's solver type, name, step sizes and tolerances
     %
-    %   See also spot.params.update, spot.params.reset.
+    %   See also spot.worker.Worker, spot.params.fromConstants.
 
     model = spot.sim.loadDiagram(diagram, root);
 

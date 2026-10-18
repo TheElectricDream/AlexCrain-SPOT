@@ -1,7 +1,7 @@
 function updateDiagramMixer(diagram)
     %UPDATEDIAGRAMMIXER Put thrusterDutyCycles's mixer code into a diagram's mixer blocks.
-    %   spot.control.updateDiagramMixer() updates the diagram in spot_settings.json (else the
-    %   first .slx in the project folder).
+    %   spot.control.updateDiagramMixer() updates the project's diagram (Constants.DIAGRAM, else
+    %   the first .slx in the project folder).
     %   spot.control.updateDiagramMixer('My_Diagram.slx') updates another one.
     %
     %   For RED, BLACK and BLUE, ".../Change <PLATFORM> Behavior/Calculate Duty Cycle/MATLAB
@@ -20,14 +20,9 @@ function updateDiagramMixer(diagram)
     % Project folder, above +spot.
     root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
 
-    % Default: the settings' diagram, else the first in the project.
+    % Default: the project's diagram, else the first in the project.
     if nargin < 1 || isempty(diagram)
-        diagram = '';
-        file = fullfile(root, 'spot_settings.json');
-        if isfile(file)
-            settings = spot.params.load(file);
-            diagram = settings.diagram;
-        end
+        diagram = char(Constants.DIAGRAM);
         if isempty(diagram) || ~isfile(fullfile(root, diagram))
             names = spot.sim.listDiagrams(root);
             if isempty(names)

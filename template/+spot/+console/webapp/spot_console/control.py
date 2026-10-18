@@ -91,7 +91,7 @@ def platform_defaults(platform):
             "thruster_dist2CG": dist2CG, "Q": list(C.LQR_Q), "R": list(C.LQR_R)}
 
 
-# SPOT's default settings (spot.params.defaults), what
+# SPOT's default settings (spot.params.fromConstants), what
 # spot.massprops.compute makes of their mass section, and the mixer
 # block's mask values in the diagram, all from Constants.m. The
 # lab console has no settings file of the project's, so Interactive

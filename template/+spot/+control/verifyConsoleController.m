@@ -16,7 +16,7 @@ function report = verifyConsoleController(varargin)
     %   report = spot.control.verifyConsoleController(...) also returns them.
     %
     %   Options (name, value)
-    %     'diagram'   .slx in the project folder (default: spot_settings.json's, else the first)
+    %     'diagram'   .slx in the project folder (default: Constants.DIAGRAM, else the first)
     %     'simulate'  false to skip check 2 (it simulates about 70 s)
     %     'cases'     random cases for check 3 (default 300)
     %
@@ -171,7 +171,7 @@ function result = checkDiagram(root, diagram, model, platforms, wiring)
     MIXER_TOL = 1e-6;
 
     %% Simulate with the defaults and a shortened timeline
-    settings = spot.params.defaults();
+    settings = spot.params.fromConstants();
     settings.diagram = diagram;
     settings.platforms = struct('RED', true, 'BLACK', true, 'BLUE', true, 'ARM', false);
     settings.timing.phase0 = 5;
@@ -282,7 +282,7 @@ function [result, py] = checkPython(root, n)
 
     rng(SEED, 'twister');
     inputs = struct('gains', [], 'lqr', [], 'mixer', []);
-    settings = spot.params.defaults();
+    settings = spot.params.fromConstants();
     mp = spot.massprops.compute(settings.mass);
     names = {'RED', 'BLACK', 'BLUE'};
 
@@ -407,7 +407,7 @@ function result = checkDefaults(model, py)
     REL_TOL = 1e-12;
     GAIN_REL_TOL = 1e-9;
 
-    settings = spot.params.defaults();
+    settings = spot.params.fromConstants();
     mp = spot.massprops.compute(settings.mass);
     d = py.defaults;
     result = struct('ok', true, 'text', {{}});
@@ -516,13 +516,8 @@ function v = ternary(c, a, b)
 end
 
 function name = defaultDiagram(root)
-    % The settings' diagram, else the first .slx in the project.
-    file = fullfile(root, 'spot_settings.json');
-    name = '';
-    if isfile(file)
-        settings = spot.params.load(file);
-        name = settings.diagram;
-    end
+    % The project's diagram (Constants.DIAGRAM), else the first .slx in the project.
+    name = char(Constants.DIAGRAM);
     if isempty(name) || ~isfile(fullfile(root, name))
         names = spot.sim.listDiagrams(root);
         if isempty(names)

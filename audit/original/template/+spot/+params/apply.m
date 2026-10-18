@@ -1,16 +1,18 @@
-function d = apply(s, root)
+function d = apply(s, ~)
     %APPLY Put the settings into the base workspace, as the Simulink diagrams expect them.
     %   d = spot.params.apply(s) assigns every workspace variable the old GUI assigned (phase
     %   times, rates, gains, LQR matrices, mass properties, initial conditions, thruster forces,
-    %   ...) and armModel (spot.arm.parameters, for the simulated arm).
-    %   d = spot.params.apply(s, root) also uses the project's calibration of the lab
-    %   (spot.params.loadCalibration), each part when its s.calibration switch is on: the
-    %   table's slope, each thruster's thrust and decay, and the arm's friction and inertia,
-    %   with the values the project overrides; and where the project's LEDs are.
+    %   ...) and armModel (spot.arm.parameters, for the simulated arm), with the lab's
+    %   calibration as the project took it (spot.params.labCalibration, Constants.LAB_*), each
+    %   part when its s.calibration switch is on: the table's slope, each thruster's thrust and
+    %   decay, and the arm's friction and inertia, with the values the project overrides; and
+    %   where the project's LEDs are.
+    %   d = spot.params.apply(s, root) is the same: the project folder is accepted for the
+    %   callers that pass it, and not needed (the calibration lives in Constants).
     %
     %   Inputs
     %     s     settings
-    %     root  project folder (optional)
+    %     root  project folder (optional, unused)
     %
     %   Outputs
     %     d     derived values for display: tsim, timing, rates, mass properties, the PhaseSpace
@@ -19,12 +21,12 @@ function d = apply(s, root)
     %           warnings, the variables assigned
     %
     %   Example (no GUI needed)
-    %     s = spot.params.load('spot_settings.json');
+    %     s = spot.params.fromConstants();
     %     s.platforms.RED = true;
     %     spot.params.apply(s, pwd);
     %     out = spot.sim.run(s, pwd);
     %
-    %   See also spot.params.defaults, spot.params.timing, spot.sim.run.
+    %   See also spot.params.fromConstants, spot.params.timing, spot.sim.run.
 
     %% Constants
     MAX_DATA_RATE = Constants.MAX_DATA_RATE;                   % [Hz] PhaseSpace
@@ -92,14 +94,9 @@ function d = apply(s, root)
     ws.yLength = TABLE_Y;
 
     %% The project's calibration
-    % The lab's calibration as the project copied it, with the project's own values: the
-    % values it overrides and where its LEDs are. Without the project folder: none, and the
-    % default LED layout.
-    if nargin > 1
-        cal = spot.params.loadCalibration(root);
-    else
-        cal = spot.params.loadCalibration();
-    end
+    % The lab's calibration as the project took it (Constants.LAB_*), with the project's own
+    % values: the values it overrides and where its LEDs are.
+    cal = spot.params.labCalibration();
 
     %% Mass properties
     % The LEDs from each platform's CG are the lab console's marker file (trackerPositions),
@@ -174,24 +171,15 @@ function d = apply(s, root)
     d.armInitial = spot.plotting.armPosition(ws.init_states_RED, ws.init_states_ARM, arm);
 
     %% Arm model and controllers
-    % The model spot.arm.Plant simulates, with the project's arm calibration (the newer of the
-    % lab's and calibrate_arm.py's arm_calibration.json, and the project's overrides) when
-    % s.calibration.arm is on.
-    if nargin > 1 && s.calibration.arm
-        ws.armModel = spot.arm.parameters(ws, root);
+    % The model spot.arm.Plant simulates, with the arm calibration the project took
+    % (Constants.LAB_ARM_*) and the project's overrides when s.calibration.arm is on.
+    if s.calibration.arm
+        ws.armModel = spot.arm.parameters(ws, cal);
     else
         ws.armModel = spot.arm.parameters(ws);
     end
-    d.calibration.armUsed = ws.armModel.calibration;   % the file it came from, or ''
-    if isempty(ws.armModel.calibration) && ~isempty(ws.armModel.calibrationIgnored)
-        armWarning = sprintf( ...
-            ['The arm calibration in %s was measured with the motor current, which SPOT no ' ...
-             'longer uses (the servos run in PWM control), so the simulated arm has its ' ...
-             'default friction: run the arm calibration again (lab console, Calibration tab).'], ...
-            ws.armModel.calibrationIgnored);
-    else
-        armWarning = '';
-    end
+    d.calibration.armUsed = ws.armModel.calibration;   % where it came from, or ''
+    armWarning = '';
 
     % Gains and limits of the diagram's Default Position/Velocity Control (ARM).
     ws.armControl = armGains(s.control.ARM);

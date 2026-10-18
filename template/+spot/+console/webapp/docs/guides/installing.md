@@ -7,14 +7,14 @@
 | **MATLAB** | **R2026a or newer**: the template diagram is saved in R2026a, and older releases can't open it. |
 | for simulations | Simulink, the DSP System Toolbox, and the Control System Toolbox (for the LQR gains) |
 | for experiments | also MATLAB Coder, Simulink Coder, Embedded Coder, and the *MATLAB Coder Support Package for NVIDIA Jetson and NVIDIA DRIVE Platforms* (MATLAB: Home › Add-Ons) |
-| **Python** | 3.6 or newer, standard library only (nothing to `pip install`). It runs the local console's small web server. If it is missing, `SPOT` offers to install it. |
+| **Python** | 3.9 to 3.13 (what the MATLAB Engine for Python supports for R2026a), with that engine package: it runs the local console's small web server, which reads the project's constants from your MATLAB session through the engine. If Python is missing, `SPOT` offers to install it; if the engine package is missing, `SPOT` offers to install it from your MATLAB folder (`python -m pip install --user "<matlabroot>/extern/engines/python"`; a Python without pip, as a Linux distribution's often is, gets the package copied into its user site-packages by `+spot/+console/install_engine.py` instead). |
 | **A web browser** | any current browser (Chrome, Firefox, Edge, Brave, Safari) |
 | for experiments | a connection to the lab network (the lab's Wi-Fi, or a cable in the lab), and the TX2's password from a lab administrator (needed once, to build) |
 
 ## Windows
 
 1. Install MATLAB R2026a with the toolboxes above.
-2. Python: nothing to do beforehand. If `SPOT` can't find one, it says so and offers **Install Python**, which installs it for your user only (with `winget`, or python.org's installer; no administrator rights needed). To install it yourself, use [python.org](https://www.python.org/downloads/) and tick *Add python.exe to PATH*. SPOT tries the Python MATLAB is set up to use (`pyenv`), then `py -3`, `python`, `python3`, then where the installers put it (`spot.console.findPython`).
+2. Python: nothing to do beforehand. If `SPOT` can't find one, it says so and offers **Install Python**, which installs it for your user only (with `winget`, or python.org's installer; no administrator rights needed). Then it offers to install the MATLAB Engine for Python into it. To install it yourself, use [python.org](https://www.python.org/downloads/) and tick *Add python.exe to PATH*. SPOT tries the Python MATLAB is set up to use (`pyenv`), then `py -3`, `python`, `python3`, then where the installers put it (`spot.console.findPython`).
 3. Make your project ([Making a New Project](page:new-project)). Avoid folders synced by OneDrive while building experiments: syncing can lock files.
 4. In MATLAB, `cd` into the project folder and type `SPOT`.
 5. If Windows Firewall asks whether Python may use the network, *private networks* is enough: the local console only listens on your own computer (127.0.0.1).
@@ -25,7 +25,7 @@
 ## Linux
 
 1. Install MATLAB R2026a with the toolboxes above.
-2. Python 3 comes with most distributions. If it is missing, `SPOT` offers **Install Python**, which uses your package manager (apt, dnf, yum, zypper or pacman) and asks for your password in a system dialog; without a desktop it prints the command instead (for example `sudo apt install python3`).
+2. Python 3 comes with most distributions (3.9 to 3.13 for the engine; a newer one is tried with a warning). If it is missing, `SPOT` offers **Install Python**, which uses your package manager (apt, dnf, yum, zypper or pacman) and asks for your password in a system dialog; without a desktop it prints the command instead (for example `sudo apt install python3`).
 3. The local console opens your default browser with `xdg-open`.
 4. Make your project, `cd` into it in MATLAB, and type `SPOT`.
 
@@ -44,7 +44,8 @@ MATLAB starts the console's web server, connects its **worker** to it, and opens
 
 | If... | then... |
 |---|---|
-| "needs Python 3.6 or newer" | click **Install Python**, run `spot.console.installPython`, install it yourself, or point MATLAB at one: `pyenv('Version', 'C:\...\python.exe')` |
+| "needs Python 3.9 or newer with the MATLAB Engine for Python" | click **Install Python**, run `spot.console.installPython`, install it yourself, or point MATLAB at one: `pyenv('Version', 'C:\...\python.exe')`; then let `SPOT` install the engine (`spot.console.ensureEngine`) |
+| "needs the MATLAB Engine for Python" | accept the install `SPOT` offers, or run `python -m pip install --user "<matlabroot>/extern/engines/python"` with the Python `SPOT` found (`spot.console.findPython`); the engine supports Python 3.9 to 3.13 for R2026a |
 | the page says it can't talk to MATLAB | open it with the link MATLAB printed, or run `SPOT open` |
 | the browser doesn't open | copy the address `SPOT open` prints into your browser |
 | **Lab Disconnected** (top right) | you are not on the lab network. Simulations and results still work; experiments and the live view need the lab network |

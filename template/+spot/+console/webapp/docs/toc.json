@@ -36,7 +36,7 @@
     ]},
     {"title": "Working in MATLAB", "pages": [
       {"id": "matlab-without-console", "file": "guides/matlab-without-console.md", "summary": "Simulations, sweeps, figures and builds from scripts."},
-      {"id": "settings-file", "file": "guides/settings-file.md", "summary": "Every key of spot_settings.json."},
+      {"id": "settings-file", "file": "guides/settings-file.md", "summary": "Every setting, as a constant in Constants.m."},
       {"id": "workspace-variables", "file": "guides/workspace-variables.md", "summary": "What the diagram reads from MATLAB's workspace."},
       {"id": "logged-signals", "file": "guides/logged-signals.md", "summary": "The 108 signals every run records."}
     ]},

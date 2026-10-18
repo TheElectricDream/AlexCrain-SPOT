@@ -22,9 +22,9 @@
   </g>
   <g fill="#aeb6c3" font-size="12">
     <text x="50" y="108">Simulation, Experiment, Results, Designer</text>
-    <text x="50" y="228">Python standard library; 127.0.0.1 with a token</text>
+    <text x="50" y="228">Python + MATLAB Engine; 127.0.0.1 with a token</text>
     <text x="50" y="348">answers one JSON command per line</text>
-    <text x="50" y="468">spot.* packages, your diagram, Saved Data</text>
+    <text x="50" y="468">Constants.m, spot.* packages, your diagram, Saved Data</text>
   </g>
   <g stroke="#8b93a3" stroke-width="1.6" marker-end="url(#a)" marker-start="url(#a)">
     <path d="M166 132V178"/>
@@ -33,7 +33,7 @@
   </g>
   <g fill="#89ddff" font-size="11">
     <text x="174" y="160">HTTP + events</text>
-    <text x="174" y="280">JSON lines (local socket)</text>
+    <text x="174" y="280">commands as JSON lines (local socket)</text>
   </g>
 
   <!-- The lab -->

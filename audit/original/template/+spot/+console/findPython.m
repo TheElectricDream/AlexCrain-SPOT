@@ -1,7 +1,10 @@
 function exe = findPython()
-    %FINDPYTHON A Python 3.6+ to run the SPOT Console's web server with.
-    %   exe = spot.console.findPython() returns the command for the first Python 3.6+ found.
-    %   It tries, in order:
+    %FINDPYTHON A Python to run the SPOT Console's web server with.
+    %   exe = spot.console.findPython() returns the command for a Python the local console can
+    %   use: one that already has the MATLAB Engine for Python (the console reads Constants
+    %   from this session through it), else the first one new enough for the engine
+    %   (MIN_VERSION), which spot.console.ensureEngine then installs it into. It tries, in
+    %   order:
     %     1. the Python MATLAB is set up to use (pyenv)
     %     2. the usual commands: py -3 and python on Windows, python3 elsewhere
     %     3. on Windows, where Python's installer puts it, so a Python installed while MATLAB
@@ -9,10 +12,11 @@ function exe = findPython()
     %   Errors with spot:console:noPython if none works; spot.console.offerPython offers to
     %   install one.
     %
-    %   See also spot.console.offerPython, spot.console.installPython.
+    %   See also spot.console.ensureEngine, spot.console.offerPython,
+    %   spot.console.installPython.
 
     %% Constants
-    MIN_VERSION = 306;   % 100 * major + minor: Python 3.6
+    MIN_VERSION = 309;   % 100 * major + minor: Python 3.9, the oldest the engine supports
 
     %% Candidates
     spot.console.ensureShell();
@@ -40,21 +44,29 @@ function exe = findPython()
             'UniformOutput', false);
     end
 
-    %% First that runs and is new enough
+    %% The first with the engine, else the first new enough
+    usable = {};
     for k = 1:numel(candidates)
         [status, out] = system([candidates{k} ...
             ' -c "import sys; print(sys.version_info[0]*100+sys.version_info[1])"']);
         v = str2double(strtrim(out));
         if status == 0 && v >= MIN_VERSION
-            exe = candidates{k};
-            return
+            if spot.console.hasEngine(candidates{k})
+                exe = candidates{k};
+                return
+            end
+            usable{end + 1} = candidates{k}; %#ok<AGROW>
         end
+    end
+    if ~isempty(usable)
+        exe = usable{1};
+        return
     end
 
     error('spot:console:noPython', ...
-        ['The SPOT Console needs Python 3.6 or newer (only its standard library). Install it ' ...
-         'with spot.console.installPython or from python.org, or tell MATLAB where it is with ' ...
-         'pyenv(''Version'', ...).']);
+        ['The SPOT Console needs Python 3.9 or newer with the MATLAB Engine for Python. ' ...
+         'Install Python with spot.console.installPython or from python.org, or tell MATLAB ' ...
+         'where it is with pyenv(''Version'', ...); SPOT then offers to install the engine.']);
 end
 
 function c = installed()

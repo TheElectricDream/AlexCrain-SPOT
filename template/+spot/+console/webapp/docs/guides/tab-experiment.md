@@ -10,7 +10,7 @@ Running the diagram **on the platforms**, from your MATLAB, through the lab cons
 
 In the same card:
 
-- **Start Cameras** / **Stop Cameras**: starts [StreamData](file:StreamData.cc) on the lab console at the **Data Rate**, after sending it this project's marker file (`tracker_positions`: each LED's position from its platform's centre of gravity, from the LED positions in `spot_calibration.json` and the scale readings; see the Simulation tab's Thruster and LED Layout). The lab console writes it next to StreamData. The line shows whether it is streaming and the packet rate the lab console sees.
+- **Start Cameras** / **Stop Cameras**: starts [StreamData](file:StreamData.cc) on the lab console at the **Data Rate**, after sending it this project's marker file (`tracker_positions`: each LED's position from its platform's centre of gravity, from the LED positions in `Constants.m` (`LED_XY_*`) and the scale readings; see the Simulation tab's Thruster and LED Layout). The lab console writes it next to StreamData. The line shows whether it is streaming and the packet rate the lab console sees.
 - **Data Rate**: the same value as the Simulation tab's (they are one setting, `dataRate`). Locked, and fixed while the cameras stream.
 
 ## Platforms

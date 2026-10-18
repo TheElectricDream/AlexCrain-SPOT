@@ -2,14 +2,16 @@
 // diagrams need, simulations run in the user's MATLAB and replayed in the shared 3D view, and
 // MATLAB's command window and workspace.
 //
-// The settings live in MATLAB (spot.worker.Worker keeps them in spot_settings.json). Every
-// change is sent back whole ("settings.set"); MATLAB puts them into the base workspace and
-// answers with what follows from them (total time, CG, LQR gains, ...) or why they don't work.
+// The settings live in the project's Constants.m (spot.worker.Worker reads and writes it). Each
+// change here is sent as its path and value ("settings.set"); MATLAB writes the constants,
+// puts the settings into the base workspace and answers with what follows from them (total
+// time, CG, LQR gains, ...) or why they don't work.
 
 import { PLATFORM_KEYS as PLATFORMS, COLORS as SWATCH, platformName, swatch } from './platforms.js';
 import { handleLockClick, isUnlocked, lockButton, onLockChange } from './ratelock.js';
 import { initLayout } from './layout.js';
 import { constant } from './constants.js';
+import { initConstantsDialog } from './constantsdialog.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -164,11 +166,18 @@ export function initSimulation({
       ? storage.get('spot.pose', 'initial')
       : 'initial',
     t: 0, playing: false, lastTick: 0, shown: false,
-    editSeq: 0, pushTimer: null, pushing: false,
+    editSeq: 0, pending: new Map(), pushTimer: null, pushing: false,
     history: storage.get('spot.cmdHistory', []), histPos: -1,
     workspace: [], inspected: null,
   };
   const matlab = (cmd, args = {}) => api('/api/matlab', { cmd, args }).then(r => r.result);
+
+  // The Constants window: a save there comes back with the settings, applied here at once.
+  const constantsDialog = initConstantsDialog({
+    matlab, act, toast,
+    onSaved: r => applyReply(r),
+  });
+  document.addEventListener('spot-constants', () => constantsDialog.refresh());
   const panes = $('#simPanes');
 
   // The Thruster and LED Layout window: the scales typed there are settings; the LEDs are the
@@ -178,13 +187,20 @@ export function initSimulation({
     getSettings: () => S.settings,
     getMarkers: () => (S.calFile && S.calFile.markers) || null,
     setSetting: (path, value) => {
-      setPath(S.settings, path, value);
+      changeSetting(path, value);
       S.editSeq++;
       fill();
       renderSetup();
       schedulePush(500);
     },
   });
+
+  // A setting changed on this page: into the page's copy, and remembered by its path until it
+  // is sent (push sends only what changed, so a value edited in Constants.m meanwhile is kept).
+  function changeSetting(path, value) {
+    setPath(S.settings, path, value);
+    S.pending.set(path, value);
+  }
 
   // Settings from MATLAB
 
@@ -197,6 +213,10 @@ export function initSimulation({
     }
     if (seq === undefined || seq === S.editSeq) {
       S.settings = r.settings;
+      // An edit made while this reply was on its way stays (it is still to be sent).
+      for (const [path, value] of S.pending) {
+        setPath(S.settings, path, value);
+      }
     }
     S.derived = r.derived;
     S.error = r.error || '';
@@ -263,22 +283,44 @@ export function initSimulation({
     S.pushTimer = setTimeout(push, delay);
   }
 
-  // Sends the settings (later, if a send or a simulation is under way).
+  // Sends the settings changed since the last send, as paths and values (later, if a send or
+  // a simulation is under way). A refused change is put back to be sent again, unless the
+  // field was edited meanwhile.
   async function push() {
     if (S.pushing || S.sim.running) {
       return schedulePush(600);
     }
+    if (!S.pending.size) {
+      return;
+    }
     S.pushing = true;
     const seq = S.editSeq;
+    const sent = new Map(S.pending);
+    S.pending.clear();
     try {
-      applyReply(await matlab('settings.set', { settings: S.settings }), seq);
+      const changes = [...sent].map(([path, value]) => ({ path, value }));
+      applyReply(await matlab('settings.set', { changes }), seq);
       S.pushedSeq = seq;
     } catch (e) {
+      for (const [path, value] of sent) {
+        if (!S.pending.has(path)) {
+          S.pending.set(path, value);
+        }
+      }
       toast(e.message, 'error', 8000);
     } finally {
       S.pushing = false;
     }
   }
+
+  // Constants.m may have been edited in MATLAB's editor while this page was in the background:
+  // read the settings again when it comes back (unless an edit here is still to be sent).
+  window.addEventListener('focus', () => {
+    if (S.matlab && S.matlab.connected && S.settings && !S.pushing && !S.sim.running &&
+        !S.pending.size) {
+      loadSettings().catch(() => {});
+    }
+  });
 
   // Panes
 
@@ -364,7 +406,7 @@ export function initSimulation({
     });
   }
 
-  // What the simulation takes from the lab's calibration (this project's spot_calibration.json):
+  // What the simulation takes from the lab's calibration (this project's Constants.LAB_*):
   // this project's calibration against the lab's (calibration.js's sync card, moved here by
   // renderPanes), then a card per calibration (renderCalibration); the main area shows the
   // calibrations.
@@ -417,7 +459,7 @@ export function initSimulation({
           ${num(`thrusterDecay.${n}`, 'Thrust Decay', { unit: '/valve', title: `Thrust lost per extra valve open at once: the valves share one regulated supply, so with n open each thruster gives 1 − decay (n − 1) of its thrust alone (${decay} = ${(100 * decay).toFixed(1)} %). The mixer uses it, so the simulated plant and the platforms alike. The thruster calibration\'s Together stage replaces it when used; the default is the Obstacle\'s, measured 2026-10-14.` })}
         </div>
         <p class="hint" data-derived="calthrust"></p>
-        <button type="button" class="btn btn-sm sp-top" data-action="layout" title="The platform from above, to scale: where the thrusters and the PhaseSpace LEDs are, dimensioned from the CG the scales give. The LEDs' positions are edited there (this project's spot_calibration.json); Start Cameras sends them to the lab console.">Thruster and LED Layout…</button>
+        <button type="button" class="btn btn-sm sp-top" data-action="layout" title="The platform from above, to scale: where the thrusters and the PhaseSpace LEDs are, dimensioned from the CG the scales give. The LEDs' positions are edited there (this project's Constants.m, LED_XY_*); Start Cameras sends them to the lab console.">Thruster and LED Layout…</button>
       </section>`;
   }
 
@@ -971,8 +1013,8 @@ export function initSimulation({
       : '';
     return calOpen('arm', section) +
       calHead('Arm', 'The arm\'s measured friction, back-EMF and rotor inertia, measured in PWM ' +
-        'control (the newer of the lab\'s arm calibration and an arm_calibration.json in the ' +
-        'project folder). Off: the arm model\'s defaults.', 'calibration.arm', on, measured,
+        'control (the lab\'s arm calibration as this project took it, Constants.LAB_ARM_*). ' +
+        'Off: the arm model\'s defaults.', 'calibration.arm', on, measured,
         count) +
       `<table class="cal-vals cal-vals-3"><thead>${head}</thead><tbody>${rows}</tbody></table>` +
       `${note}${calFoot('arm', text, on ? count : 0)}</section>`;
@@ -1057,8 +1099,8 @@ export function initSimulation({
       }
       const r = (v, k) => Math.round(v * 10 ** k) / 10 ** k;
       const th = ((deg % 360) + 360) % 360;
-      S.settings.initial[name][S.pose === 'home' ? 'home' : 'initial'] =
-        [r(x, 3), r(y, 3), r(th > 180 ? th - 360 : th, 1)];
+      changeSetting(`initial.${name}.${S.pose === 'home' ? 'home' : 'initial'}`,
+        [r(x, 3), r(y, 3), r(th > 180 ? th - 360 : th, 1)]);
       if (S.platform !== name && PLATFORMS.includes(name) && done) {
         S.platform = name;
         storage.set('spot.sim.platform', name);
@@ -1077,7 +1119,7 @@ export function initSimulation({
     if (!S.settings) {
       return;
     }
-    setPath(S.settings, 'realTime', ev.target.checked);
+    changeSetting('realTime', ev.target.checked);
     edited();
   };
 
@@ -1176,7 +1218,7 @@ export function initSimulation({
         return false;
       }
     }
-    setPath(S.settings, el.dataset.path, v);
+    changeSetting(el.dataset.path, v);
     return true;
   }
 
@@ -1199,10 +1241,10 @@ export function initSimulation({
       return;
     }
     if (b.dataset.toggle) {
-      setPath(S.settings, b.dataset.toggle, !getPath(S.settings, b.dataset.toggle));
+      changeSetting(b.dataset.toggle, !getPath(S.settings, b.dataset.toggle));
       edited(true);
     } else if (b.dataset.set) {
-      setPath(S.settings, b.dataset.set, b.dataset.value);
+      changeSetting(b.dataset.set, b.dataset.value);
       edited(true);
     } else if (b.dataset.pick) {
       S.platform = b.dataset.pick;
@@ -1223,23 +1265,8 @@ export function initSimulation({
     b.onclick = () => showTab(b.dataset.simtab);
   }
 
-  // Load and Save As (MATLAB's dialogs), and Save Results.
-  $('#simOpen').onclick = () => act(async () => {
-    toast('Choose the file in MATLAB\'s dialog', 'info', 4000);
-    const r = await matlab('settings.open');
-    if (r && !r.cancelled) {
-      S.panesBuilt = false;
-      applyReply(r);
-      toast(`Loaded ${r.loaded}`, 'success', 5000);
-    }
-  });
-  $('#simSaveAs').onclick = () => act(async () => {
-    toast('Choose where to save in MATLAB\'s dialog', 'info', 4000);
-    const r = await matlab('settings.saveAs');
-    if (r && r.saved) {
-      toast(`Saved ${r.saved}`, 'success', 5000);
-    }
-  });
+  // The Constants window, and Save Results.
+  $('#simEdit').onclick = () => constantsDialog.open();
   $('#simSaveResult').onclick = () => act(() => store.saveSimulation());
 
   // Reset: a clean slate, in parts (settings in MATLAB, this page's preferences, loaded results).
@@ -1262,14 +1289,13 @@ export function initSimulation({
     toast('Resetting to the defaults…', 'info', 4000);
     if (what.settings) {
       clearTimeout(S.pushTimer);
+      S.pending.clear();
       S.panesBuilt = false;
       const r = await matlab('settings.reset');
       applyReply(r);
       S.pushedSeq = S.editSeq;
-      toast(r.backup
-        ? `Settings reset to the defaults. The previous ones are in ${r.backup} ` +
-          '(Load… to bring them back).'
-        : 'Settings reset to the defaults.', 'success', 9000);
+      toast(`Settings reset to the template's (${r.template}). The previous Constants.m is ` +
+        `${r.backup}.`, 'success', 9000);
     }
     if (what.results) {
       for (const d of [...store.loaded]) {
@@ -1373,7 +1399,7 @@ export function initSimulation({
           : 'Loading settings…';
       }
     }
-    for (const b of ['#simOpen', '#simSaveAs', '#simReset']) {
+    for (const b of ['#simEdit', '#simReset']) {
       $(b).disabled = !S.matlab.connected || Boolean(sim.running);
     }
 
@@ -1381,13 +1407,14 @@ export function initSimulation({
     $('#simSaveResult').hidden = !S.result || Boolean(sim.running);
     $('#simSaveResult').disabled = !S.matlab.connected;
 
-    // The settings file.
+    // The file the settings live in.
     const file = $('#settingsFile');
-    file.textContent = (S.file || 'spot_settings.json').split(/[\\/]/).pop();
-    file.title = S.file ? `${S.file} (saved automatically)` : '';
-    $('#settingsBar .sb-label').title = `Settings: ${S.file || 'spot_settings.json'}, saved ` +
-      'automatically. They are what the Simulation tab shows (scenario, timeline, initial ' +
-      'conditions, platforms, control, solver), used for simulations and for building experiments.';
+    file.textContent = (S.file || 'Constants.m').split(/[\\/]/).pop();
+    file.title = S.file ? `${S.file} (written on every change)` : '';
+    $('#settingsBar .sb-label').title = `Settings: ${S.file || 'Constants.m'}, written on ` +
+      'every change. They are what the Simulation tab shows (scenario, timeline, initial ' +
+      'conditions, platforms, control, solver), used for simulations and for building ' +
+      'experiments, as constants next to every other parameter of SPOT.';
   }
 
   // The finished simulation: to the panels and the view, replayed from the start. Announced,
@@ -2163,9 +2190,9 @@ export function initSimulation({
       if (!S.settings) {
         return;
       }
-      setPath(S.settings, `platforms.${name}`, on);
+      changeSetting(`platforms.${name}`, on);
       if (name === 'RED' && !on) {
-        setPath(S.settings, 'platforms.ARM', false);
+        changeSetting('platforms.ARM', false);
       }
       edited(true);
     },
@@ -2174,12 +2201,12 @@ export function initSimulation({
       if (!S.settings) {
         return;
       }
-      setPath(S.settings, 'platforms.ARM', on);
+      changeSetting('platforms.ARM', on);
       if (on) {
-        setPath(S.settings, 'platforms.RED', true);
+        changeSetting('platforms.RED', true);
       }
       if (on && mount) {
-        setPath(S.settings, 'mass.arm.mount', { face: mount.face, side: mount.side });
+        changeSetting('mass.arm.mount', { face: mount.face, side: mount.side });
       }
       edited(true);
     },
@@ -2188,7 +2215,7 @@ export function initSimulation({
       if (!S.settings) {
         return false;
       }
-      setPath(S.settings, path, value);
+      changeSetting(path, value);
       edited();
       return true;
     },

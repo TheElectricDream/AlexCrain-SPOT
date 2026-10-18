@@ -39,9 +39,10 @@ position mode):
              real one)
 
 Writes arm_calibration.json (version 2, "control": "pwm") for SPOT's
-arm model (copy it to the project's folder, next to
-spot_settings.json; spot.arm.parameters reads it, see
-spot.arm.loadCalibration), and the raw data as CSV and JSON files.
+arm model (the lab console's Calibration tab keeps it as the lab's arm
+calibration, and projects take it with Update from Lab into their
+Constants.m; for bench work, spot.arm.loadCalibration reads the file),
+and the raw data as CSV and JSON files.
 
 Before running:
   - the platform rests on the table (not floating) or is held: the
@@ -1081,8 +1082,9 @@ def fit_all(out, joints, supply, motors, extra):
                  fmt(r.get("viscous")), fmt(r.get("back_emf")), fmt(r.get("inertia"), "%.4g")))
     path = os.path.join(out, "arm_calibration.json")
     write_json(path, result)
-    print("Wrote %s\nCopy it to the SPOT project's folder (next to spot_settings.json); the next "
-          "simulation uses it." % path)
+    print("Wrote %s\nRun from the lab console's Calibration tab, it becomes the lab's arm "
+          "calibration (projects take it with Update from Lab); by hand, "
+          "spot.arm.loadCalibration reads it." % path)
     return result
 
 

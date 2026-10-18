@@ -147,18 +147,26 @@ iteration caps, drawing sizes), and may alias a parameter for a shorter name:
 |---|---|
 | MATLAB | `Constants.NAME` |
 | The Simulink diagram | `Constants.NAME` in a block's parameter (a Constant, a Gain, a mask value) |
-| Python (`spot_console`) | `from .constants import C`, then `C.NAME` (`constants.py` parses the file at startup) |
-| JavaScript (the page) | `constant('NAME')` or `constantPlatform('MASS', 'RED')` from `static/constants.js`, filled from the `state.constants` the server sends |
+| Python, the local console | `from .constants import C`, then `C.NAME`: `constants.py` reads `jsonencode(Constants.all())` from the user's MATLAB session through the MATLAB Engine for Python (`SPOT` shares the session; `SPOT_MATLAB_ENGINE` names it), and again after the worker writes the file |
+| Python, the lab console (TX2) | the same `C.NAME`: no MATLAB there, so `constants.py` parses the copy of `Constants.m` that `deploy_tx2.sh` leaves; `Constants.verify` checks that reader against the class |
+| JavaScript (the page) | `constant('NAME')` or `constantPlatform('MASS', 'RED')` from `static/constants.js`, filled from the `state.constants` the server sends (and the `constants` event after a change) |
 | Shell scripts | `grep` the line out of `Constants.m` |
 | Firmware and C (`teensy_pwm_control.ino`, `csrc/`, `StreamData.cc`), `calibrate_arm.py` | can't read MATLAB: each keeps its copy, commented with the property it mirrors, and `Constants.verify` compares them with the file |
 
-`Constants.m` keeps to the grammar `constants.py` parses: `NAME = value;   % [unit] comment` in
-a `properties (Constant)` block, where the value is a number, a `'string'`, a row vector `[a b c]`
-(a matrix with `;`), `pi`, an earlier constant as `Constants.NAME`, or arithmetic on these
-(`+ - * / ^`, parentheses). No structs, cells or function calls. A per-platform value carries the
-platform's suffix (`MASS_RED`). A value a user changes is a *setting*: its default lives here and
-`spot.params.defaults` builds the settings from it. A value the lab measures is a *calibration*
-(`spot_calibration.json`): its placeholder lives here.
+`Constants.m` keeps to the grammar the lab console's reader parses: `NAME = value;   % [unit]
+comment` in a `properties (Constant)` block, where the value is a number, a `'string'`, `true` or
+`false`, `NaN`, a row vector `[a b c]` (a matrix with `;`, `[]` for none), `pi`, an earlier
+constant as `Constants.NAME`, or arithmetic on these (`+ - * / ^`, parentheses; a scalar times a
+vector or matrix). No structs, cells or function calls. A per-platform value carries the
+platform's suffix (`MASS_RED`).
+
+**Settings are constants too.** A value a user changes on the Simulation tab, in the Designer or
+by Update from Lab is a constant like any other (`USE_RED`, `SAMPLE_RATE`, `DOCK_RED`,
+`LAB_THRUST_BLUE`): `spot.params.fromConstants` builds the settings struct from them, and the
+MATLAB worker writes a change back with `spot.params.writeConstants` (the value between `NAME =`
+and `;` is replaced; the comment stays). The worker is the only writer of the file; nothing else
+in SPOT keeps a settings, design or calibration file. A value the lab measures lands in a `LAB_*`
+constant; its placeholder (`THRUST_NOMINAL`, the `ARM_*` bench values) is what runs without one.
 
 ---
 

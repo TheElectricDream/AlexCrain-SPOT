@@ -17,7 +17,9 @@ SPOT starts from MATLAB (Simulation, Experiment and Results tabs).
                                            # computers (see warning)
     python3 webapp/app.py --no-browser     # don't open a browser tab
 
-Needs only the Python standard library (3.6 or newer), plus g++ and
+Needs only the Python standard library (3.6 or newer on the TX2; the
+local console needs 3.9 or newer with the MATLAB Engine for Python,
+which reads the project's constants from MATLAB), plus g++ and
 make to compile. The code is in the spot_console package next to this
 file (see spot_console/__init__.py); this file only starts it.
 
