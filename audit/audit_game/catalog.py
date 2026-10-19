@@ -29,7 +29,7 @@ MANIFEST = ORIGINAL_DIR / "MANIFEST.json"
 SOURCES = ["template", "New_SPOT_Project.m", "changes/patch-notes.tex", "designs/cad_tools"]
 EXCLUDED_PARTS = {"slprj", "node_modules", "__pycache__", ".spot_cache", "output",
                   "libowl-src-410", "vendor", "images", "models", "audit"}
-EXCLUDED_FILES = {"LICENSE.txt"}
+EXCLUDED_FILES = {"spot_calibration.json", "LICENSE.txt"}
 EXCLUDED_SUFFIXES = (".bak", ".slxc", ".slx", ".pyc")
 
 WEBAPP = "template/+spot/+console/webapp"
@@ -40,7 +40,7 @@ CHAPTERS = [
     {"id": "docs", "title": "Documentation", "icon": "book",
      "blurb": "The guides, the notes on the code, the project's READMEs and the release notes."},
     {"id": "matlab", "title": "MATLAB", "icon": "matlab",
-     "blurb": "The +spot packages, the launcher, Constants.m and New_SPOT_Project."},
+     "blurb": "The +spot packages, the launcher, the user parameters and New_SPOT_Project."},
     {"id": "python", "title": "Python", "icon": "python",
      "blurb": "The console server, SPOT Vision, the arm calibration and the CAD tools."},
     {"id": "javascript", "title": "JavaScript and the Page", "icon": "js",
@@ -50,7 +50,7 @@ CHAPTERS = [
     {"id": "firmware", "title": "Arduino and C/C++", "icon": "chip",
      "blurb": "The Teensy firmware, the platforms' C code and StreamData."},
     {"id": "config", "title": "Configuration", "icon": "gear",
-     "blurb": "The table-of-contents file and the bundle's package.json (the settings live in Constants.m)."},
+     "blurb": "The settings, design and table-of-contents files, and the bundle's package.json."},
 ]
 SECTION_ORDER = {
     "docs": ["Guides · Start Here", "Guides · The Lab", "Guides · The Local Console",

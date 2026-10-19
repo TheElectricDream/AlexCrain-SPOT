@@ -11,7 +11,7 @@ Running your diagram on the platforms. Simulate it first ([Quick Start: Your Fir
 
 ## 1. Check the platforms
 
-Open the lab console (the top bar's **Lab Console ↗**, or `http://192.168.1.116:8080`: `Constants.IP_LAB_CONSOLE` and `PORT_LAB_CONSOLE`). On its **Hardware** tab, each platform taking part should show **Ready**. Switch the pucks on and off, and run a thruster check, to hear every valve open ([The Hardware Tab](page:tab-hardware)).
+Open the lab console (the top bar's **Lab Console ↗**, or `http://192.168.1.116:8080`). On its **Hardware** tab, each platform taking part should show **Ready**. Switch the pucks on and off, and run a thruster check, to hear every valve open ([The Hardware Tab](page:tab-hardware)).
 
 ## 2. Start the cameras
 

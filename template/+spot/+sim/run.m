@@ -41,9 +41,9 @@ function out = run(s, root, resultFile)
         assignin('base', 'armModel', armModel);
     end
 
-    % simMode tells the diagram it is being simulated; WhoAmI is the simulation's own id.
+    % simMode tells the diagram it is being simulated; WhoAmI = 0 is the simulation's id.
     assignin('base', 'simMode', 1);
-    assignin('base', 'WhoAmI', Constants.WHO_AM_I_SIMULATION);
+    assignin('base', 'WhoAmI', 0);
     restore = onCleanup(@() assignin('base', 'simMode', 0));
 
     %% Simulation input: temporary overrides

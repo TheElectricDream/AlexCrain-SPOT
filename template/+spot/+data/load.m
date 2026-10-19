@@ -36,14 +36,10 @@ function datasets = load(spec, root, settings)
     end
     spec = defaults(spec);
 
-    % For a file or an experiment: only the settings saved with it (the variable settings in
-    % its settings.mat or simulation.mat).
+    % For a file or an experiment: only the settings saved with it.
     runSettings = [];
     if ~isempty(spec.settings)
-        saved = load(resolve(spec.settings, root), 'settings');
-        if isfield(saved, 'settings')
-            runSettings = saved.settings;
-        end
+        runSettings = spot.params.load(resolve(spec.settings, root));
     end
 
     if strcmp(spec.source, 'simulation')

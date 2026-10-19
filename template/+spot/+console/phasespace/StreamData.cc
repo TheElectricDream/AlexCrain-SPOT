@@ -160,15 +160,11 @@ typedef std::chrono::high_resolution_clock Clock;
    Calculations are done in double; the packet is only converted to PacketScalar when sent.
    Change PacketScalar to double for full precision at twice the packet size. */
 typedef float PacketScalar;
-/* The packet's and the network's constants here mirror Constants.m (this program can't read
-   MATLAB): PACKET_RIGID_FIELDS, PACKET_LEDS, PACKET_SERVER_MARKERS, PORT_STREAMDATA,
-   PORT_PHASESPACE_CLIENT, IP_PHASESPACE_SERVER and the platforms' IP_*. Constants.verify
-   compares them with that file. */
-const int NUM_RIGID_FIELDS = 19;   /* Constants.PACKET_RIGID_FIELDS */
-const int NUM_LEDS = 32;           /* Constants.PACKET_LEDS */
+const int NUM_RIGID_FIELDS = 19;
+const int NUM_LEDS = 32;
 /* The PhaseSpace server rejects marker ids >= 24 ("assignMarker: invalid marker id=24"),
    so only ids below this are put in the point tracker. Their packet slots stay NaN. */
-const int NUM_SERVER_MARKERS = 24; /* Constants.PACKET_SERVER_MARKERS */
+const int NUM_SERVER_MARKERS = 24;
 const int PACKET_LENGTH = NUM_RIGID_FIELDS + 3 * NUM_LEDS;
 /* The experiment clock: when the lab console starts an experiment it waits until every platform's
    program is running, then sends "exp start <seconds>" on standard input. From then on every
@@ -220,8 +216,8 @@ int main(int argc, const char **argv)
 #endif
 
 
-    unsigned short port_number = 31535;	/* Port the packets are sent from (Constants.PORT_STREAMDATA) */
-    unsigned short client_port = 31534;	/* Port the packets are sent to (Constants.PORT_PHASESPACE_CLIENT) */
+    unsigned short port_number = 31535;	/* Port the packets are sent from */
+    unsigned short client_port = 31534;	/* Port the packets are sent to */
     double dataPacket[PACKET_LENGTH] = { 0 };		/* Create array for data storage */
     PacketScalar sendPacket[PACKET_LENGTH];			/* dataPacket converted to the wire format */
     const double LED_NOT_VISIBLE = std::numeric_limits<double>::quiet_NaN();
@@ -254,8 +250,7 @@ int main(int argc, const char **argv)
         ::exit(0);
     }
 
-    /* Below is the IP address for the UDP client: Constants.IP_RED, IP_BLACK, IP_BLUE, IP_SPARE
-       and IP_ORIN (the lab console adds or removes destinations at run time, see dest below). */
+    /* Below is the IP address for the UDP client. */
     std::vector<std::string> client_addresses = { "192.168.1.110", "192.168.1.111", "192.168.1.112", "192.168.1.104", "192.168.1.115"};
 
     /* static: also used by the command thread below, which may outlive main's locals at exit */
@@ -357,7 +352,7 @@ int main(int argc, const char **argv)
         PACKET_LENGTH, (unsigned)sizeof(PacketScalar), (unsigned)(PACKET_LENGTH * sizeof(PacketScalar)));
 
     /* This is where the PhaseSpace code begins. */
-    string address = "192.168.1.109";   /* Constants.IP_PHASESPACE_SERVER */
+    string address = "192.168.1.109";
     OWL::Context owl;
     OWL::Markers markers;
     OWL::Rigids rigids;
@@ -373,11 +368,7 @@ int main(int argc, const char **argv)
 
     std::unordered_map<std::string, std::string> tracker_positions;
 
-    // Default values: each LED's offset from the platform's centre of gravity [mm], measured on the
-    // platforms long ago. They are fallbacks only, used when tracker_positions_phasespace.txt is
-    // missing: they differ from the nominal layout in Constants (LED_DEFAULT_OFFSET, 137 mm in
-    // from the body centre, before the CG shift), and the marker file the lab console writes from
-    // the project's calibration overwrites every one of them.
+    // Default values
     tracker_positions["tracker_id_RED_5_pos_string"] = "pos=125.509767,143.875167,0";
     tracker_positions["tracker_id_RED_3_pos_string"] = "pos=125.509767,-135.624833,0";
     tracker_positions["tracker_id_RED_7_pos_string"] = "pos=-154.990233,-135.624833,0";

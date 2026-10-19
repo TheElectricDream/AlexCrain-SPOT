@@ -1,39 +1,38 @@
-function d = apply(s, ~)
+function d = apply(s, root)
     %APPLY Put the settings into the base workspace, as the Simulink diagrams expect them.
     %   d = spot.params.apply(s) assigns every workspace variable the old GUI assigned (phase
     %   times, rates, gains, LQR matrices, mass properties, initial conditions, thruster forces,
-    %   ...) and armModel (spot.arm.parameters, for the simulated arm), with the lab's
-    %   calibration as the project took it (spot.params.labCalibration, Constants.LAB_*), each
-    %   part when its s.calibration switch is on: the table's slope, each thruster's thrust and
-    %   decay, and the arm's friction and inertia, with the values the project overrides; and
-    %   where the project's LEDs are.
-    %   d = spot.params.apply(s, root) is the same: the project folder is accepted for the
-    %   callers that pass it, and not needed (the calibration lives in Constants).
+    %   ...) and armModel (spot.arm.parameters, for the simulated arm).
+    %   d = spot.params.apply(s, root) also uses the project's calibration of the lab
+    %   (spot.params.loadCalibration), each part when its s.calibration switch is on: the
+    %   table's slope, each thruster's thrust and decay, and the arm's friction and inertia,
+    %   with the values the project overrides; and where the project's LEDs are. It then runs
+    %   root/SPOT_User_Parameters.m, where users define their own variables or override these.
     %
     %   Inputs
     %     s     settings
-    %     root  project folder (optional, unused)
+    %     root  project folder (optional)
     %
     %   Outputs
     %     d     derived values for display: tsim, timing, rates, mass properties, the PhaseSpace
     %           marker file (trackerPositions), arm geometry, calibration used
-    %           (d.calibration.inUse: the calibrated values in the workspace), LQR gains,
-    %           warnings, the variables assigned
+    %           (d.calibration.inUse: the calibrated values in the workspace, after
+    %           SPOT_User_Parameters.m), LQR gains, warnings, the variables assigned
     %
     %   Example (no GUI needed)
-    %     s = spot.params.fromConstants();
+    %     s = spot.params.load('spot_settings.json');
     %     s.platforms.RED = true;
     %     spot.params.apply(s, pwd);
     %     out = spot.sim.run(s, pwd);
     %
-    %   See also spot.params.fromConstants, spot.params.timing, spot.sim.run.
+    %   See also spot.params.defaults, spot.params.timing, spot.sim.run.
 
     %% Constants
-    MAX_DATA_RATE = Constants.MAX_DATA_RATE;                   % [Hz] PhaseSpace
-    TEENSY_PWM_FREQUENCY = Constants.TEENSY_PWM_FREQUENCY;     % [Hz] the firmware's
-    TABLE_X = Constants.TABLE_X;                               % [m] table size
-    TABLE_Y = Constants.TABLE_Y;                               % [m]
-    LEVEL_TABLE = Constants.LEVEL_TABLE;                       % tableSlope of a level table
+    MAX_DATA_RATE = 960;                    % [Hz] PhaseSpace
+    TEENSY_PWM_FREQUENCY = 5;               % [Hz] PWM_FREQUENCY in teensy_pwm_control.ino
+    TABLE_X = 3.51155;                      % [m] table size
+    TABLE_Y = 2.41935;                      % [m]
+    LEVEL_TABLE = [0 0 0 0 0 1.75 1.2];     % tableSlope of a level table
 
     d = struct();
     ws = struct();   % name -> value, assigned to the base workspace at the end
@@ -60,7 +59,7 @@ function d = apply(s, ~)
     if ~(isscalar(s.dataRate) && s.dataRate >= 1 && s.dataRate <= MAX_DATA_RATE ...
          && s.dataRate == round(s.dataRate))
         error('spot:params:apply', ...
-            'The PhaseSpace data rate must be a whole number of Hz, 1 to %d.', MAX_DATA_RATE);
+            'The PhaseSpace data rate must be a whole number of Hz, 1 to 960.');
     end
     ws.baseRate = 1 / s.sampleRate;
     ws.dataRate = 1 / s.dataRate;            % [s] the setting is in Hz
@@ -79,10 +78,9 @@ function d = apply(s, ~)
     if s.pwmFrequency ~= TEENSY_PWM_FREQUENCY
         pwmWarning = sprintf( ...
             ['The thrusters'' PWM frequency is %g Hz, but the Teensy firmware runs its PWM at ' ...
-             '%g Hz (PWM_FREQUENCY in +spot/+hardware/teensy/teensy_pwm_control.ino): ' ...
-             'flash it with the same value, or the duty cycles won''t mean what the diagram ' ...
-             'assumes.'], ...
-            s.pwmFrequency, TEENSY_PWM_FREQUENCY);
+             '5 Hz (PWM_FREQUENCY in +spot/+hardware/teensy/teensy_pwm_control.ino): flash it ' ...
+             'with the same value, or the duty cycles won''t mean what the diagram assumes.'], ...
+            s.pwmFrequency);
     end
 
     % Four numbers, for the diagram's UDP blocks.
@@ -94,9 +92,14 @@ function d = apply(s, ~)
     ws.yLength = TABLE_Y;
 
     %% The project's calibration
-    % The lab's calibration as the project took it (Constants.LAB_*), with the project's own
-    % values: the values it overrides and where its LEDs are.
-    cal = spot.params.labCalibration();
+    % The lab's calibration as the project copied it, with the project's own values: the
+    % values it overrides and where its LEDs are. Without the project folder: none, and the
+    % default LED layout.
+    if nargin > 1
+        cal = spot.params.loadCalibration(root);
+    else
+        cal = spot.params.loadCalibration();
+    end
 
     %% Mass properties
     % The LEDs from each platform's CG are the lab console's marker file (trackerPositions),
@@ -171,15 +174,24 @@ function d = apply(s, ~)
     d.armInitial = spot.plotting.armPosition(ws.init_states_RED, ws.init_states_ARM, arm);
 
     %% Arm model and controllers
-    % The model spot.arm.Plant simulates, with the arm calibration the project took
-    % (Constants.LAB_ARM_*) and the project's overrides when s.calibration.arm is on.
-    if s.calibration.arm
-        ws.armModel = spot.arm.parameters(ws, cal);
+    % The model spot.arm.Plant simulates, with the project's arm calibration (the newer of the
+    % lab's and calibrate_arm.py's arm_calibration.json, and the project's overrides) when
+    % s.calibration.arm is on.
+    if nargin > 1 && s.calibration.arm
+        ws.armModel = spot.arm.parameters(ws, root);
     else
         ws.armModel = spot.arm.parameters(ws);
     end
-    d.calibration.armUsed = ws.armModel.calibration;   % where it came from, or ''
-    armWarning = '';
+    d.calibration.armUsed = ws.armModel.calibration;   % the file it came from, or ''
+    if isempty(ws.armModel.calibration) && ~isempty(ws.armModel.calibrationIgnored)
+        armWarning = sprintf( ...
+            ['The arm calibration in %s was measured with the motor current, which SPOT no ' ...
+             'longer uses (the servos run in PWM control), so the simulated arm has its ' ...
+             'default friction: run the arm calibration again (lab console, Calibration tab).'], ...
+            ws.armModel.calibrationIgnored);
+    else
+        armWarning = '';
+    end
 
     % Gains and limits of the diagram's Default Position/Velocity Control (ARM).
     ws.armControl = armGains(s.control.ARM);
@@ -272,15 +284,44 @@ function d = apply(s, ~)
     end
     d.variables = fieldnames(ws);
 
-    % The calibrated values the simulation will use.
+    % The user's own variables (they may override any of the above).
+    if nargin > 1
+        script = fullfile(root, 'SPOT_User_Parameters.m');
+        if isfile(script)
+            evalin('base', sprintf('run(''%s'');', strrep(script, '''', '''''')));
+            d.userScript = script;
+        end
+    end
+
+    % The calibrated values the simulation will use, as the workspace has them now.
     d.calibration.inUse = inUse(ws);
 end
 
 function u = inUse(ws)
-    % The calibrated values put in the base workspace, for the Simulation tab's cards.
+    % The calibrated values in the base workspace (after SPOT_User_Parameters.m), and which of
+    % them that script changed (u.changedBy: the variables' names).
     u = struct('tableSlope', [], 'tableDamping', struct(), 'thrust', struct(), ...
-               'decay', struct(), 'arm', []);
-    values = ws;
+               'decay', struct(), 'arm', [], 'changedBy', {{}});
+    names = {'tableSlope'};
+    for name = {'RED', 'BLACK', 'BLUE'}
+        names = [names, {['tableDamping_' name{1}], ['F_thrusters_' name{1}], ...
+                         ['thrust_decay_' name{1}]}]; %#ok<AGROW>
+    end
+    names{end + 1} = 'armModel';
+
+    % Each variable as the workspace has it (as assigned, if the script cleared it).
+    values = struct();
+    for k = 1:numel(names)
+        try
+            values.(names{k}) = evalin('base', names{k});
+        catch
+            values.(names{k}) = ws.(names{k});
+        end
+        if ~isequal(values.(names{k}), ws.(names{k}))
+            u.changedBy{end + 1} = names{k};
+        end
+    end
+
     u.tableSlope = values.tableSlope;
     for name = {'RED', 'BLACK', 'BLUE'}
         key = name{1};
@@ -297,9 +338,9 @@ end
 function gains = armGains(arm)
     % The arm controllers' settings, checked against the servos' register ranges; per-joint
     % gains (one value for all three, or three) expanded to [shoulder elbow wrist].
-    MAX_GAIN = Constants.MAX_GAIN;         % the gain registers' range
-    MAX_PROFILE = Constants.MAX_PROFILE;   % the profile registers' range
-    MAX_PWM = Constants.PWM_FULL;          % PWM at 100 % of the supply
+    MAX_GAIN = 16383;
+    MAX_PROFILE = 32767;
+    MAX_PWM = 885;
 
     gains = arm;
 
@@ -314,8 +355,8 @@ function gains = armGains(arm)
         if ~(isnumeric(value) && any(numel(value) == [1 3]) && all(isfinite(value)) ...
              && all(value >= 0) && all(value <= MAX_GAIN))
             error('spot:params:apply', ...
-                ['The arm''s %s control %s gain must be 0 to %d (one value, or one per ' ...
-                 'joint).'], checks{k, 1}, checks{k, 2}, MAX_GAIN);
+                ['The arm''s %s control %s gain must be 0 to 16383 (one value, or one per ' ...
+                 'joint).'], checks{k, 1}, checks{k, 2});
         end
         gains.(checks{k, 1}).(checks{k, 2}) = double(value(:)).' .* ones(1, 3);
     end

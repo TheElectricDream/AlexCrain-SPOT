@@ -33,8 +33,8 @@ function [packet, newPackets, age] = phasespaceLatest(port, senderIP)
     %#codegen
 
     %% Constants
-    PACKET_LENGTH = Constants.PACKET_LENGTH;             % rigid-body values + LEDs x (x, y, z)
-    BYTES_PER_VALUE = Constants.PACKET_BYTES_PER_VALUE;  % float32 on the wire
+    PACKET_LENGTH = 115;   % 19 rigid-body values + 32 LEDs x (x, y, z), float32 on the wire
+    BYTES_PER_VALUE = 4;   % float32
 
     % Outputs in a desktop simulation.
     packet = zeros(PACKET_LENGTH, 1, 'single');

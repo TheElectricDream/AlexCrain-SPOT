@@ -21,7 +21,6 @@ import time
 from pathlib import Path
 
 from .common import ApiError, PHASESPACE_DIR, decode, finite, quote_cmd
-from .constants import C
 from .events import hub, run_logged, run_quiet, settings
 
 
@@ -32,24 +31,18 @@ PLATFORM_DIR = "linux-" + platform.machine()
 
 EXE_NAME = "StreamData"
 
-# UDP packet layout (Constants.m's PhaseSpace packet section, see
-# StreamData.cc). Positions arrive in mm and are sent to the browser in
-# m.
-NUM_RIGID_FIELDS = C.int("PACKET_RIGID_FIELDS")
-MM_PER_M = 1000
+# UDP packet layout, see StreamData.cc. Positions arrive in mm and are
+# sent to the browser in m.
+NUM_RIGID_FIELDS = 19
 
-# (platform, index of its x, index of its vx) in a packet, 0-based.
-CRAFTS = tuple((p, C.index("PACKET_POSE_" + p), C.index("PACKET_RATE_" + p))
-               for p in C.PLATFORMS)
+# (platform, index of its x, index of its vx) in a packet.
+CRAFTS = (("RED", 1, 10), ("BLACK", 4, 13), ("BLUE", 7, 16))
 
-# SPOT client port and StreamData's own port.
-RESERVED_PORTS = (C.int("PORT_PHASESPACE_CLIENT"), C.int("PORT_STREAMDATA"))
-
-MAX_FREQUENCY = C.int("MAX_DATA_RATE")   # [Hz] PhaseSpace's fastest
+RESERVED_PORTS = (31534, 31535)  # SPOT client port and StreamData's own port
 
 TOOL_TIMEOUT = 10          # [s] for wslinfo, cmd.exe and wslpath
 STOP_TIMEOUT = 5           # [s] for StreamData to exit after Ctrl-C
-RECEIVE_BUFFER = 1 << 20   # [bytes] about 2 s of packets at MAX_FREQUENCY
+RECEIVE_BUFFER = 1 << 20   # [bytes] about 2 s of packets at 960 Hz
 BROADCAST_RATE = 60        # [Hz] frames to the browsers, at most
 STATUS_PERIOD = 2          # [s] monitor status heartbeat
 
@@ -440,13 +433,13 @@ def parse_packet(data):
         x, y, att = values[pos:pos + 3]
         crafts[name] = {
             "tracked": not (x == 0 and y == 0 and att == 0),
-            "x": finite(x / MM_PER_M), "y": finite(y / MM_PER_M), "att": finite(att),
-            "vx": finite(values[vel] / MM_PER_M), "vy": finite(values[vel + 1] / MM_PER_M),
+            "x": finite(x / 1000), "y": finite(y / 1000), "att": finite(att),
+            "vx": finite(values[vel] / 1000), "vy": finite(values[vel + 1] / 1000),
             "w": finite(values[vel + 2]),
         }
 
     # The LEDs seen (finite positions), after the rigid-body fields.
-    leds = [[k, values[i] / MM_PER_M, values[i + 1] / MM_PER_M, values[i + 2] / MM_PER_M]
+    leds = [[k, values[i] / 1000, values[i + 1] / 1000, values[i + 2] / 1000]
             for k, i in enumerate(range(NUM_RIGID_FIELDS, n - 2, 3))
             if all(math.isfinite(v) for v in values[i:i + 3])]
     return {"t": finite(values[0]), "crafts": crafts, "leds": leds, "values": n}
@@ -509,8 +502,7 @@ class Monitor:
                 self._stop.set()
             self._sock, self._stop, self.port, self.error = None, None, port, None
 
-            # Room for ~2 s of packets at MAX_FREQUENCY, in case this
-            # thread
+            # Room for ~2 s of packets at 960 Hz, in case this thread
             # is briefly busy.
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, RECEIVE_BUFFER)
@@ -595,15 +587,14 @@ def parse_frequency(value):
     """Return a camera rate from a request.
 
     Raises:
-        ApiError: if it isn't a whole number of Hz from 1 to
-            MAX_FREQUENCY.
+        ApiError: if it isn't a whole number of Hz from 1 to 960.
     """
     try:
         frequency = int(value)
     except (TypeError, ValueError):
         raise ApiError("Frequency must be a whole number of Hz.")
-    if not 1 <= frequency <= MAX_FREQUENCY:
-        raise ApiError("Frequency must be between 1 and %d Hz." % MAX_FREQUENCY)
+    if not 1 <= frequency <= 960:
+        raise ApiError("Frequency must be between 1 and 960 Hz.")
     return frequency
 
 

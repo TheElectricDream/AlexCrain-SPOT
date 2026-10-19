@@ -18,7 +18,6 @@ import time
 from pathlib import Path
 
 from .common import ApiError
-from .constants import C
 from .events import DEFAULT_PLATFORMS, hub
 from .experiment import NAME_RE
 
@@ -29,9 +28,7 @@ LOCAL = {"enabled": False, "token": "", "root": None, "ready_file": None, "serve
 # None = no limit).
 MATLAB_COMMANDS = {
     "ping": 10, "info": 10, "settings.get": 120, "settings.set": 120, "settings.reset": 120,
-    "constants.get": 60, "constants.set": 120, "constants.edit": 60, "constants.catalog": 60,
-    "constants.setText": 120,
-    "calibration.take": 120, "diagram.open": 120, "diagram.showBlock": 120,
+    "settings.open": 900, "settings.saveAs": 900, "diagram.open": 120, "diagram.showBlock": 120,
     "workspace.list": 60, "workspace.inspect": 60, "workspace.eval": None,
     "experiment.plan": 120, "experiment.connect": 600, "experiment.decode": 900,
     # Results page: Saved Data, loaded datasets, plots and 3D playback
@@ -42,13 +39,6 @@ MATLAB_COMMANDS = {
     # MATLAB noticing a saved file.
     "code.lint": 30, "code.rehash": 30,
 }
-
-# Commands after which Constants.m may have changed: the constants are
-# read from MATLAB again and the pages told (after_constants_change).
-# settings.get is among them because the worker re-reads a file edited
-# by hand (or by a script) on it, and the page asks on every focus.
-CONSTANTS_COMMANDS = ("settings.get", "settings.set", "settings.reset", "constants.set",
-                      "constants.setText", "calibration.take")
 
 HELLO_TIMEOUT = 10         # [s] for the worker's hello
 LOG_TAIL = 300             # build log lines kept for a page opened later
@@ -296,9 +286,8 @@ BUSY_LABELS = {
     "experiment.connect": "connecting to the TX2",
     "experiment.decode": "converting the data",
     "workspace.eval": "running a command",
-    "constants.set": "writing Constants.m",
-    "constants.setText": "writing Constants.m",
-    "calibration.take": "taking the lab's calibration",
+    "settings.open": "waiting for the file dialog",
+    "settings.saveAs": "waiting for the file dialog",
     "diagram.open": "opening the diagram",
     "diagram.showBlock": "opening the diagram",
     "data.load": "loading results",
@@ -312,35 +301,6 @@ BUSY_LABELS = {
 
 
 matlab = MatlabBridge()
-
-
-# The project's constants, design and calibration
-
-# Set up by the server in local mode (server.main_local): the project's
-# design and calibration are views over the constants (project.py).
-project = {"design": None, "calibration": None}
-
-
-def after_constants_change():
-    """Read the constants from MATLAB again and tell the pages.
-
-    Called after a MATLAB command that may have written Constants.m
-    (CONSTANTS_COMMANDS): the constants, and the design and calibration
-    that are read from them, go out as events. MATLAB answers the engine
-    once the command has returned, so this runs right after it.
-    """
-    try:
-        C.reload()
-    except Exception as e:   # ConstantsError, or the engine gone
-        hub.log("matlab", "Could not read the constants from MATLAB again: %s" % e)
-        return
-    hub.publish("constants", C.as_dict())
-    if project["calibration"] is not None:
-        project["calibration"].reload_record()
-    if project["design"] is not None:
-        hub.publish("design", project["design"].get())
-    if project["calibration"] is not None:
-        hub.publish("calibration", project["calibration"].get())
 
 
 # Long MATLAB jobs
@@ -485,7 +445,7 @@ class LabLink:
     # GET requests the page may make through the local server.
     READS = ("experiment/build", "experiment/live", "calibration")
 
-    PORT = C.int("PORT_LAB_CONSOLE")   # the lab console's web port
+    PORT = 8080   # the lab console's web port
 
     def __init__(self, url):
         """Start following nothing yet (see start)."""
@@ -531,8 +491,8 @@ class LabLink:
         """
         parts = str(address).strip().split(".")
         if len(parts) != 4 or not all(part.isdigit() and int(part) <= 255 for part in parts):
-            raise ApiError("The lab console address must be an IPv4 address such as %s."
-                           % C.IP_LAB_CONSOLE)
+            raise ApiError("The lab console address must be an IPv4 address such as "
+                           "192.168.1.116.")
         return "http://%s:%d" % (".".join(str(int(part)) for part in parts), LabLink.PORT)
 
     def set_address(self, address):

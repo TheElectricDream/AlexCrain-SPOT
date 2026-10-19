@@ -3,7 +3,6 @@
 // Every change comes back as a "hardware_platform" event, so all open pages stay in step.
 
 import { COLORS, platformName } from './platforms.js';
-import { constant } from './constants.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 
@@ -18,8 +17,8 @@ const SWATCH = {
   BLUE: `background:${COLORS.BLUE}`,
 };
 
-// One platform's card (its defaults the THRUSTER_CHECK_* constants); render() fills it in.
-const cardHtml = () => `
+// One platform's card; render() fills it in.
+const CARD_HTML = `
   <div class="card-head">
     <h2 class="hw-name"><i class="swatch"></i><span data-role="name"></span></h2>
     <span class="pill" data-role="pill">Checking…</span>
@@ -39,7 +38,7 @@ const cardHtml = () => `
     <div class="hw-row">
       <span class="field-label">Thrusters <span class="muted">· click to switch on/off</span></span>
       <label class="input-suffix duty" title="Duty cycle used when you switch a thruster on">
-        <input class="input" type="number" min="1" max="100" step="1" value="${constant('THRUSTER_CHECK_DUTY')}" data-role="duty"><span>%</span>
+        <input class="input" type="number" min="1" max="100" step="1" value="100" data-role="duty"><span>%</span>
       </label>
     </div>
     <div class="thruster-map">
@@ -53,7 +52,7 @@ const cardHtml = () => `
     <div class="hw-row">
       <label class="field">
         <span class="field-label">Thruster Check</span>
-        <span class="input-suffix wide"><input class="input" type="number" min="${constant('THRUSTER_CHECK_TIME_RANGE')[0]}" max="${constant('THRUSTER_CHECK_TIME_RANGE')[1]}" step="0.1" value="${constant('THRUSTER_CHECK_TIME')}" data-role="checkDur"><span>s each</span></span>
+        <span class="input-suffix wide"><input class="input" type="number" min="0.2" max="10" step="0.1" value="0.5" data-role="checkDur"><span>s each</span></span>
       </label>
       <button type="button" class="btn btn-primary" data-role="check">Run Check</button>
     </div>
@@ -155,15 +154,15 @@ export function initHardware({ api, act, toast, storage, fmtTime }) {
     const el = document.createElement('section');
     el.className = 'card hw-card';
     el.dataset.platform = name;
-    el.innerHTML = cardHtml();
+    el.innerHTML = CARD_HTML;
     $('[data-role=name]', el).textContent = platformName(name);
     $('.swatch', el).style.cssText = SWATCH[name] || '';
 
     // The thruster duty and check duration, remembered per platform.
     const duty = $('[data-role=duty]', el);
     const dur = $('[data-role=checkDur]', el);
-    duty.value = storage.get(`spot.hw.${name}.duty`, constant('THRUSTER_CHECK_DUTY'));
-    dur.value = storage.get(`spot.hw.${name}.checkDur`, constant('THRUSTER_CHECK_TIME'));
+    duty.value = storage.get(`spot.hw.${name}.duty`, 100);
+    dur.value = storage.get(`spot.hw.${name}.checkDur`, 0.5);
     duty.onchange = () => storage.set(`spot.hw.${name}.duty`, Number(duty.value));
     dur.onchange = () => storage.set(`spot.hw.${name}.checkDur`, Number(dur.value));
 
@@ -258,7 +257,7 @@ export function initHardware({ api, act, toast, storage, fmtTime }) {
       const lc = p.last_check;
       note.textContent = lc
         ? `${lc.ok ? '✓' : '✕'} Last check ${fmtTime(lc.finished)}: ${lc.note}`
-        : `Fires T1 to T8 one at a time at ${constant('THRUSTER_CHECK_DUTY')} %, with the pucks off.`;
+        : 'Fires T1 to T8 one at a time at 100 %, with the pucks off.';
       note.className = `hint ${lc ? (lc.ok ? 'ok' : 'bad') : ''}`;
     }
 

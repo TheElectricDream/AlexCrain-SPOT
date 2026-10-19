@@ -9,9 +9,8 @@ function a = loadCalibration(file, a)
     %   braking, which the servos in PWM control add, so it is refused.
     %
     %   Inputs
-    %     file  the calibration script's JSON file (calibrate_arm.py's arm_calibration.json,
-    %           for bench work), or the calibration as a struct (spot.params.labCalibration's
-    %           arm section: Constants.LAB_ARM_*)
+    %     file  the calibration script's JSON file, the lab's calibration (the project's
+    %           spot_calibration.json, its arm section), or the calibration as a struct
     %     a     arm model (spot.arm.defaults or spot.arm.parameters)
     %
     %   Outputs
@@ -23,7 +22,7 @@ function a = loadCalibration(file, a)
     %   See also spot.arm.parameters, spot.arm.compareSteps, spot.arm.defaults.
 
     %% Constants
-    PWM_FORMAT = Constants.ARM_CALIBRATION_FORMAT;   % first version measured in PWM control
+    PWM_FORMAT = 2;   % first version measured in PWM control
 
     %% Read the calibration
     if isstruct(file)

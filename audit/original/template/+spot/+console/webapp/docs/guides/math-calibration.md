@@ -1,6 +1,6 @@
 # The Calibration Fits
 
-The fits behind the [Calibration tab](page:tab-calibration) ([calfit.py](file:calfit.py)). Both fit the positions PhaseSpace measures, not accelerations worked out from them: the positions are good to about 0.2 mm (`Constants.CAL_NOISE_FALLBACK`, used when a run didn't measure the noise), but differentiating them twice amplifies that noise a lot. Over a stretch of samples starting at $t_0$,
+The fits behind the [Calibration tab](page:tab-calibration) ([calfit.py](file:calfit.py)). Both fit the positions PhaseSpace measures, not accelerations worked out from them: the positions are good to about 0.2 mm, but differentiating them twice amplifies that noise a lot. Over a stretch of samples starting at $t_0$,
 
 $$x(t) = x(t_0) + \dot x(t_0)\,(t - t_0) + \int_{t_0}^{t}\!\!\int_{t_0}^{s} \ddot x(r)\,dr\,ds$$
 
@@ -8,7 +8,7 @@ and when the acceleration is linear in the unknowns once the measured path is pu
 
 ## The table's slope
 
-The table top's height (with $u = x - x_c$, $v = y - y_c$ from the table's centre, 1.7558 m and 1.2097 m: `TABLE_CENTRE_X`, `TABLE_CENTRE_Y`, half of `TABLE_X` and `TABLE_Y`) is
+The table top's height (with $u = x - x_c$, $v = y - y_c$ from the table's centre, 1.75 m and 1.2 m) is
 
 $$h(x, y) = a_1 u + a_2 v + a_3 u^2 + a_4 u v + a_5 v^2$$
 
@@ -18,7 +18,7 @@ $$\ddot x = -g\,(a_1 + 2 a_3 u + a_4 v) - c\,\dot x, \qquad \ddot y = -g\,(a_2 +
 
 For a drift, the position's row holds $-g\iint 1$, $-2g\iint u$, $-g\iint v$ for $a_1, a_3, a_4$ (and the matching ones for $y$), and $-\int (x - x(t_0))$ for the drag $c$, since $\iint \dot x = \int (x - x(t_0))$. The unknowns are $a_1 \dots a_5$, one $c$ per platform, and four per drift.
 
-**Plane or surface.** The quadratic terms need drifts in different parts of the table: with fewer than three drifts (`CAL_SURFACE_MIN_DRIFTS`), or drifts covering less than 40 % of the table in either direction (`CAL_SURFACE_COVERAGE`), the fit is a plane ($a_3 = a_4 = a_5 = 0$).
+**Plane or surface.** The quadratic terms need drifts in different parts of the table: with fewer than three drifts, or drifts covering less than 40 % of the table in either direction, the fit is a plane ($a_3 = a_4 = a_5 = 0$).
 
 **Drag.** Over a short drift from rest, the slope gives $x \approx \tfrac12 a t^2$ and the drag only changes it by $\tfrac16 a c\, t^3$, so the two are hard to tell apart; the fit can then trade them and find $c < 0$, which no air bearing has. Such a platform's drag is fixed at 0 and the slope fitted again (`damping_fixed`).
 
@@ -54,4 +54,4 @@ Opposite thrusters cancel (all eight together give no net force or torque), so a
 
 $$r(N) = s\,\bigl(1 - m\,(N - 1)\bigr),$$
 
-where $s$ is the single thrust that day against the calibration (near 1) and $m$ is the **thrust decay**: each valve added takes $m$ of every one's thrust alone. The regulator holds the supply pressure, so the loss is the valves sharing it. The lab's first run (the Obstacle, 2026-10-14) fell on a straight line, 11.2 % per valve (now the default, `THRUST_DECAY_DEFAULT`), to within 1.6 %; a rational curve $s/(1 + k(N-1))$ fitted only to 7 %, and is still reported for comparison. The mixer uses $m$ ([The Thruster Mixer](page:math-mixer)).
+where $s$ is the single thrust that day against the calibration (near 1) and $m$ is the **thrust decay**: each valve added takes $m$ of every one's thrust alone. The regulator holds the supply pressure, so the loss is the valves sharing it. The lab's first run (the Obstacle, 2026-10-14) fell on a straight line, 11.2 % per valve, to within 1.6 %; a rational curve $s/(1 + k(N-1))$ fitted only to 7 %, and is still reported for comparison. The mixer uses $m$ ([The Thruster Mixer](page:math-mixer)).

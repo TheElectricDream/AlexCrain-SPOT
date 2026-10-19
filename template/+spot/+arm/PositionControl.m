@@ -6,21 +6,19 @@ classdef PositionControl < matlab.System
     %   (spot.hardware.ArmPWM), so they apply it as the servo's own law would.
     %
     %   Each step, per joint:
-    %     1. Goal: [rad] to pulses as the old hardware code did (CMD_PULSES_PER_RAD pulses/rad
-    %        + CENTER_PULSE). A goal beyond Min/Max Position is ignored, so the joint keeps its
-    %        last goal.
+    %     1. Goal: [rad] to pulses as the old hardware code did (651.74 pulses/rad + 2048). A
+    %        goal beyond Min/Max Position is ignored, so the joint keeps its last goal.
     %     2. Profile: the desired position moves to the goal at Profile Velocity with Profile
     %        Acceleration (0 = none: the goal at once).
     %     3. PID + feedforward in the servo's units, per ServoPeriod (integral and derivative
     %        scaled to StepTime), within PWM Limit [885 = 100 %], in whole units:
     %          PWM = P/128 e + I/65536 sum(e) + D/16 de + FF1/4 vd + FF2/4 ad,  e in pulses
     %
-    %   At StepTime = ServoPeriod this is the servo's own position control. At the diagram's
-    %   SAMPLE_RATE the servo's gains (SERVO_POSITION_P/I/D) are unstable, so the defaults
-    %   (ARM_POSITION_P/I/D) are retuned for it: about 1 N m/rad stiffness at rest
-    %   (0.0068 N m per PWM unit), with the I gain removing the last few degrees against
-    %   stiction (slowly, within ~3 deg). The motors' back-EMF damps the joints on top of the D
-    %   gain. Every default is Constants'.
+    %   At StepTime = ServoPeriod = 1 ms this is the servo's own position control. At the
+    %   diagram's 20 Hz the servo's gains (400/0/200) are unstable, so the defaults are retuned
+    %   for 20 Hz: about 1 N m/rad stiffness at rest (0.0068 N m per PWM unit), with the I gain
+    %   removing the last few degrees against stiction (slowly, within ~3 deg). The motors'
+    %   back-EMF damps the joints on top of the D gain.
     %   In the diagram: armControl.position (Control pane).
     %
     %   Each gain is one value for all three servos, or [shoulder elbow wrist].
@@ -44,23 +42,23 @@ classdef PositionControl < matlab.System
     %#codegen
 
     properties (Nontunable)
-        StepTime = 1 / Constants.SAMPLE_RATE           % [s] controller period (baseRate)
-        ServoPeriod = Constants.SERVO_PERIOD           % [s] the servo's; its gains are per it
-        PositionP = Constants.ARM_POSITION_P           % Position P Gain [shoulder elbow wrist]
-        PositionI = Constants.ARM_POSITION_I           % Position I Gain
-        PositionD = Constants.ARM_POSITION_D           % Position D Gain
-        Feedforward1 = Constants.SERVO_FEEDFORWARD_1   % Feedforward 1st Gain
-        Feedforward2 = Constants.SERVO_FEEDFORWARD_2   % Feedforward 2nd Gain
-        ProfileVelocity = Constants.ARM_POSITION_PROFILE_VELOCITY           % 0 = no profile
-        ProfileAcceleration = Constants.ARM_POSITION_PROFILE_ACCELERATION   % 0 = none
-        MinPosition = Constants.MIN_POSITION           % Min Position Limit [pulses]
-        MaxPosition = Constants.MAX_POSITION           % Max Position Limit [pulses]
-        PWMLimit = Constants.PWM_FULL                  % PWM Limit
+        StepTime = 0.05                 % [s] controller period (the diagram's baseRate)
+        ServoPeriod = 1e-3              % [s] servo's control period, which its gains are per
+        PositionP = [25 56 21]          % Position P Gain [shoulder elbow wrist] (servo had 400)
+        PositionI = 10                  % Position I Gain (servo had 0)
+        PositionD = [1545 230 236]      % Position D Gain (servo had 200)
+        Feedforward1 = 0                % Feedforward 1st Gain
+        Feedforward2 = 0                % Feedforward 2nd Gain
+        ProfileVelocity = 20            % [0.229 rev/min], 0 = no profile
+        ProfileAcceleration = 0         % [214.577 rev/min^2], 0 = none
+        MinPosition = 1024              % Min Position Limit [pulses]
+        MaxPosition = 3072              % Max Position Limit [pulses]
+        PWMLimit = 885                  % PWM Limit
     end
 
     properties (Access = private)
         started = false                 % holding position has been initialised
-        goal = zeros(3, 1)              % [pulses, relative to CENTER_PULSE] goal position
+        goal = zeros(3, 1)              % [pulses, relative to 2048] goal position
         pd = zeros(3, 1)                % [pulses] profile's desired position
         vd = zeros(3, 1)                % [pulses/s] profile's desired velocity
         ePrev = zeros(3, 1)             % [pulses] position error last step
@@ -68,15 +66,15 @@ classdef PositionControl < matlab.System
     end
 
     properties (Constant, Access = private)
-        PULSES = Constants.PULSES_PER_REV / (2*pi)       % [pulses/rad] encoder
-        CMD_PULSES = Constants.CMD_PULSES_PER_RAD        % [pulses/rad] goals (old hw code)
-        CENTER_PULSE = Constants.CENTER_PULSE            % [pulses] joint straight out
-        VEL_UNIT = Constants.VEL_UNIT_RPM * 2*pi/60      % [rad/s] per velocity unit
-        ACC_UNIT = Constants.ACC_UNIT_RPM2 * 2*pi/3600   % [rad/s^2] per profile accel. unit
-        P_SCALE = Constants.GAIN_SCALE_P                 % gain scalings: PWM per gain unit
-        I_SCALE = Constants.GAIN_SCALE_I
-        D_SCALE = Constants.GAIN_SCALE_D
-        FF_SCALE = Constants.GAIN_SCALE_FF
+        PULSES = 4096 / (2*pi)          % [pulses/rad] encoder
+        CMD_PULSES = 651.74             % [pulses/rad] goal conversion (old hardware code)
+        CENTER_PULSE = 2048             % [pulses] joint straight out
+        VEL_UNIT = 0.229 * 2*pi/60      % [rad/s] per velocity unit
+        ACC_UNIT = 214.577 * 2*pi/3600  % [rad/s^2] per profile acceleration unit
+        P_SCALE = 128                   % Dynamixel gain scalings: PWM per gain unit
+        I_SCALE = 65536
+        D_SCALE = 16
+        FF_SCALE = 4
     end
 
     methods

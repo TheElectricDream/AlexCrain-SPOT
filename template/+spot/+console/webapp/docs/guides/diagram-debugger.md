@@ -12,7 +12,7 @@
 ![Send Debug Messages](images/sub_Debugger_Send_Debug_Messages.png)
 
   one line, `spot.hardware.debugMessages(whoAmI, isSim, t, red, black, blue, labConsoleIP)` (`spot.hardware.debugMessages`):
-  - **on a platform**: its own text goes to the lab console by UDP (RED 55001, BLACK 55002, BLUE 55003, as `[double t][text]`; `Constants.PORT_DEBUG_RED/BLACK/BLUE`) when it changes and every 0.5 s otherwise (`DEBUG_REPEAT_PERIOD`), so the Experiment tab shows what each platform is doing and when it changed ([experiment.py](file:experiment.py) keeps them and `Collect` saves them as `debug_messages.txt`);
+  - **on a platform**: its own text goes to the lab console by UDP (RED 55001, BLACK 55002, BLUE 55003, as `[double t][text]`) when it changes and every 0.5 s otherwise, so the Experiment tab shows what each platform is doing and when it changed ([experiment.py](file:experiment.py) keeps them and `Collect` saves them as `debug_messages.txt`);
   - **in a simulation**: every change of any of the three texts is recorded, time-stamped, for the console, which shows them in the Messages panel in step with the replay (`spot.sim.debugLog`, [messages.js](file:messages.js)).
 
 The texts are free: change the String Constants in the phases to say what your experiment is doing ("Approach: 1.2 m to go"), or write to `X_Logger` from anywhere in the diagram with a Data Store Write.

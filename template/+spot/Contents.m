@@ -15,6 +15,6 @@
 %   spot.worker       The MATLAB worker that runs the console's commands in this session
 %   spot.workspace    The console's Workspace panel and Command Window
 %
-%   Outside the packages: SPOT.m (starts the console) and Constants.m (every parameter of
-%   SPOT, in one place; change your project's copy for your own values). Retired code (the old GUI, Custom_Library, earlier diagrams) is outside the
+%   Outside the packages: SPOT.m (starts the console), SPOT_User_Parameters.m (your own
+%   variables). Retired code (the old GUI, Custom_Library, earlier diagrams) is outside the
 %   project, in ../archive/ (not published).

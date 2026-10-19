@@ -10,7 +10,7 @@ function s = fromLegacyState(file)
     %   Outputs
     %     s     settings
     %
-    %   See also spot.params.fromConstants, spot.worker.Worker.
+    %   See also spot.params.load, spot.params.defaults.
 
     %% The state file
     stored = load(file);
@@ -21,7 +21,7 @@ function s = fromLegacyState(file)
     app = stored.appState;
     massState = getfield_or(stored, 'subAppState', struct());
     initState = getfield_or(stored, 'subAppStateInit', struct());
-    s = spot.params.fromConstants();
+    s = spot.params.defaults();
 
     %% Platforms and diagram
     s.platforms.RED = num(app, 'REDCheckBox', s.platforms.RED) ~= 0;

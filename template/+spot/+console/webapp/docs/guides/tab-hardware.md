@@ -14,6 +14,6 @@ Checking the platforms before an experiment: pucks on and off, each thruster on 
 ## Safety
 
 - **Esc** on this tab switches **everything off on every platform** (as long as no dialog is open).
-- The lab console re-sends the command every 0.2 s while anything is on (`Constants.TEENSY_SEND_PERIOD`); the Teensy shuts every valve after 2 s without a command (`TEENSY_WATCHDOG`), so a crashed console, a lost network or an unplugged cable ends with the platform off ([teensy_pwm_control.ino](file:teensy_pwm_control.ino)).
+- The lab console re-sends the command every 0.2 s while anything is on; the Teensy shuts every valve after 2 s without a command, so a crashed console, a lost network or an unplugged cable ends with the platform off ([teensy_pwm_control.ino](file:teensy_pwm_control.ino)).
 - If another program opens the Teensy's port while the console is driving it (an experiment starting), the console lets go rather than fight; the card says **In Use**.
 - A platform that is **Interactive** or **Calibrating** can't be driven by hand; switch it off here to end its flight or the calibration (for the arm calibration, this also stops the script and switches the servos' torque off).

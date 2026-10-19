@@ -7,8 +7,8 @@ current readings are too coarse and noisy at the arm's small torques to be used.
 
 The easiest way to run it is from the lab console's **Calibration tab** (Arm): it checks what the Chaser
 needs, sends this script, runs it (`--yes`), shows its progress and keeps the result in the lab's
-calibration, which projects get with **Update from Lab** (the `LAB_ARM_*` constants in the project's
-`Constants.m`). Below is how to run it by hand.
+calibration, which projects get with **Update from Lab** (`spot_calibration.json`, in the project
+folder). Below is how to run it by hand.
 
 ## In the lab
 
@@ -25,13 +25,10 @@ calibration, which projects get with **Update from Lab** (the `LAB_ARM_*` consta
 
    Other options: `--joints 3` (one joint), `--tests breakaway sweep` (some tests), `--window 15` (a
    smaller range), `--max-pwm 200` (a lower cap), `--port /dev/ttyUSB1`, `--help` for the rest.
-   `--simulate` rehearses without hardware; `--yes` starts without asking for Enter. The script runs on its own
-   on the Chaser, so it keeps copies of the servo units and SPOT's servo settings; `Constants.verify`
-   checks them against `Constants.m`, where SPOT keeps every such number.
-5. To use it in a project, let the lab console keep it (the Calibration tab's Arm run does this) and
-   take it with **Update from Lab**; on the bench, `spot.arm.loadCalibration('runs/<date_time>/arm_calibration.json', armModel)`
-   applies it to a model and `spot.arm.compareSteps` checks it. Keep the whole `runs/<date_time>` folder
-   with the raw data.
+   `--simulate` rehearses without hardware; `--yes` starts without asking for Enter.
+5. Copy `runs/<date_time>/arm_calibration.json` to the SPOT project's folder (next to
+   `spot_settings.json`). The next simulation uses it (the newer of it and the Calibration tab's). Keep
+   the whole `runs/<date_time>` folder with the raw data.
 
 ## Afterwards, in MATLAB
 
@@ -58,9 +55,8 @@ supply. At rest a voltage is a torque; turning, the back-EMF brakes the joint li
 Torques come from the datasheet's torque per volt (MX-64(2.0): 6.0 N m / 12 V = 0.5 N m/V). The
 back-EMF and viscous friction both brake in proportion to speed, so PWM control measures only their sum
 (the speed coefficient); the datasheet's back-EMF (MX-64(2.0): 12 V at 63 rev/min, 1.82 V s/rad) is
-taken as the back-EMF, the rest as viscous friction; a speed coefficient below the datasheet's (an
-MX-64(2.0) on the bench gave 1.49 V s/rad) is taken as all back-EMF. Below the breakaway a joint
-stick-slips at the slowest speeds; those levels are left out of the fit. The wrist settles within a few milliseconds of a
+taken as the back-EMF, the rest as viscous friction. Below the breakaway a joint stick-slips at the
+slowest speeds; those levels are left out of the fit. The wrist settles within a few milliseconds of a
 PWM step, close to the time between reads, so its inertia is only roughly known (the result says so).
 
 Calibrations from before (version 1) measured the motor current under current control; SPOT no longer

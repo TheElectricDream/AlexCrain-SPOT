@@ -1,16 +1,15 @@
-# systemd user service: runs the SPOT PhaseSpace Console webapp at boot on its web port,
+# systemd user service: runs the SPOT PhaseSpace Console webapp at boot on port 8080,
 # reachable from any computer on the network. Installed by deploy_tx2.sh into
-# ~/.config/systemd/user/ ("loginctl enable-linger" makes it start without anyone logging in),
-# which fills in @PORT@ (PORT_LAB_CONSOLE in Constants.m).
+# ~/.config/systemd/user/ ("loginctl enable-linger" makes it start without anyone logging in).
 #   systemctl --user status spot-phasespace-console
 #   journalctl --user -u spot-phasespace-console -f      (live server log)
 
 [Unit]
-Description=SPOT PhaseSpace Console (webapp on port @PORT@)
+Description=SPOT PhaseSpace Console (webapp on port 8080)
 
 [Service]
 WorkingDirectory=%h/PhaseSpace_Server_SendAll
-ExecStart=/usr/bin/python3 %h/PhaseSpace_Server_SendAll/webapp/app.py --host 0.0.0.0 --port @PORT@ --no-browser
+ExecStart=/usr/bin/python3 %h/PhaseSpace_Server_SendAll/webapp/app.py --host 0.0.0.0 --port 8080 --no-browser
 Environment=PYTHONUNBUFFERED=1
 # Ctrl+C equivalent, so the app stops StreamData cleanly before exiting
 KillSignal=SIGINT

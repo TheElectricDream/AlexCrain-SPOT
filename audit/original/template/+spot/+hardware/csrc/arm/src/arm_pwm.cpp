@@ -17,8 +17,6 @@
 //     status output counts what was missed.
 //   - The SDK busy-waits on the port; this waits with poll(), so the rest of the program (and
 //     the kernel's USB work) keeps running while the servos answer.
-// The servo constants marked Constants.* mirror Constants.m (C can't read MATLAB);
-// Constants.verify compares them with that file.
 #include "arm_pwm.h"
 
 #include <errno.h>
@@ -48,7 +46,7 @@ const uint16_t ADDR_TORQUE_ENABLE = 64;
 const uint16_t ADDR_GOAL_PWM = 100;
 const uint16_t ADDR_PRESENT_PWM = 124;   // 2 bytes, then Present Current (2), Velocity (4), Position (4)
 const uint16_t READ_LENGTH = 12;
-const uint8_t MODE_PWM = 16;             // PWM (voltage) control, Constants.MODE_PWM
+const uint8_t MODE_PWM = 16;             // PWM (voltage) control
 
 const uint8_t INST_WRITE = 0x03;
 const uint8_t INST_SYNC_READ = 0x82;
@@ -59,7 +57,7 @@ const uint8_t BROADCAST = 0xFE;
 int fd = -1;
 double latencyMs = -1;          // the adapter's latency timer, -1 if unknown
 double replyMs = 30;            // how long to wait for the replies to one request
-double pwmLimit = 885;          // Constants.PWM_FULL until arm_pwm_open sets the block's limit
+double pwmLimit = 885;
 double missed = 0;              // servo reads missed since the start
 double lastPos[N], lastVel[N], lastPwm[N];
 
@@ -257,8 +255,8 @@ void syncWritePwm(const double goal[N])
     send(p, packet(p, BROADCAST, INST_SYNC_WRITE, par, k));
 }
 
-// The adapter's latency timer: ask for 1 ms (Constants.SERVO_LATENCY_TIMER_MS; allowed without
-// root through TIOCSSERIAL; the sysfs file needs root or a udev rule), then read what it is
+// The adapter's latency timer: ask for 1 ms (allowed without root through TIOCSSERIAL; the sysfs
+// file needs root or a udev rule), then read what it is
 void lowLatency(const char *port)
 {
     struct serial_struct ss;
@@ -300,7 +298,7 @@ extern "C" int arm_pwm_open(const char *port, double limit, double zeroReturnDel
     pwmLimit = limit;
     missed = 0;
     for (int j = 0; j < N; j++)
-        lastPos[j] = 2048, lastVel[j] = 0, lastPwm[j] = 0;   // Constants.CENTER_PULSE
+        lastPos[j] = 2048, lastVel[j] = 0, lastPwm[j] = 0;
     fd = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd < 0) {
         fprintf(stderr, "[arm_pwm] cannot open %s: %s\n", port, strerror(errno));
@@ -308,7 +306,7 @@ extern "C" int arm_pwm_open(const char *port, double limit, double zeroReturnDel
     }
     struct termios t;
     memset(&t, 0, sizeof(t));
-    t.c_cflag = B1000000 | CS8 | CLOCAL | CREAD;   // 1 Mbps, Constants.SERVO_BAUD
+    t.c_cflag = B1000000 | CS8 | CLOCAL | CREAD;
     t.c_iflag = IGNPAR;
     t.c_cc[VMIN] = 0;
     t.c_cc[VTIME] = 0;

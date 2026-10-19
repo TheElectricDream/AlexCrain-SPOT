@@ -28,12 +28,9 @@
 #   arm-cal-data            the newest run's results (*.json, *.csv) as a tar on stdout
 #
 # NAME and FILE are checked strictly (letters, digits, _ . -), so nothing else can be run.
-#
-# This script runs on the platforms, which have no copy of Constants.m: the values below mirror
-# its TEENSY_PORT, TEENSY_BAUD, SERVO_PORT, SERVO_BAUD and SERVO_FACTORY_BAUD (named where they are).
-DEV=/dev/ttyACM0                            # TEENSY_PORT
+DEV=/dev/ttyACM0
 BASE="$HOME/ExperimentSoftware/spot"
-ARM_DEV="${SPOT_ARM_DEV:-/dev/ttyUSB0}"   # SERVO_PORT (SSH passes no environment to the forced command: always ttyUSB0 there)
+ARM_DEV="${SPOT_ARM_DEV:-/dev/ttyUSB0}"   # (SSH passes no environment to the forced command: always ttyUSB0 there)
 ARM="$HOME/.spot/arm_calibration"
 
 read -r -a ARGS <<< "$SSH_ORIGINAL_COMMAND"
@@ -73,7 +70,7 @@ case "$CMD" in
         ;;
     stream)
         [ -e "$DEV" ] || { echo "No Teensy at $DEV" >&2; exit 3; }
-        # Raw: the packets are binary, so no newline translation or echo; 115200 is TEENSY_BAUD
+        # Raw: the packets are binary, so no newline translation or echo
         stty -F "$DEV" 115200 raw -echo || exit 4
         # The name lets "status" tell the console's own link apart from other programs
         exec -a spot-teensy-link cat > "$DEV"
@@ -144,9 +141,8 @@ case "$CMD" in
         [ -n "$holders" ] && echo "$holders" | sed 's/^/user /'
         if [ -f "$ARM/calibrate_arm.py" ]; then echo "script yes"; else echo "script no"; fi
         if pid=$(arm_pid); then running=yes; echo "running $pid"; else running=no; echo "running no"; fi
-        # The servos that answer a ping (IDs 0-10), at the bus's 1 Mbps (SERVO_BAUD) and at the Dynamixel factory
-        # default 57600 (SERVO_FACTORY_BAUD; a reset or new servo is ID 1 there): "servos <baud> <id>:<model> ...",
-        # "-" for none.
+        # The servos that answer a ping (IDs 0-10), at the bus's 1 Mbps and at the Dynamixel factory default
+        # 57600 (a reset or new servo is ID 1 there): "servos <baud> <id>:<model> ...", "-" for none.
         # Only with the port free (pinging doesn't move anything)
         if [ -z "$holders" ] && [ "$running" = no ] && [ -r "$ARM_DEV" ] && [ -w "$ARM_DEV" ] \
                 && python3 -c "import dynamixel_sdk" 2>/dev/null; then

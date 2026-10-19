@@ -32,22 +32,21 @@ function msgs = checkCommands(dataClass, armModel)
     %   spot.arm.VelocityControl, spot.arm.Plant, spot.hardware.ArmPWM.
 
     %% Constants
-    % Dynamixel MX unit conversions, as used by the controllers and blocks being checked
-    % (Constants): goals use the old hardware code's conversions, the encoder its own.
-    CENTER_PULSE = Constants.CENTER_PULSE;               % [pulses] joint straight out
-    PULSES_PER_REV = Constants.PULSES_PER_REV;           % [pulses/rev] encoder resolution
-    CMD_PULSES_PER_RAD = Constants.CMD_PULSES_PER_RAD;   % [pulses/rad] goals, PositionControl
-    RADPS_TO_RPM = Constants.CMD_RADPS_TO_RPM;           % [rev/min / (rad/s)] VelocityControl
-    RPM_TO_VEL_UNITS = Constants.CMD_RPM_TO_VEL_UNITS;   % [units per rev/min] VelocityControl
-    VEL_UNIT_RPM = Constants.VEL_UNIT_RPM;               % [rev/min] per velocity unit
-    PWM_FULL = Constants.PWM_FULL;                       % PWM at 100 % of the supply
-    PWM_ROUNDING = Constants.ARM_PWM_ROUNDING;           % [PWM] commands go in whole units
+    % Dynamixel MX unit conversions, as used by the controllers and blocks being checked.
+    % Goals use 651.74 pulses/rad (old hardware code); the encoder uses 4096 pulses/rev.
+    CENTER_PULSE = 2048;                    % [pulses] joint straight out
+    PULSES_PER_REV = 4096;                  % [pulses/rev] encoder resolution
+    CMD_PULSES_PER_RAD = 651.74;            % [pulses/rad] goal conversion (PositionControl)
+    RADPS_TO_RPM = 9.549296585513702;       % [rev/min per rad/s] = 60/(2*pi)
+    RPM_TO_VEL_UNITS = 4.366756307;         % [units per rev/min] = 1/0.229 (VelocityControl)
+    VEL_UNIT_RPM = 0.229;                   % [rev/min] per velocity unit
+    PWM_ROUNDING = 0.5;                     % [PWM] commands are sent in whole units
 
-    % ARM_Control_Mode values (the ARM_Control_Law_Enabler codes)
-    MODE_OFF = Constants.ARM_LAW_OFF;
-    MODE_POSITION = Constants.ARM_LAW_POSITION;
-    MODE_CUSTOM = Constants.ARM_LAW_CUSTOM;
-    MODE_VELOCITY = Constants.ARM_LAW_VELOCITY;
+    % ARM_Control_Mode values
+    MODE_OFF = 0;
+    MODE_POSITION = 1;
+    MODE_CUSTOM = 2;
+    MODE_VELOCITY = 3;
 
     JOINT_NAMES = {'shoulder', 'elbow', 'wrist'};
 
@@ -136,10 +135,10 @@ function msgs = checkCommands(dataClass, armModel)
             k = find(goalTooFast, 1);
             msgs{end + 1} = sprintf( ...
                 ['The arm''s %s goal speed of %.3f rad/s at %.1f s (%d steps) is beyond its ' ...
-                 'Velocity Limit (%d x %g rev/min = %.3f rad/s, Default Velocity Control ' ...
+                 'Velocity Limit (%d x 0.229 rev/min = %.3f rad/s, Default Velocity Control ' ...
                  '(ARM)): the controller ignores it, so the joint keeps its last goal.'], ...
                 JOINT_NAMES{j}, goal(k, j), sampleTime(k), nnz(goalTooFast), ...
-                servo.velocityLimit, VEL_UNIT_RPM, maxSpeed);
+                servo.velocityLimit, maxSpeed);
         end
 
         % Check 3: PWM pushing a joint further past its position limit (any mode).
@@ -164,10 +163,9 @@ function msgs = checkCommands(dataClass, armModel)
             k = find(overLimit, 1);
             msgs{end + 1} = sprintf( ...
                 ['The arm''s %s PWM of %.0f at %.1f s (%d steps) is beyond its servo''s PWM ' ...
-                 'Limit (%d of %d, on the Dynamixel Arm (PWM) block): the servo gets the ' ...
+                 'Limit (%d of 885, on the Dynamixel Arm (PWM) block): the servo gets the ' ...
                  'limit.'], ...
-                JOINT_NAMES{j}, pwmCmd(k, j), sampleTime(k), nnz(overLimit), servo.pwmLimit, ...
-                PWM_FULL);
+                JOINT_NAMES{j}, pwmCmd(k, j), sampleTime(k), nnz(overLimit), servo.pwmLimit);
         end
     end
 end

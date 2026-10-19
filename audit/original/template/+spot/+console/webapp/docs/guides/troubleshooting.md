@@ -6,9 +6,7 @@ Start with what the consoles say: most problems show up as a status with its rea
 
 | What you see | What to do |
 |---|---|
-| "needs Python 3.9 or newer with the MATLAB Engine for Python" | **Install Python** in the dialog, or `spot.console.installPython`, or point MATLAB at a Python with `pyenv('Version', ...)` ([Setting Up Your Computer](page:installing)) |
-| "its Python needs the MATLAB Engine for Python" | accept the install `SPOT` offers (`spot.console.ensureEngine`), or run `python -m pip install --user "<matlabroot>/extern/engines/python"` with that Python; without pip, `python +spot/+console/install_engine.py <matlabroot>` copies the package instead. The engine supports Python 3.9 to 3.13 for R2026a |
-| "The SPOT Console did not start" and its log says it could not connect to the MATLAB session | the console reads `Constants` from your MATLAB session, which answers only when MATLAB is idle: let MATLAB return to its prompt (don't start `SPOT` from inside a script that keeps running), then `SPOT` again |
+| "needs Python 3.6 or newer" | **Install Python** in the dialog, or `spot.console.installPython`, or point MATLAB at a Python with `pyenv('Version', ...)` ([Setting Up Your Computer](page:installing)) |
 | the page says it can't talk to MATLAB | open the page with the link MATLAB printed, or run `SPOT open`. The page only takes commands from a tab opened with that link |
 | **MATLAB Not Connected** on the Simulation tab | MATLAB was closed or the worker stopped: run `SPOT` again in the project folder |
 | MATLAB is busy | a simulation, a build, a file dialog or a command is still running in MATLAB; wait, or **Stop** the simulation |
@@ -40,10 +38,10 @@ Start with what the consoles say: most problems show up as a status with its rea
 | **Offline** | the platform doesn't answer: switched off, still booting, or not on the network. Check its power and Wi-Fi; wait a minute after power-on. A platform that drops off now and then may have Wi-Fi power saving on: run `setup_hardware_link.sh` in a terminal for it ([Lab Administration](page:lab-admin)) |
 | **No Access** | the platform doesn't accept the lab console's key (a reinstalled platform, or a new one): **Lab Setup › Link the Platforms** |
 | host key changed | the platform was reinstalled; on the TX2 run the `ssh-keygen -R <address>` the message gives |
-| **No Teensy** | the Jetson is up, but there is no Teensy at `/dev/ttyACM0` (`Constants.TEENSY_PORT`): check its USB cable, and power-cycle the platform |
+| **No Teensy** | the Jetson is up, but there is no Teensy at `/dev/ttyACM0`: check its USB cable, and power-cycle the platform |
 | **In Use** | another program has the Teensy's port (usually an experiment still running): stop it on the Experiment tab |
 | pucks or a thruster don't respond | check that the E-stop is released (blue light), that the tank valve is open and the gauges read pressure, and the connections to the valves on the bottom level; power-cycle the platform |
-| a thruster stays open | switch everything off (Esc on the Hardware tab), then toggle the pucks and fire each thruster once; if it persists, power-cycle the platform. The Teensy shuts every valve 2 s after its commands stop (`TEENSY_WATCHDOG`), so a stuck valve after that is electrical: press the E-stop and look at the valve's driver |
+| a thruster stays open | switch everything off (Esc on the Hardware tab), then toggle the pucks and fire each thruster once; if it persists, power-cycle the platform. The Teensy shuts every valve 2 s after its commands stop, so a stuck valve after that is electrical: press the E-stop and look at the valve's driver |
 
 ## PhaseSpace
 

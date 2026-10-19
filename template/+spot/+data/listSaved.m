@@ -36,8 +36,7 @@ function runs = listSaved(root)
     legacy = containers.Map();
     entries = dir(folder);
     for entry = entries(:).'
-        % The lab calibration's record (spot.params.calibrationRecord) is not a run.
-        if entry.name(1) == '.' || strcmp(entry.name, 'Calibration')
+        if entry.name(1) == '.'
             continue
         end
         runFolder = fullfile(folder, entry.name);
@@ -115,14 +114,9 @@ function runs = listSaved(root)
             end
         end
 
-        % Settings saved with the run: settings.mat (an experiment's, written when its data
-        % was converted), or in simulation.mat (the variable settings).
-        if isfile(fullfile(runFolder, 'settings.mat'))
-            run.settings = rel(root, fullfile(runFolder, 'settings.mat'));
-        elseif isfile(fullfile(runFolder, 'simulation.mat')) ...
-                && any(strcmp({whos('-file', fullfile(runFolder, 'simulation.mat')).name}, ...
-                              'settings'))
-            run.settings = rel(root, fullfile(runFolder, 'simulation.mat'));
+        % Settings saved with the run.
+        if isfile(fullfile(runFolder, 'spot_settings.json'))
+            run.settings = rel(root, fullfile(runFolder, 'spot_settings.json'));
         end
         if ~isempty(items)
             run.items = items;

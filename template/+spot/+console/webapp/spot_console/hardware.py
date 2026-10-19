@@ -18,21 +18,18 @@ import time
 from pathlib import Path
 
 from .common import ApiError, HOST_RE, USER_RE, decode, shown
-from .constants import C
 from .events import DEFAULT_PLATFORMS, hub, run_quiet, settings
 
 
-NUM_THRUSTERS = C.int("NUM_THRUSTERS")
+NUM_THRUSTERS = 8
 
-# Each platform's Teensy (teensy_pwm_control.ino, at TEENSY_PORT) takes
-# TEENSY_PACKET_BYTES-byte packets: the sync byte, then the 8 thruster
-# duty cycles (0-100 %) and the pucks (on if >= TEENSY_PUCK_THRESHOLD)
-# as little-endian float32. It switches everything off when no packet
-# has arrived for TEENSY_WATCHDOG, so whatever is on is re-sent every
-# HW_SEND_PERIOD (shorter); if this app or the network stops, the
-# platform shuts down by itself.
-HW_SEND_PERIOD = C.TEENSY_SEND_PERIOD   # [s]
-TEENSY_PORT = C.TEENSY_PORT
+# Each platform's Teensy (teensy_pwm_control.ino) takes 37-byte packets:
+# 0xAA, then the 8 thruster duty cycles (0-100 %) and the pucks (on if
+# >= 0.5) as little-endian float32. It switches everything off when no
+# packet has arrived for 2 s, so whatever is on is re-sent every
+# HW_SEND_PERIOD; if this app or the network stops, the platform shuts
+# down by itself.
+HW_SEND_PERIOD = 0.2
 
 # After everything is off, keep sending "off" this long [s] before
 # letting go of the port.
@@ -50,8 +47,7 @@ HW_LINK_NAME = "spot-teensy-link"
 HW_SETUP_HINT = ("run +spot/+console/deploy/setup_hardware_link.sh from a lab computer "
                  "(see STATUS.md in the project folder)")
 
-PACKET_HEADER = C.int("TEENSY_SYNC_BYTE")
-PACKET_FORMAT = "<B%df" % C.int("TEENSY_PACKET_FLOATS")   # the sync byte, then the float32s
+PACKET_HEADER = 0xAA
 PUBLISH_PERIOD = 0.2       # [s] drive() tells the pages at most this often
 PROBE_TIMEOUT = 10         # [s] for a status check
 PROBE_SOON = 0.5           # [s] re-check this soon to confirm another user
@@ -61,8 +57,8 @@ SSH_NOISE = "Warning: Permanently added"   # ssh's first-connection message
 
 
 def teensy_packet(duty, pucks):
-    """Return a Teensy packet: sync byte, 8 duty cycles [%], pucks."""
-    return struct.pack(PACKET_FORMAT, PACKET_HEADER,
+    """Return a Teensy packet: 0xAA, 8 duty cycles [%], pucks."""
+    return struct.pack("<B9f", PACKET_HEADER,
                        *([float(d) for d in duty] + [1.0 if pucks else 0.0]))
 
 
@@ -70,7 +66,7 @@ def platform_ssh(cfg, command):
     """Return the ssh command that runs an agent command on a platform.
 
     A dead link is noticed within ~3 s (the Teensy has already
-    switched off after its watchdog, TEENSY_WATCHDOG).
+    switched off after 2 s).
 
     Args:
         cfg: The platform's {"host", "user"}.
@@ -221,8 +217,7 @@ class Platform:
         if probe["state"] != "ok":
             raise ApiError(probe["detail"])
         if not probe["teensy"]:
-            raise ApiError("The %s has no Teensy at %s (unplugged?)."
-                           % (shown(self.name), TEENSY_PORT))
+            raise ApiError("The %s has no Teensy at /dev/ttyACM0 (unplugged?)." % shown(self.name))
         if probe["others"]:
             raise ApiError("The %s's Teensy is in use by %s (an experiment?); stop that first."
                            % (shown(self.name), ", ".join(probe["others"])))

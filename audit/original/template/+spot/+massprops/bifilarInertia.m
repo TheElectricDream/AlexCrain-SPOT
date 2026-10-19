@@ -14,7 +14,7 @@ function I = bifilarInertia(mass, T, L, D)
     %   See also spot.massprops.compute.
 
     %% Constants
-    G = Constants.G;   % [m/s^2] standard gravity
+    G = 9.81;   % [m/s^2]
 
     % Bifilar pendulum: I = T^2 m g D^2 / (16 pi^2 L).
     I = T^2 * mass * G * D^2 / (16 * pi^2 * L);

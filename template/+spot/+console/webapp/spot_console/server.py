@@ -24,7 +24,6 @@ from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .common import ApiError, PROJECT_DIR, STATIC_DIR, parse_bool, parse_number
-from .constants import C
 from .events import hub, settings
 from .phasespace import (PLATFORM_DIR, RESERVED_PORTS, WSL_INFO, broadcast_loop, builder,
                          monitor, parse_frequency, read_base_destinations, read_led_owner,
@@ -34,11 +33,10 @@ from .hardware import NUM_THRUSTERS, hardware, parse_platforms
 from .experiment import experiment
 from .interactive import interactive
 from . import local   # local.lab: the link to the lab console, set when the local console starts
-from .local import (CONSTANTS_COMMANDS, after_constants_change, LOCAL, LabLink, MATLAB_COMMANDS, build_runner, check_token, download_run,
+from .local import (LOCAL, LabLink, MATLAB_COMMANDS, build_runner, check_token, download_run,
                     matlab, sim_runner, write_ready_file)
 from .files import browse, make_folder
 from .design import design_store
-from .project import ProjectCalibration, ProjectDesign
 from .calibration import assumed_defaults, calibrator, saved_runs, store as calibration_store
 from . import vision
 from .deploy import deployer
@@ -55,17 +53,32 @@ CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; c
 MAX_EXTRA_DESTINATIONS = 20
 EVENT_KEEPALIVE = 15       # [s] a comment line when no event has come
 EVENTS_PER_WRITE = 200     # events sent together when they queue up
-WEB_PORT = C.int("PORT_LAB_CONSOLE")   # the consoles' web port
-DEFAULT_LAB_URL = "http://%s:%d" % (C.IP_LAB_CONSOLE, WEB_PORT)
-
-# The Hardware tab's thruster check: duty cycle [%], and how long [s]
-# (default and range).
-CHECK_DUTY = C.THRUSTER_CHECK_DUTY
-CHECK_TIME = C.THRUSTER_CHECK_TIME
-CHECK_TIME_RANGE = C.THRUSTER_CHECK_TIME_RANGE
+DEFAULT_LAB_URL = "http://192.168.1.116:8080"
 
 
 # State and settings
+
+
+def open_project_calibration(root):
+    """Use the project's calibration, spot_calibration.json.
+
+    It sits next to spot_settings.json. A project made before it moved
+    keeps it in resources/: it is moved across the first time.
+
+    Args:
+        root: The project folder.
+    """
+    path = root / "spot_calibration.json"
+    old = root / "resources" / "spot_calibration.json"
+    if old.is_file() and not path.exists():
+        try:
+            old.replace(path)
+            hub.log("matlab", "Moved the project's calibration to %s" % path)
+        except OSError as e:
+            hub.log("matlab", "Could not move %s to %s (%s); using it where it is."
+                    % (old, path, e))
+            path = old
+    calibration_store.open(path, local=True)
 
 
 def features():
@@ -95,7 +108,6 @@ def app_state(client_ip=None):
     # The local console: MATLAB, its jobs, and the lab link.
     if LOCAL["enabled"]:
         return {"features": features(), "client_ip": client_ip, "project_dir": LOCAL["root"],
-                "constants": C.as_dict(),
                 "host": {"os": platform.system(), "name": socket.gethostname(), "wsl": WSL_INFO},
                 "logs": hub.history(), "matlab": matlab.status(), "sim": sim_runner.status(),
                 "build": build_runner.status(), "lab_url": local.lab.url,
@@ -107,7 +119,6 @@ def app_state(client_ip=None):
     return {
         "features": features(),
         "client_ip": client_ip,
-        "constants": C.as_dict(),
         "base_destinations": read_base_destinations(),
         "host": {"os": platform.system(), "name": socket.gethostname(), "wsl": WSL_INFO},
         "project_dir": str(PROJECT_DIR),
@@ -166,8 +177,7 @@ def update_settings(body):
         except (TypeError, ValueError):
             raise ApiError("Viewer port must be a number.")
         if not 1024 <= port <= 65535 or port in RESERVED_PORTS:
-            raise ApiError("Viewer port must be 1024-65535 and not %d/%d (used by SPOT)."
-                           % RESERVED_PORTS)
+            raise ApiError("Viewer port must be 1024-65535 and not 31534/31535 (used by SPOT).")
         if port != settings.get("monitor_port") and streamer.status()["running"]:
             raise ApiError("Stop streaming before changing the viewer port.")
         changes["monitor_port"] = port
@@ -533,11 +543,10 @@ class Handler(BaseHTTPRequestHandler):
                     if thruster != int(thruster):
                         raise ApiError("thruster must be 1-%d." % NUM_THRUSTERS)
                     plat.set_thruster(int(thruster) - 1,
-                                      parse_number(body.get("duty", CHECK_DUTY), "duty", 0, 100),
+                                      parse_number(body.get("duty", 100), "duty", 0, 100),
                                       requester)
                 elif path == "/api/hardware/check":
-                    plat.start_check(parse_number(body.get("duration", CHECK_TIME), "duration",
-                                                  CHECK_TIME_RANGE[0], CHECK_TIME_RANGE[1]),
+                    plat.start_check(parse_number(body.get("duration", 0.5), "duration", 0.2, 10),
                                      requester)
                 elif path == "/api/hardware/check/cancel":
                     plat.cancel_check(requester)
@@ -591,10 +600,7 @@ class Handler(BaseHTTPRequestHandler):
             if cmd == "experiment.connect" and not local.lab.status()["reachable"]:
                 raise ApiError("The lab console isn't reachable: connect to the lab network "
                                "first.")
-            result = matlab.request(cmd, args, timeout=MATLAB_COMMANDS[cmd])
-            if cmd in CONSTANTS_COMMANDS:
-                after_constants_change()
-            return {"result": result}, 200
+            return {"result": matlab.request(cmd, args, timeout=MATLAB_COMMANDS[cmd])}, 200
 
         # A simulation.
         if path == "/api/sim/run":
@@ -810,8 +816,7 @@ def main():
     parser.add_argument("--host", default="127.0.0.1",
                         help="address to serve on (default 127.0.0.1 = this computer only; "
                              "0.0.0.0 = whole network)")
-    parser.add_argument("--port", type=int, default=WEB_PORT,
-                        help="web port (default %d)" % WEB_PORT)
+    parser.add_argument("--port", type=int, default=8080, help="web port (default 8080)")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
     parser.add_argument("--local", action="store_true",
                         help="local console for simulations, started by SPOT.m in MATLAB (this "
@@ -823,8 +828,8 @@ def main():
                         help="local mode: where to write the ports and token for MATLAB")
     parser.add_argument("--lab-url", default=os.environ.get("SPOT_LAB_URL"),
                         help="local mode: the lab console (default: the project's "
-                             "Constants.IP_LAB_CONSOLE, port %d; else $SPOT_LAB_URL or %s)"
-                             % (WEB_PORT, DEFAULT_LAB_URL))
+                             "spot_settings.json labConsoleAddress, port 8080; else "
+                             "$SPOT_LAB_URL or http://192.168.1.116:8080)")
     args = parser.parse_args()
 
     # The local console, or the lab console (Linux only).
@@ -879,34 +884,31 @@ def main():
         server.server_close()
 
 
-def lab_url_from_constants():
-    """Return the lab console's URL from the project's constants, or the usual."""
+def lab_url_from_settings(root):
+    """Return the lab console's URL from the settings, or the usual."""
     try:
-        return LabLink.url_for(C.IP_LAB_CONSOLE)
-    except (ApiError, AttributeError):
-        return DEFAULT_LAB_URL
+        address = json.loads((root / "spot_settings.json").read_text(encoding="utf-8")).get(
+            "labConsoleAddress")
+        if address:
+            return LabLink.url_for(address)
+    except (OSError, ValueError, ApiError, AttributeError):
+        pass
+    return DEFAULT_LAB_URL
 
 
 def main_local(args):
     """Start the local console.
 
     Served to this computer only, with the MATLAB worker on another
-    port; the ports and token go to the ready file for SPOT.m. The
-    constants were read from the shared MATLAB session when this module
-    loaded (constants.py, SPOT_MATLAB_ENGINE).
+    port; the ports and token go to the ready file for SPOT.m.
     """
     # The project, the session token, the design and calibration.
     LOCAL.update(enabled=True, root=str(Path(args.root or os.getcwd()).resolve()),
                  token=os.environ.get("SPOT_TOKEN") or os.urandom(24).hex())
     LOCAL["ready_file"] = args.ready_file or str(Path(LOCAL["root"]) / ".spot_cache"
                                                  / "console.json")
-
-    # The project's design and calibration live in its Constants.m, read
-    # from MATLAB (C) and written through the worker (project.py).
-    global design_store, calibration_store
-    design_store = ProjectDesign(matlab, after_constants_change)
-    calibration_store = ProjectCalibration(matlab, after_constants_change)
-    local.project.update(design=design_store, calibration=calibration_store)
+    design_store.open(Path(LOCAL["root"]) / "spot_design.json")
+    open_project_calibration(Path(LOCAL["root"]))
 
     # The server, the MATLAB worker's port and the lab link.
     try:
@@ -916,7 +918,7 @@ def main_local(args):
     server.daemon_threads = True
     LOCAL["server"] = server
     matlab.listen(args.worker_port)
-    local.lab = LabLink(args.lab_url or lab_url_from_constants())
+    local.lab = LabLink(args.lab_url or lab_url_from_settings(Path(LOCAL["root"])))
     local.lab.start()
 
     # Tell SPOT.m, and open the page with the token.

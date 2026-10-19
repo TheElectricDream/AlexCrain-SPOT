@@ -16,7 +16,7 @@ Reference implementation: `spot.arm.checkCommands` (`+arm/checkCommands.m`).
 | 4 | Blank line | Ends the text `help` prints. |
 | 5 | `%#codegen` | Only if the file is used in generated code. |
 | 6 | `%% Defaults` | `if nargin < k` blocks for optional inputs. |
-| 7 | `%% Constants` | Program-internal constants with units; parameters come from `Constants` (§4). |
+| 7 | `%% Constants` | Named numeric constants with units (§4). |
 | 8 | `%% <Section>` | The body, as commented blocks (§3). |
 | 9 | `end` | Closes the function. |
 | 10 | Local functions | Same layout, after the main function. |
@@ -128,45 +128,6 @@ CMD_PULSES_PER_RAD = 651.74;    % [pulses/rad] goal conversion (spot.arm.Positio
 
 `0`, `1`, `2*pi`, `180/pi` and indices need no names. Mode codes do: `ctrlMode == MODE_POSITION`,
 not `ctrlMode == 1`.
-
-**Parameters live in `Constants`** (`Constants.m`), never typed in a function. A
-*parameter* is a number that describes something outside the program: a physical constant, a lab
-fact (the table's size, an address, a port), a hardware fact (a servo's units, the Teensy's
-protocol), a nominal or placeholder value, a tuning value, a limit, or a default a user sees. Read
-it as `Constants.NAME`:
-
-```matlab
-pull = Constants.MRAD_PULL * tilt;             % [m/s^2]
-```
-
-A local `%% Constants` section holds only *program-internal* values (timeouts, buffer sizes,
-iteration caps, drawing sizes), and may alias a parameter for a shorter name:
-`PWM_FULL = Constants.PWM_FULL;`. One property serves every language:
-
-| Where | How it reads a parameter |
-|---|---|
-| MATLAB | `Constants.NAME` |
-| The Simulink diagram | `Constants.NAME` in a block's parameter (a Constant, a Gain, a mask value) |
-| Python, the local console | `from .constants import C`, then `C.NAME`: `constants.py` reads `jsonencode(Constants.all())` from the user's MATLAB session through the MATLAB Engine for Python (`SPOT` shares the session; `SPOT_MATLAB_ENGINE` names it), and again after the worker writes the file |
-| Python, the lab console (TX2) | the same `C.NAME`: no MATLAB there, so `constants.py` parses the copy of `Constants.m` that `deploy_tx2.sh` leaves; `Constants.verify` checks that reader against the class |
-| JavaScript (the page) | `constant('NAME')` or `constantPlatform('MASS', 'RED')` from `static/constants.js`, filled from the `state.constants` the server sends (and the `constants` event after a change) |
-| Shell scripts | `grep` the line out of `Constants.m` |
-| Firmware and C (`teensy_pwm_control.ino`, `csrc/`, `StreamData.cc`), `calibrate_arm.py` | can't read MATLAB: each keeps its copy, commented with the property it mirrors, and `Constants.verify` compares them with the file |
-
-`Constants.m` keeps to the grammar the lab console's reader parses: `NAME = value;   % [unit]
-comment` in a `properties (Constant)` block, where the value is a number, a `'string'`, `true` or
-`false`, `NaN`, a row vector `[a b c]` (a matrix with `;`, `[]` for none), `pi`, an earlier
-constant as `Constants.NAME`, or arithmetic on these (`+ - * / ^`, parentheses; a scalar times a
-vector or matrix). No structs, cells or function calls. A per-platform value carries the
-platform's suffix (`MASS_RED`).
-
-**Settings are constants too.** A value a user changes on the Simulation tab, in the Designer or
-by Update from Lab is a constant like any other (`USE_RED`, `SAMPLE_RATE`, `DOCK_RED`,
-`LAB_THRUST_BLUE`): `spot.params.fromConstants` builds the settings struct from them, and the
-MATLAB worker writes a change back with `spot.params.writeConstants` (the value between `NAME =`
-and `;` is replaced; the comment stays). The worker is the only writer of the file; nothing else
-in SPOT keeps a settings, design or calibration file. A value the lab measures lands in a `LAB_*`
-constant; its placeholder (`THRUST_NOMINAL`, the `ARM_*` bench values) is what runs without one.
 
 ---
 
@@ -330,7 +291,7 @@ def solve(a, b):
  * @return {number} How many platforms were drawn.
  */
 export function drawFrame(ctx, frame) {
-  // Background: the table (Constants.TABLE_X by TABLE_Y, from S.constants).
+  // Background: the table, 3.5 x 2.4 m.
   ctx.fillStyle = TABLE_COLOR;
   ctx.fillRect(0, 0, TABLE_X, TABLE_Y);
 
@@ -367,8 +328,6 @@ The §7 rules apply here too. The checks for each language:
 - [ ] One statement per line; no one-line `if`, `for` or `function`; lines at most 100 characters.
 - [ ] Sections marked with `%%`; every block has a short comment.
 - [ ] No unexplained numeric literals; constants have units.
-- [ ] Parameters read from `Constants`, not typed; a local `%% Constants` holds program-internal
-      values only; a firmware or script copy names its property and passes `Constants.verify`.
 - [ ] No shadowed MATLAB functions.
 - [ ] Verbatim sections untouched.
 - [ ] Results and messages unchanged.

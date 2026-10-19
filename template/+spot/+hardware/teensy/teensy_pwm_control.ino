@@ -2,9 +2,6 @@
 #include <math.h>
 #include <string.h>
 
-// The values marked Constants.* mirror Constants.m (the firmware can't read
-// MATLAB); Constants.verify compares them with that file. Change both together.
-
 // =========================================================
 // Hardware configuration
 // =========================================================
@@ -12,12 +9,11 @@ const int THRUSTER_PINS[8] = {0, 1, 2, 3, 4, 5, 6, 7};
 const int AIR_BEARING_PIN  = 8;
 const int STATUS_LED_PIN   = 13;
 
-const int NUM_THRUSTERS = 8;   // Constants.NUM_THRUSTERS
+const int NUM_THRUSTERS = 8;
 
 // =========================================================
 // PWM configuration (ISR-driven software PWM)
 // =========================================================
-// Constants.TEENSY_PWM_FREQUENCY and TEENSY_PWM_TICK
 const float    PWM_FREQUENCY        = 5.0f;
 const uint32_t PWM_TICK_HZ          = 10000;                           // 10 kHz ISR
 const uint32_t PWM_TICK_INTERVAL_US = 1000000UL / PWM_TICK_HZ;         // 100 us
@@ -27,16 +23,16 @@ const uint32_t PWM_TICKS_PER_PERIOD =
 // =========================================================
 // Serial protocol
 // =========================================================
-const uint8_t SYNC_BYTE = 0xAA;   // Constants.TEENSY_SYNC_BYTE (170)
+const uint8_t SYNC_BYTE = 0xAA;
 
-// 8 thrusters + 1 puck signal (Constants.TEENSY_PACKET_FLOATS)
+// 8 thrusters + 1 puck signal
 const size_t NUM_FLOATS    = 9;
 const size_t PAYLOAD_BYTES = NUM_FLOATS * 4;
 
 // =========================================================
 // Watchdog
 // =========================================================
-const unsigned long PACKET_TIMEOUT_MS = 2000;   // Constants.TEENSY_WATCHDOG, in ms
+const unsigned long PACKET_TIMEOUT_MS = 2000;
 
 // =========================================================
 // State
@@ -134,7 +130,7 @@ void processPacket() {
     setThrusterDuty(i, values[i]);
   }
 
-  // Puck: on at or above the threshold (Constants.TEENSY_PUCK_THRESHOLD)
+  // Puck
   setPuck(values[8] >= 0.5f);
 }
 
@@ -165,7 +161,7 @@ void setup() {
   pwmTimer.begin(pwmISR, PWM_TICK_INTERVAL_US);
   pwmTimer.priority(128);   // default mid-priority; Serial preempts cleanly
 
-  Serial.begin(115200);     // Constants.TEENSY_BAUD
+  Serial.begin(115200);
 }
 
 // =========================================================

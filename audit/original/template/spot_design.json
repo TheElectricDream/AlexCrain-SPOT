@@ -3,7 +3,7 @@
   "platforms": {
     "RED": {
       "dock": {
-        "type": "male",
+        "type": "arm",
         "face": "+y",
         "side": "left"
       },

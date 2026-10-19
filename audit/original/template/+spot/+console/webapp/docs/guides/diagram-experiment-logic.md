@@ -32,7 +32,7 @@ Twenty-five blocks that are all constants and Data Store Writes: `0` into the fo
 
 ## Phase #1: Start Floating
 
-The same, with **Puck State** = 1: the pucks are switched on and the platform lifts off the granite, controllers still off. The default 5 s (`Constants.PHASE1_DURATION`) gives the air bearings time to come up before anything pushes.
+The same, with **Puck State** = 1: the pucks are switched on and the platform lifts off the granite, controllers still off. The default 5 s gives the air bearings time to come up before anything pushes.
 
 ## Phase #2: Initial Position
 
@@ -42,7 +42,7 @@ Controllers on: `1` into `RED/BLACK/BLUE_Control_Law_Enabler` (the default LQR),
 - **Desired Position RED/BLACK/BLUE**: a Constant `init_states_X` (the Platforms pane's **Initial** pose, converted to m and rad by `spot.params.apply`) → `X_Desired_States`.
 - **Desired Joint Angles RED**: `[π/2, 0, π/2]` muxed → `ARM_Desired_States` (the folded pose; the arm controller is off in this phase, so it is just a value for the record).
 
-Phase 2 is when the platforms fly from wherever they were put on the table to the experiment's starting poses. 40 s by default (`PHASE2_DURATION`).
+Phase 2 is when the platforms fly from wherever they were put on the table to the experiment's starting poses. 40 s by default.
 
 ## Phase #3: Experiment
 
@@ -58,13 +58,13 @@ Controllers on for the three platforms **and the arm** (`ARM_Control_Law_Enabler
 
 **Desired Position BLACK**:
 - **Calculate Time since Phase #3 Start**: `Univ_Time − Phase2_End` = the time `t` into the experiment.
-- **Desired Rate** 0.0349 rad/s (2° per second; `Constants.GUIDANCE_CIRCLE_RATE`) × `t` (**Product**) = the angle travelled, `ωt`.
+- **Desired Rate** 0.0349 rad/s (2° per second) × `t` (**Product**) = the angle travelled, `ωt`.
 - **Constant** = the platform's **phase on the circle**: 0 for RED, 2π/3 for BLACK, 4π/3 for BLUE, so the three are 120° apart.
 - **Calculate Circular Tracking** (inputs *Angular Frequency* = ωt and *Phase* = φ):
 
 $$x_d = \frac{x_{\text{Length}}}{2} + 0.85\cos(\omega t + \varphi), \qquad y_d = \frac{y_{\text{Length}}}{2} + 0.85\sin(\omega t + \varphi)$$
 
-  (Sum, Cos/Sin, Gain 0.85 = the circle's radius in metres, `GUIDANCE_CIRCLE_RADIUS`, Sum1/Sum2 adding the table's centre.)
+  (Sum, Cos/Sin, Gain 0.85 = the circle's radius in metres, Sum1/Sum2 adding the table's centre.)
 - **Sum** → **Wrap**: the desired heading `θ_d = ωt + φ`, wrapped to (−π, π]: each platform points along the radius, outwards.
 - **Mux** `[x_d y_d θ_d]` → `BLACK_Desired_States`.
 

@@ -126,7 +126,6 @@ from pathlib import Path
 
 from . import calfit
 from .common import PROJECT_DIR, ApiError, decode, shown
-from .constants import C
 from .control import DEFAULTS
 from .events import hub
 from .experiment import experiment
@@ -140,64 +139,47 @@ SECTIONS = ("table", "thrusters", "arm")
 RUNS_DIR = Path.home() / "SPOTCalibration"   # the lab console's raw data of each run
 MAX_FILE = 4 * 1024 * 1024                   # [bytes] a calibration is a few hundred kB at most
 
-# The parameters below come from Constants.m (its calibration
-# section, CAL_*); the lab's body geometry and limits from its other
-# sections. Constants.m is SI; this file keeps mm where the calibration
-# file does.
-MM_PER_M = 1000
-
 # Flying between points (fly_to): the goal moves towards the point at
 # these speeds, so the controller isn't kicked by a jump in its goal
 # (as a dragged goal in Interactive Mode moves).
-GOAL_SPEED = C.CAL_GOAL_SPEED                   # [m/s]
-GOAL_TURN = math.radians(C.CAL_GOAL_TURN)       # [rad/s]
+GOAL_SPEED = 0.10            # [m/s]
+GOAL_TURN = math.radians(15)  # [rad/s]
 
 # There: within SETTLED_POS of the point and SETTLED_ATT of its
-# attitude, and slower than SETTLED_SPEED and SETTLED_RATE, for
-# SETTLED_TIME. Only roughly at the point: the diagram's LQR has no
-# integral action, so on a sloping table it holds the platform a few
-# centimetres downhill of its goal; what matters is that it is at rest.
-SETTLED_POS = C.CAL_SETTLED_POSITION            # [m]
-SETTLED_ATT = math.radians(C.CAL_SETTLED_ATTITUDE)
-SETTLED_SPEED = C.CAL_SETTLED_SPEED             # [m/s]
-SETTLED_RATE = math.radians(C.CAL_SETTLED_RATE)  # [rad/s]
-SETTLED_TIME = float(C.CAL_SETTLED_TIME)        # [s]
-FLY_TIMEOUT = float(C.CAL_FLY_TIMEOUT)          # [s] to reach a point
-LOST_TIMEOUT = float(C.CAL_LOST_TIMEOUT)        # [s] PhaseSpace may lose the platform this long
-                                                # (thrusters off)
-CLEARANCE = C.PLATFORM_CLEARANCE                # [m] from other platforms (centre to centre), as
-                                                # Interactive Mode
+# attitude, and slower than SETTLED_SPEED, for SETTLED_TIME. Only
+# roughly at the point: the diagram's LQR has no integral action, so on
+# a sloping table it holds the platform a few centimetres downhill of
+# its goal; what matters is that it is at rest.
+SETTLED_POS = 0.10           # [m]
+SETTLED_ATT = math.radians(5)
+SETTLED_SPEED = 0.01         # [m/s]
+SETTLED_TIME = 1.5           # [s]
+FLY_TIMEOUT = 90.0           # [s] to reach a point
+LOST_TIMEOUT = 1.0           # [s] PhaseSpace may lose the platform this long (thrusters off)
+CLEARANCE = 0.45             # [m] from other platforms (centre to centre), as Interactive Mode
 # [s] after the pucks go off (at each point before its drift, or to end
 # a drift early): the platform comes to rest.
-STOP_PAUSE = float(C.CAL_STOP_PAUSE)
-DRIFT_LIFT = float(C.CAL_DRIFT_LIFT)            # [s] the pucks lift the platform before a drift
-                                                # is recorded
-NOISE_TIME = float(C.CAL_NOISE_TIME)            # [s] the platform at rest: the cameras' noise
-MIN_NOISE_SAMPLES = C.int("CAL_MIN_NOISE_SAMPLES")   # frames the noise needs
-EDGE_EXTRA = C.CAL_EDGE_EXTRA                   # [m] the first drift ends this much earlier
-PATH_SPACING = C.CAL_PATH_SPACING               # [m] between the points of a drawn path
-GRID_INSET = C.CAL_GRID_INSET                   # [m] grid points this far inside the margin
+STOP_PAUSE = 5.0
+DRIFT_LIFT = 5.0             # [s] the pucks lift the platform before a drift is recorded
 
 # The data's own check: from one frame to the next a drifting platform
 # moves at most a few mm, so a bigger jump is a glitch (PhaseSpace
 # mis-tracking it, or a second stream on the monitor's port); with more
 # than GLITCH_FRACTION of them, the run is not saved.
-GLITCH_STEP = C.CAL_GLITCH_STEP                 # [m]
-GLITCH_FRACTION = C.CAL_GLITCH_FRACTION
+GLITCH_STEP = 0.02           # [m]
+GLITCH_FRACTION = 0.005
 
 # The fit's check: a position residual above POOR_FIT_FACTOR times the
-# cameras' noise (NOISE_FALLBACK when it wasn't measured; at least
-# POOR_FIT_FLOOR) means the model doesn't describe the table well (a
-# plane on a curved table: more grid points give a surface), which the
-# result says; above REJECT_RESIDUAL something else moved the platform:
-# not saved.
-POOR_FIT_FACTOR = float(C.CAL_POOR_FIT_FACTOR)
-POOR_FIT_FLOOR = float(C.CAL_POOR_FIT_FLOOR)    # [mm]
-REJECT_RESIDUAL = float(C.CAL_REJECT_RESIDUAL)  # [mm]
-NOISE_FALLBACK = C.CAL_NOISE_FALLBACK           # [mm]
+# cameras' noise (at least POOR_FIT_FLOOR) means the model doesn't
+# describe the table well (a plane on a curved table: more grid points
+# give a surface), which the result says; above REJECT_RESIDUAL
+# something else moved the platform: not saved.
+POOR_FIT_FACTOR = 5.0
+POOR_FIT_FLOOR = 1.0         # [mm]
+REJECT_RESIDUAL = 20.0       # [mm]
 
-MIN_THRUST = C.CAL_MIN_THRUST                   # [N] plausible calibrated thrust
-MAX_THRUST = float(C.CAL_MAX_THRUST)            # [N]
+MIN_THRUST = 0.01            # [N] plausible calibrated thrust
+MAX_THRUST = 2.0             # [N]
 
 # Values a project's copy can override, with their plausible ranges (SI
 # units, as in the file): the table's height coefficients [a1 a2: m/m;
@@ -205,46 +187,23 @@ MAX_THRUST = float(C.CAL_MAX_THRUST)            # [N]
 # and the thrust decay per extra valve, and each arm joint's friction
 # [N m, rad/s, N m s/rad], armature [kg m^2] and back-EMF [V s/rad].
 NUM_HEIGHT = 5
-NUM_JOINTS = len(C.SERVO_IDS)
-MAX_HEIGHT = float(C.CAL_MAX_HEIGHT)
-MAX_DAMPING = float(C.CAL_MAX_DAMPING)          # [1/s]
-MAX_DECAY = C.CAL_MAX_DECAY                     # as spot.params.loadCalibration
-ARM_FIELDS = {"static": tuple(C.CAL_ARM_RANGE_FRICTION),
-              "coulomb": tuple(C.CAL_ARM_RANGE_FRICTION),
-              "stribeck": tuple(C.CAL_ARM_RANGE_STRIBECK),
-              "viscous": tuple(C.CAL_ARM_RANGE_FRICTION),
-              "armature": tuple(C.CAL_ARM_RANGE_ARMATURE),
-              "back_emf": tuple(C.CAL_ARM_RANGE_BACK_EMF)}
+NUM_JOINTS = 3
+MAX_HEIGHT = 1.0
+MAX_DAMPING = 10.0           # [1/s]
+MAX_DECAY = 0.5              # as spot.params.loadCalibration
+ARM_FIELDS = {"static": (0.0, 10.0), "coulomb": (0.0, 10.0), "stribeck": (1e-4, 10.0),
+              "viscous": (0.0, 10.0), "armature": (1e-6, 1.0), "back_emf": (0.0, 20.0)}
 PUBLISH_PERIOD = 0.2         # [s] run status to the pages, at most this often
 
 # Each platform's PhaseSpace LEDs (spot.massprops.markerLayout): their
 # ids, which StreamData knows them by, in the corner order (+x,+y),
 # (+x,-y), (-x,-y), (-x,+y); where they sit until the project says
-# otherwise (LED_INSET in from the corners of the body; rounded to a nm,
-# the subtraction not being exact in floating point); and how far from
-# the body centre one can be.
-LED_IDS = dict((p, tuple(ids)) for p, ids in C.per_platform("LED_IDS").items())
-LED_CORNERS = tuple(tuple(corner) for corner in C.LED_CORNERS)
-LED_DEFAULT = round(C.LED_DEFAULT_OFFSET * MM_PER_M, 6)   # [mm]
-MAX_LED = float(C.LED_MAX_OFFSET * MM_PER_M)              # [mm] as spot.params.loadCalibration
-
-# The runs' settings: defaults and ranges (the Calibration tab's forms).
-TABLE_GRID = C.CAL_TABLE_GRID                   # [columns rows] of drift points
-TABLE_GRID_MAX = C.CAL_TABLE_GRID_MAX
-DRIFT_TIME = C.CAL_DRIFT_TIME                   # [s]
-DRIFT_TIME_RANGE = C.CAL_DRIFT_TIME_RANGE       # [s]
-EDGE_MARGIN = C.CAL_EDGE_MARGIN                 # [m]
-EDGE_MARGIN_RANGE = C.CAL_EDGE_MARGIN_RANGE     # [m]
-MAX_DRIFT_SPEED = C.CAL_MAX_DRIFT_SPEED         # [m/s]
-MAX_DRIFT_SPEED_RANGE = C.CAL_MAX_DRIFT_SPEED_RANGE   # [m/s]
-BURN_REPEATS = C.CAL_BURN_REPEATS
-BURN_REPEATS_RANGE = C.CAL_BURN_REPEATS_RANGE
-BURN_TIME = float(C.CAL_BURN_TIME)              # [s]
-BURN_TIME_RANGE = C.CAL_BURN_TIME_RANGE         # [s]
-DECAY_REPEATS = C.CAL_DECAY_REPEATS
-ASSUMED_MASS_RANGE = C.CAL_ASSUMED_MASS_RANGE   # [kg]
-ASSUMED_INERTIA_RANGE = C.CAL_ASSUMED_INERTIA_RANGE   # [kg m^2]
-ASSUMED_CG_LIMIT = C.CAL_ASSUMED_CG_LIMIT       # [mm]
+# otherwise (13 mm in from the corners of the 0.3 m body); and how far
+# from the body centre one can be.
+LED_IDS = {"RED": (5, 3, 7, 4), "BLACK": (13, 11, 9, 15), "BLUE": (8, 14, 12, 10)}
+LED_CORNERS = ((1, 1), (1, -1), (-1, -1), (-1, 1))
+LED_DEFAULT = 137.0          # [mm]
+MAX_LED = 300.0              # [mm] as spot.params.loadCalibration
 
 
 def now_iso():
@@ -980,15 +939,11 @@ class Calibrator:
         """
         platform = parse_platform(body.get("platform"))
         params = {
-            "nx": int(number(body.get("nx", TABLE_GRID[0]), "Grid columns", 1,
-                             TABLE_GRID_MAX[0])),
-            "ny": int(number(body.get("ny", TABLE_GRID[1]), "Grid rows", 1, TABLE_GRID_MAX[1])),
-            "drift": number(body.get("drift", DRIFT_TIME), "Drift time", DRIFT_TIME_RANGE[0],
-                            DRIFT_TIME_RANGE[1]),
-            "margin": number(body.get("margin", EDGE_MARGIN), "Edge margin",
-                             EDGE_MARGIN_RANGE[0], EDGE_MARGIN_RANGE[1]),
-            "max_speed": number(body.get("max_speed", MAX_DRIFT_SPEED), "Highest speed",
-                                MAX_DRIFT_SPEED_RANGE[0], MAX_DRIFT_SPEED_RANGE[1]),
+            "nx": int(number(body.get("nx", 3), "Grid columns", 1, 5)),
+            "ny": int(number(body.get("ny", 2), "Grid rows", 1, 4)),
+            "drift": number(body.get("drift", 12), "Drift time", 4, 40),
+            "margin": number(body.get("margin", 0.35), "Edge margin", 0.25, 0.8),
+            "max_speed": number(body.get("max_speed", 0.15), "Highest speed", 0.03, 0.3),
             "model": str(body.get("model") or "auto"),
         }
         if params["model"] not in ("auto", "quadratic", "plane"):
@@ -1178,24 +1133,19 @@ class Calibrator:
         cg = given.get("cg_mm", defaults["cg_mm"])
         if not isinstance(cg, list) or len(cg) != 2:
             raise ApiError("cg_mm must be [x, y] in mm.")
-        assumed = {"mass": number(given.get("mass", defaults["mass"]), "Mass",
-                                  ASSUMED_MASS_RANGE[0], ASSUMED_MASS_RANGE[1]),
+        assumed = {"mass": number(given.get("mass", defaults["mass"]), "Mass", 1, 50),
                    "inertia": number(given.get("inertia", defaults["inertia"]), "Inertia",
-                                     ASSUMED_INERTIA_RANGE[0], ASSUMED_INERTIA_RANGE[1]),
-                   "cg_mm": [number(cg[0], "CG x", -ASSUMED_CG_LIMIT, ASSUMED_CG_LIMIT),
-                             number(cg[1], "CG y", -ASSUMED_CG_LIMIT, ASSUMED_CG_LIMIT)]}
+                                     0.01, 5),
+                   "cg_mm": [number(cg[0], "CG x", -60, 60), number(cg[1], "CG y", -60, 60)]}
         assumed["dist2CG"] = dist_from_cg(assumed["cg_mm"])
         assumed["changed"] = (
             any(abs(assumed[k] - defaults[k]) > 1e-9 for k in ("mass", "inertia"))
             or any(abs(u - v) > 1e-9 for u, v in zip(assumed["cg_mm"], defaults["cg_mm"])))
 
         params = {
-            "repeats": int(number(body.get("repeats", BURN_REPEATS), "Repeats",
-                                  BURN_REPEATS_RANGE[0], BURN_REPEATS_RANGE[1])),
-            "burn": number(body.get("burn", BURN_TIME), "Burn time", BURN_TIME_RANGE[0],
-                           BURN_TIME_RANGE[1]),
-            "margin": number(body.get("margin", EDGE_MARGIN), "Edge margin",
-                             EDGE_MARGIN_RANGE[0], EDGE_MARGIN_RANGE[1]),
+            "repeats": int(number(body.get("repeats", 2), "Repeats", 1, 3)),
+            "burn": number(body.get("burn", 2.0), "Burn time", 0.5, 3.0),
+            "margin": number(body.get("margin", 0.35), "Edge margin", 0.25, 0.8),
             "assumed": assumed,
         }
         self._check_free(platform)
@@ -1204,7 +1154,7 @@ class Calibrator:
     def start_decay(self, body, requester):
         """Start the second stage (DecayRun) on a calibrated platform.
 
-        body as for start_thrusters (DECAY_REPEATS repeats by default).
+        body as for start_thrusters (one repeat by default).
 
         Raises:
             ApiError: if the platform has no thruster calibration.
@@ -1215,7 +1165,7 @@ class Calibrator:
             raise ApiError("Calibrate the %s's thrusters one at a time first: the combined "
                            "firings are measured against what each gives alone."
                            % shown(platform))
-        body = dict(body, repeats=body.get("repeats", DECAY_REPEATS))
+        body = dict(body, repeats=body.get("repeats", 1))
         run = self._thruster_params(platform, body, requester, "decay")
         run.params["single"] = {"thrust": list(single["thrust"]), "run": single.get("run")}
         self._begin(run, DecayRun(self, run).main)
@@ -1483,11 +1433,11 @@ class Driver:
                             % (shown(self.name), pose[0], pose[1]))
 
             # For the page: the pose, and the path while recording
-            # (points PATH_SPACING apart).
+            # (points 3 mm apart).
             run.pose = [pose[0], pose[1], math.degrees(pose[2])]
             if run.recording is not None:
                 if not run.path or math.hypot(pose[0] - run.path[-1][0],
-                                              pose[1] - run.path[-1][1]) > PATH_SPACING:
+                                              pose[1] - run.path[-1][1]) > 0.003:
                     run.path.append([round(pose[0], 4), round(pose[1], 4)])
 
         # Send the packet; taken back: stop.
@@ -1596,7 +1546,7 @@ class Driver:
                 close = (math.hypot(pose[0] - target[0], pose[1] - target[1]) < SETTLED_POS
                          and abs(wrap(pose[2] - target[2])) < SETTLED_ATT
                          and math.hypot(pose[3], pose[4]) < SETTLED_SPEED
-                         and abs(pose[5]) < SETTLED_RATE)
+                         and abs(pose[5]) < math.radians(2))
                 if close:
                     settled_since = settled_since or time.monotonic()
                     if time.monotonic() - settled_since >= SETTLED_TIME:
@@ -1612,9 +1562,9 @@ class Driver:
                 if pose is not None:
                     why = (" (it is %.0f mm and %.1f deg from it, moving at %.0f mm/s and "
                            "%.1f deg/s)" % (
-                               MM_PER_M * math.hypot(pose[0] - target[0], pose[1] - target[1]),
+                               1000 * math.hypot(pose[0] - target[0], pose[1] - target[1]),
                                math.degrees(abs(wrap(pose[2] - target[2]))),
-                               MM_PER_M * math.hypot(pose[3], pose[4]),
+                               1000 * math.hypot(pose[3], pose[4]),
                                math.degrees(abs(pose[5]))))
                 raise Abort("the %s didn't settle at (%.2f m, %.2f m) within %g s%s"
                             % (shown(self.name), goal[0], goal[1], FLY_TIMEOUT, why))
@@ -1680,9 +1630,9 @@ def save_run(run, data):
 def grid_points(nx, ny, margin):
     """Return the grid of start points, in a snake.
 
-    nx x ny points, spread over the table inside margin + GRID_INSET.
+    nx x ny points, spread over the table inside margin + 0.35 m.
     """
-    inset = margin + GRID_INSET
+    inset = margin + 0.35
     xs = [TABLE[0] / 2] if nx == 1 else [inset + (TABLE[0] - 2 * inset) * i / (nx - 1)
                                          for i in range(nx)]
     ys = [TABLE[1] / 2] if ny == 1 else [inset + (TABLE[1] - 2 * inset) * j / (ny - 1)
@@ -1698,7 +1648,7 @@ def grid_points(nx, ny, margin):
 
 # A drift needs this many frames to be fitted (calfit.fit_table's
 # min_samples).
-MIN_DRIFT_SAMPLES = calfit.MIN_DRIFT_SAMPLES
+MIN_DRIFT_SAMPLES = 20
 
 # A saved run's folder (save_run): <stamp>_<kind>_<platform>.
 RUN_RE = {kind: re.compile(r"^(\d{8})_(\d{6})_%s_(RED|BLACK|BLUE)$" % kind)
@@ -1763,7 +1713,7 @@ def fit_drifts(drifts, still, model=None, backwards=0):
         raise Rejected("the drifts don't follow the model at all (position residual %.1f mm): "
                        "something else moved the platform; the lab's calibration was not "
                        "changed" % fit["rms_mm"], {"rejected_fit": fit})
-    if fit["rms_mm"] > max(POOR_FIT_FLOOR, POOR_FIT_FACTOR * (noise or NOISE_FALLBACK)):
+    if fit["rms_mm"] > max(POOR_FIT_FLOOR, POOR_FIT_FACTOR * (noise or 0.2)):
         fit["warning"] = ("The drifts follow the %s only to %.1f mm (the cameras' noise is "
                           "%.2f mm): the table isn't that simple here.%s"
                           % (fit["model"], fit["rms_mm"], noise or 0.0,
@@ -1865,10 +1815,9 @@ class TableRun:
         try:
             # 1. Resting: the cameras' noise.
             drv.begin_step(0)
-            drv.say("Recording the %s resting on the table (%g s)."
-                    % (shown(run.platform), NOISE_TIME))
+            drv.say("Recording the %s resting on the table (2 s)." % shown(run.platform))
             drv.start_recording()
-            drv.wait(NOISE_TIME)
+            drv.wait(2.0)
             still = drv.stop_recording()
             noise = noise_mm(still)
             drv.end_step(note="%.2f mm" % noise if noise is not None else "no data")
@@ -1877,7 +1826,7 @@ class TableRun:
             drv.begin_step(1)
             drv.claim()
             pose = drv.check()
-            if pose is not None and self.inside(pose, extra=EDGE_EXTRA):
+            if pose is not None and self.inside(pose, extra=0.1):
                 drifts.append(self.drift(1))
             else:
                 drv.end_step("skipped", "too close to an edge or a platform")
@@ -1999,7 +1948,7 @@ class TableRun:
         # How far and long, and the jumps between frames.
         moved = math.hypot(rec[-1][1] - rec[0][1], rec[-1][2] - rec[0][2]) if len(rec) > 1 else 0.0
         secs = rec[-1][0] - rec[0][0] if len(rec) > 1 else 0.0
-        note = "%.1f s, %.0f mm%s" % (secs, MM_PER_M * moved, " (cut: %s)" % cut if cut else "")
+        note = "%.1f s, %.0f mm%s" % (secs, 1000 * moved, " (cut: %s)" % cut if cut else "")
         drv.end_step(note=note)
         glitches = sum(1 for a, b in zip(rec, rec[1:])
                        if math.hypot(b[1] - a[1], b[2] - a[2]) > GLITCH_STEP)
@@ -2035,24 +1984,23 @@ class TableRun:
 
 # [m] the thrusters sit this far in from the body's edges
 # (spot.massprops.centerOfGravity).
-THRUSTER_INSET = C.THRUSTER_INSET
+THRUSTER_INSET = 0.081
 # [s] from the command to the thruster pushing (SSH, the Teensy, the
 # valve): skipped.
-BURN_LATENCY = C.CAL_BURN_LATENCY
+BURN_LATENCY = 0.15
 # [s] pucks off before each burn, at the table's centre: the platform
 # comes to rest.
-REST_TIME = float(C.CAL_BURN_REST)
-BURN_SETTLE = C.CAL_BURN_SETTLE   # [s] recorded after a burn, before the fit
+REST_TIME = 5.0
 # [mm] a burn whose motion doesn't follow a constant force better than
 # this is left out.
-BURN_RMS_LIMIT = float(C.CAL_BURN_RMS_LIMIT)
+BURN_RMS_LIMIT = 3.0
 # A burn needs this many frames to fit its 6 unknowns (2 s at the 10 Hz
 # data rate gives ~18).
-MIN_BURN_FRAMES = C.int("CAL_MIN_BURN_FRAMES")
-HALF_SIDE = C.BODY_HALF_SIDE                   # [m] body centre to edge
-MIN_FIT_THRUST = C.CAL_MIN_FIT_THRUST          # [N] a fitted thrust outside this range is unlikely
-MAX_FIT_THRUST = C.CAL_MAX_FIT_THRUST          # [N]
-START_CLEARANCE = C.CAL_BURN_CLEARANCE         # [m] others from the centre, where burns start
+MIN_BURN_FRAMES = 10
+HALF_SIDE = 0.15             # [m] body centre to edge
+MIN_FIT_THRUST = 0.02        # [N] a fitted thrust outside this range is unlikely
+MAX_FIT_THRUST = 1.5         # [N]
+START_CLEARANCE = CLEARANCE + 0.15   # [m] others from the centre, where burns start
 
 
 def dist_from_cg(cg_mm):
@@ -2064,9 +2012,8 @@ def dist_from_cg(cg_mm):
         cg_mm: [x, y] [mm] from the body's centre.
     """
     e = HALF_SIDE - THRUSTER_INSET
-    X, Y = cg_mm[0] / float(MM_PER_M), cg_mm[1] / float(MM_PER_M)
-    return [MM_PER_M * v
-            for v in (e - Y, -(e + Y), e - X, -(e + X), e + Y, -(e - Y), e + X, -(e - X))]
+    X, Y = cg_mm[0] / 1000.0, cg_mm[1] / 1000.0
+    return [1000 * v for v in (e - Y, -(e + Y), e - X, -(e + X), e + Y, -(e - Y), e + X, -(e - X))]
 
 
 def assumed_defaults():
@@ -2085,8 +2032,7 @@ def assumed_defaults():
         dist = plat["thruster_dist2CG"]
         out[name] = {"mass": plat["mass"], "inertia": plat["inertia"], "thrust": plat["thrust"],
                      "thrust_decay": plat["thrust_decay"],
-                     "cg_mm": [round(MM_PER_M * e - dist[2], 3),
-                               round(MM_PER_M * e - dist[0], 3)]}
+                     "cg_mm": [round(1000 * e - dist[2], 3), round(1000 * e - dist[0], 3)]}
     return out
 
 
@@ -2244,7 +2190,7 @@ class ThrusterRun:
         drv.wait(params["burn"], until=stop)
         t_off = time.time()
         drv.set(duty=[0.0] * NUM_THRUSTERS)
-        drv.wait(BURN_SETTLE)
+        drv.wait(0.2)
         rec = drv.stop_recording()
         if cut:
             drv.say("%s: burn cut short (%s)." % (what, cut[0]))
@@ -2377,9 +2323,8 @@ def keep_decay(result, platform):
 
 
 # A firing whose thrusters alone push less than this many single
-# thrusts is left out; the fit needs this many different firings.
-DECAY_MIN_PUSH = C.CAL_DECAY_MIN_PUSH
-DECAY_MIN_FIRINGS = C.int("CAL_DECAY_MIN_FIRINGS")
+# thrusts is left out.
+DECAY_MIN_PUSH = 0.5
 
 
 class DecayRun(ThrusterRun):
@@ -2495,13 +2440,12 @@ class DecayRun(ThrusterRun):
         """Return the decay: each firing's ratio, and the fitted curve.
 
         Raises:
-            Abort: with fewer than DECAY_MIN_FIRINGS different firings
-                that pushed.
+            Abort: with fewer than 3 different firings that pushed.
         """
         run, params = self.run, self.run.params
         rows = [(b["thruster"], b["fit"]["ratio"], b["fit"]["ratio_sd"]) for b in burns
                 if b.get("fit") and b["fit"]["used"]]
-        if len({n for n, _, _ in rows}) < DECAY_MIN_FIRINGS:
+        if len({n for n, _, _ in rows}) < 3:
             why = next((b["error"] for b in burns if b.get("error")),
                        "too few firings with a push to measure")
             raise Abort("the decay can't be fitted (%s); the lab's calibration was not changed"
@@ -2527,15 +2471,8 @@ class DecayRun(ThrusterRun):
 # The arm
 
 ARM_TESTS = ("breakaway", "sweep", "inertia", "steps")
-PWM_FULL = C.int("PWM_FULL")   # the servos' PWM at 100 % of the supply
+PWM_FULL = 885               # the servos' PWM at 100 % of the supply
 JOINT_NAMES = {1: "Shoulder", 2: "Elbow", 3: "Wrist"}
-# The U2D2's bus rate, the Dynamixel factory default a reset or new
-# servo answers at (as the agent's scan reports them), and the FTDI
-# latency timer setup_arm_serial.sh sets [ms].
-SERVO_BAUD = str(C.int("SERVO_BAUD"))
-SERVO_FACTORY_BAUD = str(C.int("SERVO_FACTORY_BAUD"))
-BUS_RATE = "%g Mbps" % (C.SERVO_BAUD / 1e6)
-LATENCY_MS = str(C.int("SERVO_LATENCY_TIMER_MS"))
 ARM_POLL = 2.0               # [s] between status checks while the script runs
 # [s] the longest a run may take (three joints, every test: about 15
 # min).
@@ -2613,11 +2550,10 @@ def arm_check():
                 "udev rule), then log in again."},
         {"what": "Port free", "ok": not users, "value": ", ".join(users) if users else "free",
          "fix": "Stop the program holding it (an experiment?)."},
-        {"what": "Latency timer", "ok": True, "warn": fields.get("latency") not in (LATENCY_MS,),
+        {"what": "Latency timer", "ok": True, "warn": fields.get("latency") not in ("1",),
          "value": "%s ms" % fields["latency"]
                   if fields.get("latency", "unknown") != "unknown" else "unknown",
-         "fix": "setup_arm_serial.sh sets it to %s ms (16 ms works, but the data comes slower)."
-                % LATENCY_MS},
+         "fix": "setup_arm_serial.sh sets it to 1 ms (16 ms works, but the data comes slower)."},
     ]
     items.append(servo_item(fields, servos, users))
     running = fields.get("running", "no")
@@ -2626,20 +2562,17 @@ def arm_check():
             "raw": text}
 
 
-# Model numbers (SERVO_MODEL_* in Constants.m; calibrate_arm.py's
-# MODELS).
-ARM_SERVO_NAMES = {C.int("SERVO_MODEL_MX64"): "MX-64", C.int("SERVO_MODEL_MX106"): "MX-106",
-                   C.int("SERVO_MODEL_MX28"): "MX-28", C.int("SERVO_MODEL_XM430"): "XM430",
-                   C.int("SERVO_MODEL_XM540"): "XM540"}
+# Model numbers (calibrate_arm.py's MODELS).
+ARM_SERVO_NAMES = {311: "MX-64", 321: "MX-106", 30: "MX-28", 1020: "XM430", 1120: "XM540"}
 
 
 def servo_item(fields, servos, users):
     """Return the setup check's servo line.
 
-    Whether IDs 1, 2 and 3 answer at the bus's rate (the agent's scan),
-    and if not, what to check.
+    Whether IDs 1, 2 and 3 answer at the bus's 1 Mbps (the agent's
+    scan), and if not, what to check.
     """
-    what = "Servos 1-3 (%s)" % BUS_RATE
+    what = "Servos 1-3 (1 Mbps)"
 
     # Not scanned: the port was busy, the scan failed, or the agent is
     # old.
@@ -2651,29 +2584,27 @@ def servo_item(fields, servos, users):
         return {"what": what, "ok": True, "warn": True, "value": why,
                 "fix": "The run pings them first anyway."}
 
-    # The servos at the bus's rate; all three there: fine.
-    bus = servos.get(SERVO_BAUD, {})
+    # The servos at 1 Mbps; all three there: fine.
+    bus = servos.get("1000000", {})
     names = {1: "shoulder", 2: "elbow", 3: "wrist"}
     missing = [i for i in (1, 2, 3) if i not in bus]
     found = ", ".join("%d %s" % (i, ARM_SERVO_NAMES.get(m, m))
                       for i, m in sorted(bus.items())) or "none"
-    slow = servos.get(SERVO_FACTORY_BAUD, {})
+    slow = servos.get("57600", {})
     if not missing:
         return {"what": what, "ok": True, "value": found, "fix": ""}
 
-    # Missing: the cables, a reset servo at the factory baud, or a wrong
-    # ID.
+    # Missing: the cables, a reset servo at 57600 baud, or a wrong ID.
     fix = ("No answer from %s. Check its cable in the daisy chain (and the next one along) and "
            "the arm's power." % ", ".join("ID %d (%s)" % (i, names[i]) for i in missing))
     if slow:
-        fix += (" At %s baud (the factory default: a servo reset or replaced) %s answer%s: "
-                "give it its ID and %s in Dynamixel Wizard."
-                % (SERVO_FACTORY_BAUD, ", ".join("ID %d" % i for i in sorted(slow)),
-                   "s" if len(slow) == 1 else "", BUS_RATE))
+        fix += (" At 57600 baud (the factory default: a servo reset or replaced) %s answer%s: "
+                "give it its ID and 1 Mbps in Dynamixel Wizard."
+                % (", ".join("ID %d" % i for i in sorted(slow)), "s" if len(slow) == 1 else ""))
     others = sorted(set(bus) - {1, 2, 3})
     if others:
-        fix += (" Also answering at %s: %s (a servo with the wrong ID?)."
-                % (BUS_RATE, ", ".join("ID %d" % i for i in others)))
+        fix += (" Also answering at 1 Mbps: %s (a servo with the wrong ID?)."
+                % ", ".join("ID %d" % i for i in others))
     return {"what": what, "ok": not missing, "value": found, "fix": fix}
 
 
@@ -2980,12 +2911,12 @@ def arm_plots(files, cal):
 def noise_mm(samples):
     """Return the cameras' noise on a resting platform [mm].
 
-    The standard deviation of its position; None with fewer than
-    MIN_NOISE_SAMPLES samples.
+    The standard deviation of its position; None with fewer than 5
+    samples.
     """
-    if not samples or len(samples) < MIN_NOISE_SAMPLES:
+    if not samples or len(samples) < 5:
         return None
     mx = sum(s[1] for s in samples) / len(samples)
     my = sum(s[2] for s in samples) / len(samples)
     var = sum((s[1] - mx) ** 2 + (s[2] - my) ** 2 for s in samples) / (2 * (len(samples) - 1))
-    return MM_PER_M * math.sqrt(var)
+    return 1000 * math.sqrt(var)

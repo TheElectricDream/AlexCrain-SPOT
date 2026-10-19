@@ -7,11 +7,9 @@ function target = New_SPOT_Project(name, location)
     %
     %   A project is a copy of the template folder (next to this file) with its Simulink diagram
     %   renamed to <name>.slx, so the name is also the diagram's name: letters, digits and _,
-    %   starting with a letter. The template's caches, builds, saved data and documentation
-    %   stay behind; its Constants.m comes along (with the lab calibration record that goes
-    %   with it, Saved Data/Calibration), so the project starts from the template's values and
-    %   keeps every change of its own there. Afterwards: cd into the project and
-    %   run SPOT.
+    %   starting with a letter. The template's caches, builds, saved data, settings and
+    %   documentation stay behind, so the console starts the new project with the default
+    %   settings. Afterwards: cd into the project and run SPOT.
     %
     %   Inputs
     %     name      the project's name (optional: asked for in a dialog, or in the Command
@@ -34,7 +32,7 @@ function target = New_SPOT_Project(name, location)
     %% Constants
     % Not copied from the template: its own state, builds and the developers' documentation.
     LEAVE_OUT = {'.', '..', '.spot_cache', 'slprj', 'Saved Data', 'documentation', ...
-                 'STATUS.md'};
+                 'STATUS.md', 'spot_settings.json', 'spot_design.json'};
     BUILD_SUFFIXES = {'.slxc', '.autosave', '_ert_rtw'};   % Simulink's build and cache files
 
     %% Name and location
@@ -98,14 +96,9 @@ function target = New_SPOT_Project(name, location)
             copyfile(guide, target);
         end
 
-        % The diagram, named after the project, and an empty folder for the results, with the
-        % template's lab calibration record (it goes with the LAB_* numbers in Constants.m).
+        % The diagram, named after the project, and an empty folder for the results.
         copyfile(fullfile(template, diagram.name), fullfile(target, [name '.slx']));
         mkdir(fullfile(target, 'Saved Data'));
-        record = fullfile(template, 'Saved Data', 'Calibration');
-        if isfolder(record)
-            copyfile(record, fullfile(target, 'Saved Data', 'Calibration'));
-        end
     catch err
         % Don't leave a half-made project behind.
         rmdir(target, 's');
@@ -180,7 +173,7 @@ function problem = nameProblem(name)
             ['''%s'' can''t be a diagram name: use letters, digits and _ only, starting ' ...
              'with a letter, at most 63 characters, and not a MATLAB keyword.'], ...
             name);
-    elseif any(strcmpi(name, {'spot', 'Constants'}))
+    elseif any(strcmpi(name, {'spot', 'SPOT_User_Parameters'}))
         problem = sprintf('''%s'' is one of SPOT''s own names; choose another.', name);
     elseif ~isempty(which(name)) && ~strcmp(which(name), 'variable')
         problem = sprintf('''%s'' is already a MATLAB function (%s); choose another name.', ...

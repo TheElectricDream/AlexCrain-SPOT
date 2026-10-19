@@ -12,7 +12,7 @@ function exe = offerPython()
     %% Constants
     TITLE = 'SPOT Console: Python Needed';
     INTRO = ['The SPOT Console (the page you run simulations and experiments from) needs ' ...
-             'Python 3.9 or newer, and none was found on this computer.'];
+             'Python 3.6 or newer, and none was found on this computer.'];
 
     exe = '';
 

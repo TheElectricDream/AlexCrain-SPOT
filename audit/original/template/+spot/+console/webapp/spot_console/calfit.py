@@ -64,30 +64,20 @@ Matrices and vectors keep their single capital letters (A, M, C, S,
 J1, ...) so the code reads like the equations above.
 
 Part of the SPOT Console (webapp/app.py starts it). Python 3.6
-standard library only, and nothing else from the console but SPOT's
-constants (constants.py, from Constants.m), so the fits can be
-checked on their own.
+standard library only, and nothing else from the console, so the fits
+can be checked on their own.
 """
 
 import math
 
-from .constants import C
 
-
-G = C.G                                        # [m/s^2]
-CENTRE = (C.TABLE_CENTRE_X, C.TABLE_CENTRE_Y)  # [m] the table's centre (u, v measured from here)
-TABLE = (C.TABLE_X, C.TABLE_Y)                 # [m] the table top
-NUM_THRUSTERS = C.int("NUM_THRUSTERS")
+G = 9.80665                 # [m/s^2]
+CENTRE = (1.75, 1.2)        # [m] the table's centre (u, v measured from here)
+TABLE = (3.5, 2.4)          # [m] the table top (as the 3D view draws it)
 
 # Thruster directions in the body frame (control.py's VEC1, VEC2): 1, 2
 # push along -x, 5, 6 along +x, 3, 4 along +y, 7, 8 along -y.
-THRUSTER_DIRECTIONS = list(zip(C.THRUSTER_DIRECTION_X, C.THRUSTER_DIRECTION_Y))
-
-# The table fit: frames a drift needs, and the quadratic model only
-# with SURFACE_MIN_DRIFTS drifts covering SURFACE_COVERAGE of each side.
-MIN_DRIFT_SAMPLES = C.int("CAL_MIN_DRIFT_SAMPLES")
-SURFACE_COVERAGE = C.CAL_SURFACE_COVERAGE
-SURFACE_MIN_DRIFTS = C.int("CAL_SURFACE_MIN_DRIFTS")
+THRUSTER_DIRECTIONS = [(-1, 0), (-1, 0), (0, 1), (0, 1), (1, 0), (1, 0), (0, -1), (0, -1)]
 
 SINGULAR = 1e-14            # pivot below which an unknown counts as unused
 MIN_BURN_SAMPLES = 8
@@ -242,7 +232,7 @@ def height(coeffs, x, y, centre=CENTRE):
     return a1 * u + a2 * v + a3 * u * u + a4 * u * v + a5 * v * v
 
 
-def fit_table(drifts, model=None, min_samples=MIN_DRIFT_SAMPLES):
+def fit_table(drifts, model=None, min_samples=20):
     """Fit the table's slope to platforms drifting on it.
 
     Args:
@@ -250,8 +240,8 @@ def fit_table(drifts, model=None, min_samples=MIN_DRIFT_SAMPLES):
             each the record of one platform floating with its
             thrusters off.
         model: "quadratic", "plane", or None to choose (quadratic only
-            with at least SURFACE_MIN_DRIFTS drifts that between them
-            cover most of the table).
+            with at least 3 drifts that between them cover most of the
+            table).
         min_samples: Drifts shorter than this are left out.
 
     Returns:
@@ -277,12 +267,12 @@ def fit_table(drifts, model=None, min_samples=MIN_DRIFT_SAMPLES):
     ys = [v for d in drifts for v in d["y"]]
     coverage = {"x": [min(xs), max(xs)], "y": [min(ys), max(ys)]}
 
-    # The model: quadratic only with enough drifts covering enough of
-    # each side.
+    # The model: quadratic only with 3+ drifts covering 40 % of each
+    # side.
     if model is None:
-        wide = (coverage["x"][1] - coverage["x"][0] >= SURFACE_COVERAGE * TABLE[0]
-                and coverage["y"][1] - coverage["y"][0] >= SURFACE_COVERAGE * TABLE[1])
-        model = "quadratic" if len(drifts) >= SURFACE_MIN_DRIFTS and wide else "plane"
+        wide = (coverage["x"][1] - coverage["x"][0] >= 0.4 * TABLE[0]
+                and coverage["y"][1] - coverage["y"][0] >= 0.4 * TABLE[1])
+        model = "quadratic" if len(drifts) >= 3 and wide else "plane"
     if model not in ("quadratic", "plane"):
         raise ValueError("model must be quadratic or plane")
     nslope = 5 if model == "quadratic" else 2
@@ -509,7 +499,7 @@ def combined_ratio(Fb, sd, thrusts):
 DECAY_SD_FLOOR = 0.01
 
 
-def fit_decay(rows, n_max=NUM_THRUSTERS):
+def fit_decay(rows, n_max=8):
     """Fit the firings' ratios with the linear decay.
 
     Args:

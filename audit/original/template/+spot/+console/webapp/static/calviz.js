@@ -3,36 +3,9 @@
 // top-down drawing of the table with the height map, its contour lines, downhill arrows, the drift
 // paths and the platform.
 
-import { constant } from './constants.js';
-
-// The table's sides [m] (TABLE_X, TABLE_Y), read when drawn: the constants arrive with the
-// page's state, after this module loads.
-export const TABLE = {
-  get x() {
-    return constant('TABLE_X');
-  },
-  get y() {
-    return constant('TABLE_Y');
-  },
-};
-
-// The height surface's centre when a calibration names none [m].
-const defaultCentre = () => [constant('TABLE_CENTRE_X'), constant('TABLE_CENTRE_Y')];
-
-/**
- * Where to mark a side of the table: every 0.5 m, then the side's length (a mark within 0.25 m
- * of the end is left out so the two don't overlap).
- * @param {number} length The side [m].
- * @return {!Array<number>} Positions [m] from 0.
- */
-export function tickMarks(length) {
-  const marks = [];
-  for (let x = 0; x < length - 0.25; x += 0.5) {
-    marks.push(x);
-  }
-  marks.push(length);
-  return marks;
-}
+export const TABLE = { x: 3.5, y: 2.4 };
+export const G = 9.80665;
+const DEFAULT_CENTRE = [1.75, 1.2];
 
 /**
  * The jet colour map: dark blue through cyan, yellow to dark red.
@@ -56,7 +29,7 @@ export const jetCss = t => `rgb(${jet(t).join(',')})`;
  * @param {!Array<number>=} centre The fit's centre [m].
  * @return {number} [m]
  */
-export function height(a, x, y, centre = defaultCentre()) {
+export function height(a, x, y, centre = DEFAULT_CENTRE) {
   const u = x - centre[0];
   const v = y - centre[1];
   return a[0] * u + a[1] * v + a[2] * u * u + a[3] * u * v + a[4] * v * v;
@@ -70,7 +43,7 @@ export function height(a, x, y, centre = defaultCentre()) {
  * @param {!Array<number>=} centre The fit's centre [m].
  * @return {!Array<number>} [dh/dx, dh/dy].
  */
-export function gradient(a, x, y, centre = defaultCentre()) {
+export function gradient(a, x, y, centre = DEFAULT_CENTRE) {
   const u = x - centre[0];
   const v = y - centre[1];
   return [a[0] + 2 * a[2] * u + a[3] * v, a[1] + a[3] * u + 2 * a[4] * v];
@@ -86,7 +59,7 @@ export function gradient(a, x, y, centre = defaultCentre()) {
  */
 export function heightGrid(cal, nx = 140, ny = 96) {
   const a = cal.height;
-  const centre = cal.centre || defaultCentre();
+  const centre = cal.centre || DEFAULT_CENTRE;
   const z = new Float64Array(nx * ny);
   let lo = Infinity;
   let hi = -Infinity;
@@ -110,7 +83,7 @@ export function heightGrid(cal, nx = 140, ny = 96) {
 
 /**
  * A canvas of the height map alone (jet, low = blue), for the 3D view's overlay: the canvas's x
- * runs along the table's x, its rows from y = TABLE_Y (top) to 0.
+ * runs along the table's x, its rows from y = 2.4 (top) to 0.
  * @param {!Object} cal The table calibration.
  * @param {number=} nx
  * @param {number=} ny
@@ -239,7 +212,7 @@ export function drawTable(canvas, {
       'rgba(255,255,255,0.5)', 1);
 
     // Downhill arrows on a 7 x 5 grid, their length growing with the slope.
-    const centre = cal.centre || defaultCentre();
+    const centre = cal.centre || DEFAULT_CENTRE;
     let max = 1e-12;
     const grid = [];
     for (let i = 0; i < 7; i++) {
@@ -302,13 +275,13 @@ export function drawTable(canvas, {
   ctx.font = '11px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  for (const x of tickMarks(TABLE.x)) {
-    ctx.fillText(x === TABLE.x ? `${x.toFixed(2)} m` : x.toFixed(1), X(x), Y(0) + 5);
+  for (let x = 0; x <= TABLE.x + 1e-6; x += 0.5) {
+    ctx.fillText(x >= TABLE.x - 1e-6 ? `${x.toFixed(1)} m` : x.toFixed(1), X(x), Y(0) + 5);
   }
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  for (const y of tickMarks(TABLE.y)) {
-    ctx.fillText(y === TABLE.y ? y.toFixed(2) : y.toFixed(1), X(0) - 5, Y(y));
+  for (let y = 0; y <= TABLE.y + 1e-6; y += 0.5) {
+    ctx.fillText(y.toFixed(1), X(0) - 5, Y(y));
   }
 
   // The drifts: each a line over a dark outline, from a dot; a red cross where the pucks went
@@ -378,7 +351,7 @@ export function drawTable(canvas, {
       ctx.lineWidth = 1.5;
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
-      ctx.arc(X(live.goal[0]), Y(live.goal[1]), constant('BODY_HALF_SIDE') * s, 0, 2 * Math.PI);
+      ctx.arc(X(live.goal[0]), Y(live.goal[1]), 0.15 * s, 0, 2 * Math.PI);
       ctx.stroke();
       if (live.pose) {
         ctx.beginPath();
@@ -389,8 +362,8 @@ export function drawTable(canvas, {
       ctx.setLineDash([]);
     }
     if (live.pose) {
-      platform(ctx, X(live.pose[0]), Y(live.pose[1]), live.pose[2] * Math.PI / 180,
-        2 * constant('BODY_HALF_SIDE') * s, color);
+      platform(ctx, X(live.pose[0]), Y(live.pose[1]), live.pose[2] * Math.PI / 180, 0.3 * s,
+        color);
     }
   }
   return { X, Y, s };
@@ -429,25 +402,18 @@ export function colorBar(range) {
 
 // The thrusters
 
-/**
- * The 8 thrusters in the body frame (as viewer.js): the nozzle [x, y] [m] (NOZZLE_PROTRUSION
- * along the face's axis, THRUSTER_ARM across it) and the way each pushes the platform.
- * @return {!Array<!Array>} [[nozzle, push], ...] for T1 to T8.
- */
-export function thrusterNozzles() {
-  const p = constant('NOZZLE_PROTRUSION');
-  const e = constant('THRUSTER_ARM');
-  return [
-    [[p, e], [-1, 0]], [[p, -e], [-1, 0]],       // T1, T2 push along -x
-    [[e, -p], [0, 1]], [[-e, -p], [0, 1]],       // T3, T4 along +y
-    [[-p, -e], [1, 0]], [[-p, e], [1, 0]],       // T5, T6 along +x
-    [[-e, p], [0, -1]], [[e, p], [0, -1]],       // T7, T8 along -y
-  ];
-}
+// The 8 thrusters in the body frame (as viewer.js): the nozzle [x, y] [m] and the way each pushes
+// the platform.
+export const THRUSTERS = [
+  [[0.1547, 0.069], [-1, 0]], [[0.1547, -0.069], [-1, 0]],     // T1, T2 push along -x
+  [[0.069, -0.1547], [0, 1]], [[-0.069, -0.1547], [0, 1]],     // T3, T4 along +y
+  [[-0.1547, -0.069], [1, 0]], [[-0.1547, 0.069], [1, 0]],     // T5, T6 along +x
+  [[-0.069, 0.1547], [0, -1]], [[0.069, 0.1547], [0, -1]],     // T7, T8 along -y
+];
 
 /**
- * The colour of a thrust against the nominal one: within CAL_THRUST_WARN_FRACTION neutral,
- * weaker amber (red beyond CAL_THRUST_BAD_FRACTION), stronger light blue (blue beyond it).
+ * The colour of a thrust against the nominal one: within 3 % neutral, weaker amber to red,
+ * stronger blue.
  * @param {?number} ratio Thrust over nominal.
  * @return {string} A CSS colour.
  */
@@ -456,14 +422,13 @@ export function deviationColor(ratio) {
     return '#8a93a3';
   }
   const d = ratio - 1;
-  const bad = constant('CAL_THRUST_BAD_FRACTION');
-  if (Math.abs(d) < constant('CAL_THRUST_WARN_FRACTION')) {
+  if (Math.abs(d) < 0.03) {
     return '#3ccf7e';
   }
   if (d < 0) {
-    return d < -bad ? '#ff6b6b' : '#f5a524';
+    return d < -0.1 ? '#ff6b6b' : '#f5a524';
   }
-  return d > bad ? '#4c8dff' : '#74c0fc';
+  return d > 0.1 ? '#4c8dff' : '#74c0fc';
 }
 
 /**
@@ -476,18 +441,17 @@ export function deviationColor(ratio) {
  * @return {string} SVG.
  */
 export function thrusterDiagram({
-  thrust = null, nominal = constant('THRUST_NOMINAL'), angle = null, firing = null,
+  thrust = null, nominal = 0.2825, angle = null, firing = null,
 } = {}) {
   const S = 520;   // px per m
   const P = ([x, y]) => [150 - y * S, 150 - x * S];   // body (x up, y left) -> svg
-  const half = constant('BODY_HALF_SIDE');
   const parts = [
-    `<rect x="${150 - half * S}" y="${150 - half * S}" width="${2 * half * S}" ` +
-    `height="${2 * half * S}" rx="10" class="cal-body"/>`,
+    `<rect x="${150 - 0.15 * S}" y="${150 - 0.15 * S}" width="${0.3 * S}" height="${0.3 * S}" ` +
+    'rx="10" class="cal-body"/>',
     '<path d="M150 170V122M143 131l7-9 7 9" class="cal-front"/>' +
     '<text x="150" y="114" class="cal-front-t">+x</text>',
   ];
-  thrusterNozzles().forEach(([nozzle, push], k) => {
+  THRUSTERS.forEach(([nozzle, push], k) => {
     const [nx, ny] = P(nozzle);
 
     // The measured push: an arrow from beyond the nozzle onto it, turned by the angle, and its
@@ -700,6 +664,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
 // What each test does to a joint over time (for the animation): its angle from where it started
 // [rad] at time t [s] of the test's loop (about 6 s), and a word for the moment.
 const D = Math.PI / 180;
+const STEP_DEG = [10, 0, -10, 20, 0, -20, 5, 0];
 export const ARM_TEST_MOTION = {
   // The PWM creeps up until the joint breaks away, then it is ramped the other way.
   breakaway: t => {
@@ -727,13 +692,12 @@ export const ARM_TEST_MOTION = {
       u < 1 ? 'at rest' : 'PWM step',
     ];
   },
-  // The position goals (ARM_CAL_STEP_GOALS [deg]), as the servo follows them.
+  // Position goals 10, 0, -10, 20, 0, -20, 5, 0 deg, as the servo follows them.
   steps: t => {
-    const goals = constant('ARM_CAL_STEP_GOALS');
-    const k = Math.floor(t / 0.75) % goals.length;
-    const prev = goals[(k + goals.length - 1) % goals.length];
+    const k = Math.floor(t / 0.75) % STEP_DEG.length;
+    const prev = STEP_DEG[(k + STEP_DEG.length - 1) % STEP_DEG.length];
     const f = Math.min(1, (t % 0.75) / 0.35);
-    return [(prev + (goals[k] - prev) * (1 - (1 - f) ** 3)) * D, `goal ${goals[k]}°`];
+    return [(prev + (STEP_DEG[k] - prev) * (1 - (1 - f) ** 3)) * D, `goal ${STEP_DEG[k]}°`];
   },
 };
 

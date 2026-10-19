@@ -6,7 +6,7 @@ function board = buildBoard(root, s)
     %
     %   Inputs
     %     root   project folder
-    %     s      settings (default: the project's, spot.params.fromConstants)
+    %     s      settings (default: the project's spot_settings.json, else the defaults)
     %
     %   Outputs
     %     board  address (the settings' labConsoleAddress), user, buildDir, workspaceDir
@@ -18,12 +18,17 @@ function board = buildBoard(root, s)
 
     %% Defaults
     if nargin < 2
-        s = spot.params.fromConstants();
+        file = fullfile(root, 'spot_settings.json');
+        if isfile(file)
+            s = spot.params.load(file);
+        else
+            s = spot.params.defaults();
+        end
     end
 
     %% Board
     board.address = strtrim(char(s.labConsoleAddress));
-    board.user = Constants.USER_LAB_CONSOLE;
+    board.user = 'spot-tx2';
     board.buildDir = ['/home/' board.user '/ExperimentSoftware/'];
 
     % One folder per project on the TX2, named after the project's path as the old GUI did.

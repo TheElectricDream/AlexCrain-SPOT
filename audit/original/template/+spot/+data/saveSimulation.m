@@ -2,8 +2,7 @@ function folder = saveSimulation(s, root)
     %SAVESIMULATION Keep the last simulation in "Saved Data", next to the experiments.
     %   folder = spot.data.saveSimulation(settings, root) saves dataClass (from the base
     %   workspace) as Saved Data/Simulation_<diagram>_<yyyyMMdd_HHmmss>/simulation.mat, with the
-    %   settings it ran with in the same file (the variable settings). The Results page lists
-    %   it.
+    %   settings it ran with as spot_settings.json beside it. The Results page lists it.
     %
     %   Inputs
     %     s       settings the simulation ran with
@@ -28,7 +27,7 @@ function folder = saveSimulation(s, root)
     folder = fullfile(root, 'Saved Data', name);
     mkdir(folder);
 
-    % The log and its settings, in one file.
-    settings = s;   % saved by name
-    save(fullfile(folder, 'simulation.mat'), 'dataClass', 'settings');
+    % The log and its settings.
+    save(fullfile(folder, 'simulation.mat'), 'dataClass');
+    spot.params.save(s, fullfile(folder, 'spot_settings.json'));
 end

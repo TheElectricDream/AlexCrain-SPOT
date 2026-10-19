@@ -8,7 +8,7 @@ function fig = toFigure(panels, lookup, opts)
     %
     %   A panel of <PLATFORM>_Py_m against <PLATFORM>_Px_m is drawn as the table from above:
     %   each platform's path (against its own Px), its outline at the start (faint) and the end
-    %   (with the arm), the whole table (Constants.TABLE_X x TABLE_Y), equal axes.
+    %   (with the arm), 0-3.51155 x 0-2.41935 m, equal axes.
     %
     %   Inputs
     %     panels  struct array or cell array, each with:
@@ -155,8 +155,8 @@ end
 
 function [handles, labels] = tablePlot(ax, panel, traces, lookup)
     % Each platform's path, with its outline (and arm) at the start and the end.
-    TABLE_X = [0 Constants.TABLE_X];   % [m]
-    TABLE_Y = [0 Constants.TABLE_Y];   % [m]
+    TABLE_X = [0 3.51155];  % [m]
+    TABLE_Y = [0 2.41935];  % [m]
     START_ALPHA = 0.2;      % start outline faint, end solid
     END_ALPHA = 1;
 
@@ -215,7 +215,7 @@ function [handles, labels] = tablePlot(ax, panel, traces, lookup)
                 end
 
                 % The arm's geometry: the dataset's settings, else the defaults.
-                geometry = spot.params.fromConstants().mass.arm;
+                geometry = spot.params.defaults().mass.arm;
                 if isstruct(ds.settings)
                     geometry = ds.settings.mass.arm;
                 end

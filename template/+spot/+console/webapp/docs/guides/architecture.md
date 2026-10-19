@@ -6,7 +6,7 @@ SPOT is five kinds of computer and the programs that connect them. This page is 
 
 ## The pieces
 
-**MATLAB** holds the truth: the project's `Constants.m` and the settings struct built from it ([The Settings in Constants.m](page:settings-file)), the diagram, the simulations, the saved data. Everything the console shows is computed by a `spot.*` function ([the packages](page:project-folder)), so it all works without the console too ([Running Without the Console](page:matlab-without-console)). `SPOT` starts the console: `spot.console.start` launches the Python server and a [worker](ref:spot.worker.Worker) that connects MATLAB to it over a local socket and answers the page's commands, one JSON line each, from a `tcpclient` callback, so the Command Window stays usable while it is idle (`settings.set`, `sim.run`, `data.series`, …; the list is in [local.py](file:local.py)).
+**MATLAB** holds the truth: the settings struct ([Settings File](page:settings-file)), the diagram, the simulations, the saved data. Everything the console shows is computed by a `spot.*` function ([the packages](page:project-folder)), so it all works without the console too ([Running Without the Console](page:matlab-without-console)). `SPOT` starts the console: `spot.console.start` launches the Python server and a [worker](ref:spot.worker.Worker) that connects MATLAB to it over a local socket and answers the page's commands, one JSON line each, from a `tcpclient` callback, so the Command Window stays usable while it is idle (`settings.set`, `sim.run`, `data.series`, …; the list is in [local.py](file:local.py)).
 
 **The local console server** (`+spot/+console/webapp/app.py`, [server.py](file:server.py)) is a plain-Python HTTP server (no packages to install). It serves the page, forwards its requests to MATLAB, pushes events to the page (MATLAB's status, a simulation's progress, live samples), runs long jobs in the background ([local.py](file:local.py)), and keeps a **link to the lab console** when the lab network is reachable: it polls `/api/state`, relays the lab console's event stream to the page, and forwards the Experiment tab's actions. Its address is a random port on `127.0.0.1` with a session **token**, so only the browser tab MATLAB opened can drive your MATLAB.
 
@@ -25,7 +25,7 @@ The Simulink diagram ([The Simulink Diagram: Overview and Step Order](page:diagr
 ## Where the data flows during an experiment
 
 1. **StreamData** on the TX2 sends every platform a packet at the data rate (positions, velocities, LEDs, and the experiment clock slot).
-2. Each platform's program sends its own clock back (UDP 48720–48722). When the lab console has heard all of them, it arms the clock in the stream (`exp start 3`); three seconds later (`Constants.SYNC_COUNTDOWN`) every program leaves phase 0 at the same instant ([PhaseSpace Camera Code](page:diagram-phasespace)).
+2. Each platform's program sends its own clock back (UDP 48720–48722). When the lab console has heard all of them, it arms the clock in the stream (`exp start 3`); three seconds later every program leaves phase 0 at the same instant ([PhaseSpace Camera Code](page:diagram-phasespace)).
 3. Each program sends its debug message (55001–55003) and its live streams (55011–55013) to the lab console, which forwards them to the Experiment tab's Messages panel and Live Plot.
 4. Each program logs its 108 signals to its `ExpLog` file. After **Stop**, **Collect** fetches them to the lab console, then to your `Saved Data/` folder, where MATLAB decodes them ([Logged Signals](page:logged-signals)).
 
@@ -33,27 +33,28 @@ The Simulink diagram ([The Simulink Diagram: Overview and Step Order](page:diagr
 
 | Who | Address / port | What |
 |---|---|---|
-| Lab console page and API | `192.168.1.116:8080` (`IP_LAB_CONSOLE`, `PORT_LAB_CONSOLE`) | HTTP; `/api/events` is the event stream |
-| PhaseSpace server | `192.168.1.109` (`IP_PHASESPACE_SERVER`) | the OWL API (StreamData connects to it) |
-| StreamData → platforms | UDP 31535 → 31534 (`PORT_STREAMDATA`, `PORT_PHASESPACE_CLIENT`) | 115 floats (`PACKET_LENGTH`): poses, velocities, LEDs, clock |
+| Lab console page and API | `192.168.1.116:8080` | HTTP; `/api/events` is the event stream |
+| PhaseSpace server | `192.168.1.109` | the OWL API (StreamData connects to it) |
+| StreamData → platforms | UDP 31535 → 31534 | 115 floats: poses, velocities, LEDs, clock |
 | StreamData → lab console | UDP (the viewer port) | the same packet, for the 3D view |
-| Platforms → lab console | UDP 48720 / 48721 / 48722 (`PORT_EXP_CLOCK_*`) | experiment clocks (RED / BLACK / BLUE) |
-| | UDP 55001 / 55002 / 55003 (`PORT_DEBUG_*`) | debug messages |
-| | UDP 55011 / 55012 / 55013 (`PORT_LIVE_*`) | live streams |
-| Platforms → network | UDP 33001–33003 broadcast (`PORT_HEARTBEAT_*`) | heartbeats ([Check Connection](page:diagram-outgoing)) |
-| RED ↔ Orin | UDP 46875 / 36845 (`PORT_ORIN_STATES`, `PORT_ORIN_COMMANDS`) | states out, vision estimate in |
-
-The addresses and ports are the network section of `Constants` ([Constants](page:dev-constants)); both consoles read them from that file.
+| Platforms → lab console | UDP 48720 / 48721 / 48722 | experiment clocks (RED / BLACK / BLUE) |
+| | UDP 55001 / 55002 / 55003 | debug messages |
+| | UDP 55011 / 55012 / 55013 | live streams |
+| Platforms → network | UDP 33001–33003 broadcast | heartbeats ([Check Connection](page:diagram-outgoing)) |
+| RED ↔ Orin | UDP 46875 / 36845 | states out, vision estimate in |
 | Lab console → platforms | SSH 22 (`spot_agent.sh`) | deploy, start, stop, status, data, Teensy stream |
 | Local console | `127.0.0.1:<random>` + token | the page; the worker's socket is another random port |
 
-All addresses are settings or constants in one place each: the lab console's in `Constants.IP_LAB_CONSOLE` (the Experiment tab's Lab Console address, compiled into the programs as `labConsoleIP`), the platforms' in `spot_console/platforms` configuration on the lab console, the fixed ones in `spot.hardware`'s blocks and [experiment.py](file:experiment.py).
+All addresses are settings or constants in one place each: the lab console's in the settings (`labConsoleAddress`, compiled into the programs as `labConsoleIP`), the platforms' in `spot_console/platforms` configuration on the lab console, the fixed ones in `spot.hardware`'s blocks and [experiment.py](file:experiment.py).
 
 ## The files a project keeps
 
 | File / folder | What | Written by |
 |---|---|---|
-| `Constants.m` | every parameter of SPOT, every setting of the Simulation tab ([The Settings in Constants.m](page:settings-file)), what is mounted on each platform (the Designer), the LEDs' positions, the lab calibration the project took and any values you override, and your own values | the MATLAB worker, on every change in the console; you, by hand |
+| `spot_settings.json` | every setting of the Simulation tab | the console, on every change ([Settings File](page:settings-file)) |
+| `spot_design.json` | what is mounted on each platform | the Designer |
+| `SPOT_User_Parameters.m` | your own workspace variables | you |
+| `spot_calibration.json` (optional) | the project's copy of the lab's calibration (the table's slope, each thruster's thrust and the thrust decay, the arm's joint friction and inertia) and any values you override, and where each platform's PhaseSpace LEDs are; an `arm_calibration.json` from `calibrate_arm.py` run by hand still works, and the newer of the two arm calibrations is used | Update from Lab, the overrides on the Simulation tab's Calibration pane ([Calibration Tab](page:tab-calibration)), the Platforms pane's Thruster and LED Layout |
 | `Saved Data/<run>/` | saved simulations and collected experiments | Save Results, Collect |
 | `.spot_cache/` | the console's port and token, the last simulation's replay, logs | the console (not to be committed) |
 | `~/ExperimentSoftware/MATLAB_ws`, `~/ExperimentData` (on the TX2) | the compiled programs; collected runs | the build, Collect |

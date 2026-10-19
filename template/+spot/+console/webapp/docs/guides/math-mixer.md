@@ -34,22 +34,22 @@ by **projected gradient descent** with a backtracking line search (`custom_const
 
 $$d \leftarrow \operatorname{clip}_{[0,1]}\!\big( d - \alpha\, 2 H^T (H d - F_b) \big),$$
 
-halving $\alpha$ until the residual decreases (up to 20 tries, `Constants.MIXER_CLS_LINE_SEARCH`), growing $\alpha$ by 10 % after a successful step and shrinking it by 10 % otherwise (`MIXER_CLS_STEP_GROWTH`, `MIXER_CLS_STEP_SHRINK`), for at most 100 iterations (`MIXER_CLS_MAX_ITERATIONS`) or until $d$ stops changing by more than $10^{-6}$ (`MIXER_CLS_TOLERANCE`).
+halving $\alpha$ until the residual decreases (up to 20 tries), growing $\alpha$ by 10 % after a successful step and shrinking it by 10 % otherwise, for at most 100 iterations or until $d$ stops changing by more than $10^{-6}$.
 
 **Thrust decay.** The eight thrusters share one regulated air supply, so each gives less when several are open at once. With $n$ valves open, each gives
 
 $$\kappa(n) = \max\bigl(0,\ 1 - m\,(n - 1)\bigr)$$
 
-of its thrust alone, where $m$ is the platform's **thrust decay**, the fraction lost per extra valve open (`thrust_decay_<PLATFORM>`: the Together calibration's when it is used, else the Platforms pane's Thrust Decay, 0.112 by default, `THRUST_DECAY_DEFAULT`). The Together stage of the thruster calibration measures $m$ ([The Calibration Tab](page:tab-calibration)).
+of its thrust alone, where $m$ is the platform's **thrust decay**, the fraction lost per extra valve open (`thrust_decay_<PLATFORM>`: the Together calibration's when it is used, else the Platforms pane's Thrust Decay, 0.112 by default). The Together stage of the thruster calibration measures $m$ ([The Calibration Tab](page:tab-calibration)).
 
 How many valves are open at a given moment follows from the duty cycles, because the Teensy opens every valve at the start of each PWM period and closes each one after its duty cycle. Sort the duty cycles: between two closings the number open is known, so each thruster's effective share is the average of $\kappa(n)$ over its own opening (`check_thrust_decay`):
 
 $$\kappa_i = \frac{1}{d_i} \int_0^{d_i} \kappa\bigl(n(t)\bigr)\,dt, \qquad n(t) = \#\{\,j : d_j \ge t\,\}.$$
 
-$H(\kappa)$ then has $\kappa_i f_i$ in place of $f_i$ (`MakeHWithDecay`). Since the $\kappa_i$ depend on $d$ and $d$ on $H(\kappa)$, the two are iterated (the outer loop, at most `max_iters` = 20 times, until $d$ changes by less than `tol` = $10^{-6}$: the block mask's values, `MIXER_MAX_ITERATIONS` and `MIXER_TOLERANCE`): build $H(\kappa)$, solve for $d$, update the $\kappa_i$. With a single valve open there is no decay; with all eight equal thrusts and $m = 0$ the result is the plain constrained fit.
+$H(\kappa)$ then has $\kappa_i f_i$ in place of $f_i$ (`MakeHWithDecay`). Since the $\kappa_i$ depend on $d$ and $d$ on $H(\kappa)$, the two are iterated (the outer loop, at most `max_iters` = 20 times, until $d$ changes by less than `tol` = $10^{-6}$): build $H(\kappa)$, solve for $d$, update the $\kappa_i$. With a single valve open there is no decay; with all eight equal thrusts and $m = 0$ the result is the plain constrained fit.
 
 The outputs are the eight duty cycles (`*_Duty_Cycle`, ×100 as the percentage sent to the Teensy) and `H_final`, the full-thrust map with the final decay, which the simulated plant uses to compute the force actually produced.
 
 ## Timing
 
-The mixer runs at `baseRate` (20 Hz, `SAMPLE_RATE`) and the Teensy runs its PWM at `PWMFreq` (5 Hz, `TEENSY_PWM_FREQUENCY`), so a duty cycle is held for the whole valve period. The `verifyConsoleController` check 4 makes sure the block's sample time is still `baseRate`.
+The mixer runs at `baseRate` (20 Hz) and the Teensy runs its PWM at `PWMFreq` (5 Hz), so a duty cycle is held for the whole valve period. The `verifyConsoleController` check 4 makes sure the block's sample time is still `baseRate`.

@@ -13,12 +13,7 @@ function F = nominalForces(force)
     %
     %   See also spot.control.thrusterDutyCycles.
 
-    %% Constants
-    % Which thrusters push along body x (the others push along y).
-    ALONG_X = Constants.THRUSTER_DIRECTION_X(:) ~= 0;
-
-    %% Thrusts
     Fx = force;
     Fy = force;
-    F = Fx * ALONG_X + Fy * ~ALONG_X;
+    F = [Fx; Fx; Fy; Fy; Fx; Fx; Fy; Fy];
 end

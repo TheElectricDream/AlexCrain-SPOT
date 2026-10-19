@@ -15,8 +15,9 @@ import urllib.error
 import urllib.request
 
 from .common import ApiError
-from .constants import C
-from .events import DEFAULT_VISION, settings
+from .events import settings
+
+DEFAULT_VISION = {"host": "192.168.1.115", "port": 8090, "user": "spot-vision"}
 
 STATUS_TIMEOUT = 3   # [s] asking for the camera list
 
@@ -27,7 +28,7 @@ def config():
 
 
 def url():
-    """Return SPOT Vision's base URL, http://<host>:<port>."""
+    """Return SPOT Vision's base URL, e.g. http://192.168.1.115:8090."""
     cfg = config()
     return "http://%s:%d" % (cfg["host"], int(cfg["port"]))
 
@@ -152,7 +153,7 @@ def parse_vision(value):
         try:
             cfg["host"] = str(ipaddress.IPv4Address(str(value["host"]).strip()))
         except ValueError:
-            raise ApiError("The Orin's address must be an IPv4 address, e.g. %s." % C.IP_ORIN)
+            raise ApiError("The Orin's address must be an IPv4 address, e.g. 192.168.1.115.")
 
     # Port: an unprivileged port number.
     if "port" in value:

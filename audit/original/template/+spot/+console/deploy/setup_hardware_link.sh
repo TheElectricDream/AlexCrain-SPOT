@@ -14,21 +14,14 @@
 #   ./setup_hardware_link.sh blue            # only some
 #   TX2=user@host SSH_KEY=~/.ssh/other_key ./setup_hardware_link.sh
 #   NO_POWER=1 ./setup_hardware_link.sh      # skip step 3 (no sudo)
-# The computers' addresses and login names come from Constants.m (constants.sh).
 set -euo pipefail
 cd "$(dirname "$0")"
-source ./constants.sh
 
-TX2="${TX2:-$(spot_constant USER_LAB_CONSOLE)@$(spot_constant IP_LAB_CONSOLE)}"
+TX2="${TX2:-spot-tx2@192.168.1.116}"
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_spot}"
 CONSOLE_KEY=".ssh/id_ed25519_spot_console"   # on the TX2; must match HW_KEY in webapp/app.py
 MARKER="spot-console-hw"                      # comment that identifies the key in authorized_keys
-# Each platform's address and login name (IP_*, USER_*).
-declare -A ADDRESS LOGIN
-for board in red black blue; do
-    ADDRESS[$board]=$(spot_constant "IP_${board^^}")
-    LOGIN[$board]=$(spot_constant "USER_${board^^}")
-done
+declare -A ADDRESS=([red]=192.168.1.110 [black]=192.168.1.111 [blue]=192.168.1.112)
 boards=("$@")
 [ ${#boards[@]} -eq 0 ] && boards=(red black blue)
 
@@ -64,7 +57,7 @@ warned=()   # linked, but power saving not switched off
 for board in "${boards[@]}"; do
     address="${ADDRESS[$board]:-}"
     [ -z "$address" ] && { echo "Unknown board '$board' (use red, black, blue)"; exit 2; }
-    user="${LOGIN[$board]}"
+    user="spot-$board"
     echo "== ${board^^} ($user@$address)"
     # The link script goes over stdin; the key line is passed as an argument
     if ! ssh "${ssh_opts[@]}" "$user@$address" bash -s -- "$pubkey" "$MARKER" <<REMOTE

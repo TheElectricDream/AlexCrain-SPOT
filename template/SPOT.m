@@ -5,12 +5,10 @@ function SPOT(action)
 %   SPOT open     opens it in the browser again (and prints its address)
 %   SPOT stop     stops the console
 %
-%   Everything this project chooses lives in Constants.m, next to this file (Constants.NAME):
-%   the console's settings, the Designer's choices and the lab calibration it took, with every
-%   parameter of SPOT. The console writes it; edit it by hand too. SPOT shares this MATLAB
-%   session so the console's Python can read it (the MATLAB Engine for Python).
+%   The console's settings are kept in spot_settings.json in this folder. Variables of your own
+%   go in SPOT_User_Parameters.m, which runs after the console's settings are applied.
 %   Everything the console does is also available as functions, e.g.
-%     s = spot.params.fromConstants();
+%     s = spot.params.load('spot_settings.json');
 %     spot.sim.run(s, pwd);
 if nargin == 0
     action = 'start';

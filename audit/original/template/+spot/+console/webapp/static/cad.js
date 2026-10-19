@@ -11,7 +11,6 @@
 // platform().
 
 import * as THREE from 'three';
-import { constant } from './constants.js';
 
 const MODEL_URL = '/static/models/spot_cad.bin.gz';
 export const TABLE_URL = '/static/models/spot_table.bin.gz';   // the table's barrier (same format)
@@ -35,8 +34,8 @@ const PANELS = {
 const OPACITY = { sim: 0.5, overlay: 0.14 };
 
 // The CAD arm ends at the wrist motor, so the end effector is a stand-in: a bracket and a white
-// tip, a3 + b3 long (ARM_A3 + ARM_B3) [m].
-const eeLength = () => constant('ARM_A3') + constant('ARM_B3');
+// tip, a3 + b3 long (spot.params.defaults).
+const EE_LENGTH = 0.06210 + 0.02515;
 
 // The face a docking cone is on, as the angle of its outward normal about +z.
 const FACE_ANGLE = { '+x': 0, '+y': Math.PI / 2, '-x': Math.PI, '-y': -Math.PI / 2 };
@@ -73,7 +72,7 @@ export function mountPose(info, slot) {
 export function armPoints(info, place, q, geometry = null) {
   const g = geometry || {
     a1: 0, b1: info.arm.linkLength, a2: 0, b2: info.arm.linkLength, a3: 0,
-    b3: info.arm.eeLength || eeLength(),
+    b3: info.arm.eeLength || EE_LENGTH,
   };
 
   // The shoulder on its mount: the CAD's, or the settings' (given in the usual mount's frame,
@@ -229,7 +228,7 @@ class CadLibrary {
   }
 
   // The male docking cone (ARM_EE), from the wrist joint along +x at the joints' height, on a
-  // bracket from the wrist to the cone's flange; without the model, a stand-in (see eeLength).
+  // bracket from the wrist to the cone's flange; without the model, a stand-in (see EE_LENGTH).
   endEffector(ghost) {
     const g = new THREE.Group();
     const h = this.info.arm.jointHeight;
@@ -249,15 +248,14 @@ class CadLibrary {
     }
 
     // The stand-in: a black bracket and a white tip.
-    const length = eeLength();
     const split = 0.04;
     const bracket = new THREE.Mesh(new THREE.BoxGeometry(split, 0.032, 0.036),
       this.material('black', 'RED', ghost));
     bracket.position.set(split / 2, 0, h);
     bracket.userData.material = 'black';
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(length - split, 0.024, 0.03),
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(EE_LENGTH - split, 0.024, 0.03),
       this.material('white', 'RED', ghost));
-    tip.position.set((split + length) / 2, 0, h);
+    tip.position.set((split + EE_LENGTH) / 2, 0, h);
     tip.userData.material = 'white';
     for (const m of [bracket, tip]) {
       m.castShadow = !ghost;
@@ -265,7 +263,7 @@ class CadLibrary {
       m.userData.platform = 'RED';
       g.add(m);
     }
-    g.userData.length = length;
+    g.userData.length = EE_LENGTH;
     return g;
   }
 

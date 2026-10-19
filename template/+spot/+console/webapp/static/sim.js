@@ -2,16 +2,13 @@
 // diagrams need, simulations run in the user's MATLAB and replayed in the shared 3D view, and
 // MATLAB's command window and workspace.
 //
-// The settings live in the project's Constants.m (spot.worker.Worker reads and writes it). Each
-// change here is sent as its path and value ("settings.set"); MATLAB writes the constants,
-// puts the settings into the base workspace and answers with what follows from them (total
-// time, CG, LQR gains, ...) or why they don't work.
+// The settings live in MATLAB (spot.worker.Worker keeps them in spot_settings.json). Every
+// change is sent back whole ("settings.set"); MATLAB puts them into the base workspace and
+// answers with what follows from them (total time, CG, LQR gains, ...) or why they don't work.
 
 import { PLATFORM_KEYS as PLATFORMS, COLORS as SWATCH, platformName, swatch } from './platforms.js';
 import { handleLockClick, isUnlocked, lockButton, onLockChange } from './ratelock.js';
 import { initLayout } from './layout.js';
-import { constant } from './constants.js';
-import { initConstantsDialog } from './constantsdialog.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -105,18 +102,17 @@ function rateField() {
     'Rate is the same setting. Locked: click the padlock to change it.';
   return `<div class="sfield" title="${esc(title)}">
     <span class="sfield-label lock-label"><span>Data Rate</span>${lockButton()}</span>
-    <span class="sfield-input"><input class="input" type="number" min="1" max="${constant('MAX_DATA_RATE')}" step="1" data-path="dataRate" data-rate aria-label="Data rate"><span class="unit">Hz</span></span>
+    <span class="sfield-input"><input class="input" type="number" min="1" max="960" step="1" data-path="dataRate" data-rate aria-label="Data rate"><span class="unit">Hz</span></span>
   </div>`;
 }
-const validRate = v => Number.isInteger(v) && v >= 1 && v <= constant('MAX_DATA_RATE');
+const validRate = v => Number.isInteger(v) && v >= 1 && v <= 960;
 
 // The thrusters' PWM frequency (pwmFrequency): locked like the data rate, since it must match
 // the Teensy firmware's.
 function pwmField() {
   const title = 'The thrusters\' PWM frequency (PWMFreq): the duty cycles assume a valve period ' +
-    `of 1/frequency. The Teensy firmware runs its PWM at ${constant('TEENSY_PWM_FREQUENCY')} Hz ` +
-    '(PWM_FREQUENCY in teensy_pwm_control.ino), so they must be equal. Locked: click the padlock ' +
-    'to change it.';
+    'of 1/frequency. The Teensy firmware runs its PWM at 5 Hz (PWM_FREQUENCY in ' +
+    'teensy_pwm_control.ino), so they must be equal. Locked: click the padlock to change it.';
   return `<div class="sfield" title="${esc(title)}">
     <span class="sfield-label lock-label"><span>Thruster PWM</span>${lockButton('pwm')}</span>
     <span class="sfield-input"><input class="input" type="number" min="0.1" max="100" step="any" data-path="pwmFrequency" data-pwm aria-label="Thruster PWM frequency"><span class="unit">Hz</span></span>
@@ -166,18 +162,11 @@ export function initSimulation({
       ? storage.get('spot.pose', 'initial')
       : 'initial',
     t: 0, playing: false, lastTick: 0, shown: false,
-    editSeq: 0, pending: new Map(), pushTimer: null, pushing: false,
+    editSeq: 0, pushTimer: null, pushing: false,
     history: storage.get('spot.cmdHistory', []), histPos: -1,
     workspace: [], inspected: null,
   };
   const matlab = (cmd, args = {}) => api('/api/matlab', { cmd, args }).then(r => r.result);
-
-  // The Constants window: a save there comes back with the settings, applied here at once.
-  const constantsDialog = initConstantsDialog({
-    matlab, act, toast,
-    onSaved: r => applyReply(r),
-  });
-  document.addEventListener('spot-constants', () => constantsDialog.refresh());
   const panes = $('#simPanes');
 
   // The Thruster and LED Layout window: the scales typed there are settings; the LEDs are the
@@ -187,20 +176,13 @@ export function initSimulation({
     getSettings: () => S.settings,
     getMarkers: () => (S.calFile && S.calFile.markers) || null,
     setSetting: (path, value) => {
-      changeSetting(path, value);
+      setPath(S.settings, path, value);
       S.editSeq++;
       fill();
       renderSetup();
       schedulePush(500);
     },
   });
-
-  // A setting changed on this page: into the page's copy, and remembered by its path until it
-  // is sent (push sends only what changed, so a value edited in Constants.m meanwhile is kept).
-  function changeSetting(path, value) {
-    setPath(S.settings, path, value);
-    S.pending.set(path, value);
-  }
 
   // Settings from MATLAB
 
@@ -213,10 +195,6 @@ export function initSimulation({
     }
     if (seq === undefined || seq === S.editSeq) {
       S.settings = r.settings;
-      // An edit made while this reply was on its way stays (it is still to be sent).
-      for (const [path, value] of S.pending) {
-        setPath(S.settings, path, value);
-      }
     }
     S.derived = r.derived;
     S.error = r.error || '';
@@ -283,44 +261,22 @@ export function initSimulation({
     S.pushTimer = setTimeout(push, delay);
   }
 
-  // Sends the settings changed since the last send, as paths and values (later, if a send or
-  // a simulation is under way). A refused change is put back to be sent again, unless the
-  // field was edited meanwhile.
+  // Sends the settings (later, if a send or a simulation is under way).
   async function push() {
     if (S.pushing || S.sim.running) {
       return schedulePush(600);
     }
-    if (!S.pending.size) {
-      return;
-    }
     S.pushing = true;
     const seq = S.editSeq;
-    const sent = new Map(S.pending);
-    S.pending.clear();
     try {
-      const changes = [...sent].map(([path, value]) => ({ path, value }));
-      applyReply(await matlab('settings.set', { changes }), seq);
+      applyReply(await matlab('settings.set', { settings: S.settings }), seq);
       S.pushedSeq = seq;
     } catch (e) {
-      for (const [path, value] of sent) {
-        if (!S.pending.has(path)) {
-          S.pending.set(path, value);
-        }
-      }
       toast(e.message, 'error', 8000);
     } finally {
       S.pushing = false;
     }
   }
-
-  // Constants.m may have been edited in MATLAB's editor while this page was in the background:
-  // read the settings again when it comes back (unless an edit here is still to be sent).
-  window.addEventListener('focus', () => {
-    if (S.matlab && S.matlab.connected && S.settings && !S.pushing && !S.sim.running &&
-        !S.pending.size) {
-      loadSettings().catch(() => {});
-    }
-  });
 
   // Panes
 
@@ -406,7 +362,7 @@ export function initSimulation({
     });
   }
 
-  // What the simulation takes from the lab's calibration (this project's Constants.LAB_*):
+  // What the simulation takes from the lab's calibration (this project's spot_calibration.json):
   // this project's calibration against the lab's (calibration.js's sync card, moved here by
   // renderPanes), then a card per calibration (renderCalibration); the main area shows the
   // calibrations.
@@ -430,7 +386,6 @@ export function initSimulation({
   // A platform's cards: initial conditions, and mass properties (scales, bifilar pendulum,
   // overrides, thrust, and the Thruster and LED Layout window).
   function platformCards(n) {
-    const decay = constant('THRUST_DECAY_DEFAULT');
     const rows = POSE_KINDS.map(([k, label, title]) =>
       `<tr data-poserow="${k}" title="${esc(title)}"><th><button type="button" ` +
       `class="pose-row-btn" data-setpose="${k}" ` +
@@ -456,10 +411,10 @@ export function initSimulation({
           ${num(`mass.${n}.mass`, 'Mass', { unit: 'kg', title: 'Used when Override is on' })}
           ${num(`mass.${n}.inertia`, 'Inertia', { unit: 'kg·m²', title: 'Used when Override is on' })}
           ${num(`thrusterForce.${n}`, 'Thrust', { unit: 'N', title: 'Force of one thruster (all eight; the thruster calibration replaces it when used)' })}
-          ${num(`thrusterDecay.${n}`, 'Thrust Decay', { unit: '/valve', title: `Thrust lost per extra valve open at once: the valves share one regulated supply, so with n open each thruster gives 1 − decay (n − 1) of its thrust alone (${decay} = ${(100 * decay).toFixed(1)} %). The mixer uses it, so the simulated plant and the platforms alike. The thruster calibration\'s Together stage replaces it when used; the default is the Obstacle\'s, measured 2026-10-14.` })}
+          ${num(`thrusterDecay.${n}`, 'Thrust Decay', { unit: '/valve', title: 'Thrust lost per extra valve open at once: the valves share one regulated supply, so with n open each thruster gives 1 − decay (n − 1) of its thrust alone (0.112 = 11.2 %). The mixer uses it, so the simulated plant and the platforms alike. The thruster calibration\'s Together stage replaces it when used; the default is the Obstacle\'s, measured 2026-10-14.' })}
         </div>
         <p class="hint" data-derived="calthrust"></p>
-        <button type="button" class="btn btn-sm sp-top" data-action="layout" title="The platform from above, to scale: where the thrusters and the PhaseSpace LEDs are, dimensioned from the CG the scales give. The LEDs' positions are edited there (this project's Constants.m, LED_XY_*); Start Cameras sends them to the lab console.">Thruster and LED Layout…</button>
+        <button type="button" class="btn btn-sm sp-top" data-action="layout" title="The platform from above, to scale: where the thrusters and the PhaseSpace LEDs are, dimensioned from the CG the scales give. The LEDs' positions are edited there (this project's spot_calibration.json); Start Cameras sends them to the lab console.">Thruster and LED Layout…</button>
       </section>`;
   }
 
@@ -519,17 +474,9 @@ export function initSimulation({
     const JOINTS = ['Shoulder', 'Elbow', 'Wrist'];
     const ARM_LAWS = 'Which controller runs is set by each phase (ARM_Control_Law_Enabler in 1 - ' +
       'Experiment Logic: 1 position, 3 velocity, 2 your torque controller, 0 off). Defaults are ' +
-      `tuned for ${constant('SAMPLE_RATE')} Hz.`;
-    const maxGain = constant('MAX_GAIN');
-    const maxProfile = constant('MAX_PROFILE');
-    const pwmFull = constant('PWM_FULL');
-    const scales = `P/${constant('GAIN_SCALE_P')}, I/${constant('GAIN_SCALE_I')}`;
-    const velUnit = constant('VEL_UNIT_RPM');
-    const accUnit = constant('ACC_UNIT_RPM2');
-    const profileVelocity = constant('ARM_POSITION_PROFILE_VELOCITY');
-    const radPerS = (profileVelocity * velUnit * 2 * Math.PI / 60).toFixed(2);
-    const gain = (path, title) => `<td><span class="lqr-in" title="${esc(title)}"><input class="input" type="number" step="1" min="0" max="${maxGain}"
-        data-min="0" data-max="${maxGain}" data-path="${path}" aria-label="${esc(title)}"></span></td>`;
+      'tuned for 20 Hz.';
+    const gain = (path, title) => `<td><span class="lqr-in" title="${esc(title)}"><input class="input" type="number" step="1" min="0" max="16383"
+        data-min="0" data-max="16383" data-path="${path}" aria-label="${esc(title)}"></span></td>`;
     const rows = (mode, gains) => JOINTS.map((j, i) => `<tr><th scope="row" class="arm-joint">${j}</th>
         ${gains.map(g => gain(`control.ARM.${mode}.${g}.${i}`, `${j}: ${mode} ${g} gain`)).join('')}</tr>`).join('');
     const limit = (path, label, max, unit, title) => `<label class="sfield" title="${esc(title)}">
@@ -540,20 +487,20 @@ export function initSimulation({
       `<thead><tr><th></th>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
     return `
       <section class="card lqr-card arm-card">
-        <div class="card-head"><h2 class="hw-name">${swatch('ARM')}${platformName('ARM')}</h2><span class="pill tip" title="The servo's position law, run every step: a PID on the joint angle error, giving the torque the servo would give. Gains in the servo's units (${scales}, D/${constant('GAIN_SCALE_D')} per the Dynamixel manual). ${ARM_LAWS}">Position · Mode 1</span></div>
+        <div class="card-head"><h2 class="hw-name">${swatch('ARM')}${platformName('ARM')}</h2><span class="pill tip" title="The servo's position law, run every step: a PID on the joint angle error, giving the torque the servo would give. Gains in the servo's units (P/128, I/65536, D/16 per the Dynamixel manual). ${ARM_LAWS}">Position · Mode 1</span></div>
         <table class="lqr-table arm-table">${head(['P', 'I', 'D'])}<tbody>${rows('position', ['P', 'I', 'D'])}</tbody></table>
         <div class="fgrid cols-3 sp-top">
-          ${limit('control.ARM.position.profileVelocity', 'Profile Velocity', maxProfile, '', `How fast the desired angle moves to the goal, in units of ${velUnit} rev/min (${profileVelocity} = ${radPerS} rad/s; 0 = at once)`)}
-          ${limit('control.ARM.position.profileAcceleration', 'Profile Accel.', maxProfile, '', `The profile's acceleration, in units of ${accUnit} rev/min² (0 = none)`)}
-          ${limit('control.ARM.position.pwmLimit', 'PWM Limit', pwmFull, '', `The most the controller asks of the motor, out of ${pwmFull} (= the full supply voltage)`)}
+          ${limit('control.ARM.position.profileVelocity', 'Profile Velocity', 32767, '', 'How fast the desired angle moves to the goal, in units of 0.229 rev/min (20 = 0.48 rad/s; 0 = at once)')}
+          ${limit('control.ARM.position.profileAcceleration', 'Profile Accel.', 32767, '', 'The profile\'s acceleration, in units of 214.577 rev/min² (0 = none)')}
+          ${limit('control.ARM.position.pwmLimit', 'PWM Limit', 885, '', 'The most the controller asks of the motor, out of 885 (= the full supply voltage)')}
         </div>
       </section>
       <section class="card lqr-card arm-card">
-        <div class="card-head"><h2 class="hw-name">${swatch('ARM')}${platformName('ARM')}</h2><span class="pill tip" title="The servo's velocity law: a PI on the joint speed error (${scales}). ${ARM_LAWS}">Velocity · Mode 3</span></div>
+        <div class="card-head"><h2 class="hw-name">${swatch('ARM')}${platformName('ARM')}</h2><span class="pill tip" title="The servo's velocity law: a PI on the joint speed error (P/128, I/65536). ${ARM_LAWS}">Velocity · Mode 3</span></div>
         <table class="lqr-table arm-table">${head(['P', 'I'])}<tbody>${rows('velocity', ['P', 'I'])}</tbody></table>
         <div class="fgrid cols-3 sp-top">
-          ${limit('control.ARM.velocity.profileAcceleration', 'Profile Accel.', maxProfile, '', `How fast the desired speed moves to the goal, in units of ${accUnit} rev/min² (0 = at once)`)}
-          ${limit('control.ARM.velocity.pwmLimit', 'PWM Limit', pwmFull, '', `The most the controller asks of the motor, out of ${pwmFull} (= the full supply voltage)`)}
+          ${limit('control.ARM.velocity.profileAcceleration', 'Profile Accel.', 32767, '', 'How fast the desired speed moves to the goal, in units of 214.577 rev/min² (0 = at once)')}
+          ${limit('control.ARM.velocity.pwmLimit', 'PWM Limit', 885, '', 'The most the controller asks of the motor, out of 885 (= the full supply voltage)')}
         </div>
       </section>`;
   }
@@ -787,7 +734,7 @@ export function initSimulation({
     // The workspace tab's tooltip, and the warnings.
     $('[data-simtab="workspace"]').title = d.variables
       ? `MATLAB's base workspace: ${d.variables.length} variables are put there whenever a ` +
-        'setting changes.'
+        'setting changes; SPOT_User_Parameters.m then runs, for your own.'
       : 'MATLAB\'s base workspace';
     const notice = $('#simNotice');
     const warnings = [S.error, ...((d && d.warnings) || [])].filter(Boolean);
@@ -836,7 +783,7 @@ export function initSimulation({
   }
 
   // The three cards, from the settings' switches, the project's file (what was measured, what is
-  // overridden) and MATLAB's values in use.
+  // overridden) and MATLAB's values in use (after SPOT_User_Parameters.m).
   function calibrationCards() {
     const s = S.settings;
     const c = (S.derived || {}).calibration || {};
@@ -846,9 +793,19 @@ export function initSimulation({
     if (!s || !use) {
       return '<p class="hint">Waiting for MATLAB: the values come from the settings applied.</p>';
     }
-    return calTableCard(s, use, file, section, '') +
-      calThrustersCard(s, use, file, section, '') +
-      calArmCard(s, use, file, c, section, '');
+
+    // The variables SPOT_User_Parameters.m changes, among a card's.
+    const changed = list(use.changedBy);
+    const scriptNote = names => {
+      const mine = changed.filter(n => names.some(p => n.startsWith(p)));
+      return mine.length
+        ? `<p class="hint warn-text">SPOT_User_Parameters.m changes ${esc(mine.join(', '))}: ` +
+          'these are the values it leaves.</p>'
+        : '';
+    };
+    return calTableCard(s, use, file, section, scriptNote(['tableSlope', 'tableDamping_'])) +
+      calThrustersCard(s, use, file, section, scriptNote(['F_thrusters_', 'thrust_decay_'])) +
+      calArmCard(s, use, file, c, section, scriptNote(['armModel']));
   }
 
   // A card's start: the main area shows its part when it is clicked (calibration.js), and it is
@@ -1013,8 +970,8 @@ export function initSimulation({
       : '';
     return calOpen('arm', section) +
       calHead('Arm', 'The arm\'s measured friction, back-EMF and rotor inertia, measured in PWM ' +
-        'control (the lab\'s arm calibration as this project took it, Constants.LAB_ARM_*). ' +
-        'Off: the arm model\'s defaults.', 'calibration.arm', on, measured,
+        'control (the newer of the lab\'s arm calibration and an arm_calibration.json in the ' +
+        'project folder). Off: the arm model\'s defaults.', 'calibration.arm', on, measured,
         count) +
       `<table class="cal-vals cal-vals-3"><thead>${head}</thead><tbody>${rows}</tbody></table>` +
       `${note}${calFoot('arm', text, on ? count : 0)}</section>`;
@@ -1099,8 +1056,8 @@ export function initSimulation({
       }
       const r = (v, k) => Math.round(v * 10 ** k) / 10 ** k;
       const th = ((deg % 360) + 360) % 360;
-      changeSetting(`initial.${name}.${S.pose === 'home' ? 'home' : 'initial'}`,
-        [r(x, 3), r(y, 3), r(th > 180 ? th - 360 : th, 1)]);
+      S.settings.initial[name][S.pose === 'home' ? 'home' : 'initial'] =
+        [r(x, 3), r(y, 3), r(th > 180 ? th - 360 : th, 1)];
       if (S.platform !== name && PLATFORMS.includes(name) && done) {
         S.platform = name;
         storage.set('spot.sim.platform', name);
@@ -1119,7 +1076,7 @@ export function initSimulation({
     if (!S.settings) {
       return;
     }
-    changeSetting('realTime', ev.target.checked);
+    setPath(S.settings, 'realTime', ev.target.checked);
     edited();
   };
 
@@ -1218,7 +1175,7 @@ export function initSimulation({
         return false;
       }
     }
-    changeSetting(el.dataset.path, v);
+    setPath(S.settings, el.dataset.path, v);
     return true;
   }
 
@@ -1241,10 +1198,10 @@ export function initSimulation({
       return;
     }
     if (b.dataset.toggle) {
-      changeSetting(b.dataset.toggle, !getPath(S.settings, b.dataset.toggle));
+      setPath(S.settings, b.dataset.toggle, !getPath(S.settings, b.dataset.toggle));
       edited(true);
     } else if (b.dataset.set) {
-      changeSetting(b.dataset.set, b.dataset.value);
+      setPath(S.settings, b.dataset.set, b.dataset.value);
       edited(true);
     } else if (b.dataset.pick) {
       S.platform = b.dataset.pick;
@@ -1265,8 +1222,23 @@ export function initSimulation({
     b.onclick = () => showTab(b.dataset.simtab);
   }
 
-  // The Constants window, and Save Results.
-  $('#simEdit').onclick = () => constantsDialog.open();
+  // Load and Save As (MATLAB's dialogs), and Save Results.
+  $('#simOpen').onclick = () => act(async () => {
+    toast('Choose the file in MATLAB\'s dialog', 'info', 4000);
+    const r = await matlab('settings.open');
+    if (r && !r.cancelled) {
+      S.panesBuilt = false;
+      applyReply(r);
+      toast(`Loaded ${r.loaded}`, 'success', 5000);
+    }
+  });
+  $('#simSaveAs').onclick = () => act(async () => {
+    toast('Choose where to save in MATLAB\'s dialog', 'info', 4000);
+    const r = await matlab('settings.saveAs');
+    if (r && r.saved) {
+      toast(`Saved ${r.saved}`, 'success', 5000);
+    }
+  });
   $('#simSaveResult').onclick = () => act(() => store.saveSimulation());
 
   // Reset: a clean slate, in parts (settings in MATLAB, this page's preferences, loaded results).
@@ -1289,13 +1261,14 @@ export function initSimulation({
     toast('Resetting to the defaults…', 'info', 4000);
     if (what.settings) {
       clearTimeout(S.pushTimer);
-      S.pending.clear();
       S.panesBuilt = false;
       const r = await matlab('settings.reset');
       applyReply(r);
       S.pushedSeq = S.editSeq;
-      toast(`Settings reset to the template's (${r.template}). The previous Constants.m is ` +
-        `${r.backup}.`, 'success', 9000);
+      toast(r.backup
+        ? `Settings reset to the defaults. The previous ones are in ${r.backup} ` +
+          '(Load… to bring them back).'
+        : 'Settings reset to the defaults.', 'success', 9000);
     }
     if (what.results) {
       for (const d of [...store.loaded]) {
@@ -1399,7 +1372,7 @@ export function initSimulation({
           : 'Loading settings…';
       }
     }
-    for (const b of ['#simEdit', '#simReset']) {
+    for (const b of ['#simOpen', '#simSaveAs', '#simReset']) {
       $(b).disabled = !S.matlab.connected || Boolean(sim.running);
     }
 
@@ -1407,14 +1380,13 @@ export function initSimulation({
     $('#simSaveResult').hidden = !S.result || Boolean(sim.running);
     $('#simSaveResult').disabled = !S.matlab.connected;
 
-    // The file the settings live in.
+    // The settings file.
     const file = $('#settingsFile');
-    file.textContent = (S.file || 'Constants.m').split(/[\\/]/).pop();
-    file.title = S.file ? `${S.file} (written on every change)` : '';
-    $('#settingsBar .sb-label').title = `Settings: ${S.file || 'Constants.m'}, written on ` +
-      'every change. They are what the Simulation tab shows (scenario, timeline, initial ' +
-      'conditions, platforms, control, solver), used for simulations and for building ' +
-      'experiments, as constants next to every other parameter of SPOT.';
+    file.textContent = (S.file || 'spot_settings.json').split(/[\\/]/).pop();
+    file.title = S.file ? `${S.file} (saved automatically)` : '';
+    $('#settingsBar .sb-label').title = `Settings: ${S.file || 'spot_settings.json'}, saved ` +
+      'automatically. They are what the Simulation tab shows (scenario, timeline, initial ' +
+      'conditions, platforms, control, solver), used for simulations and for building experiments.';
   }
 
   // The finished simulation: to the panels and the view, replayed from the start. Announced,
@@ -2190,9 +2162,9 @@ export function initSimulation({
       if (!S.settings) {
         return;
       }
-      changeSetting(`platforms.${name}`, on);
+      setPath(S.settings, `platforms.${name}`, on);
       if (name === 'RED' && !on) {
-        changeSetting('platforms.ARM', false);
+        setPath(S.settings, 'platforms.ARM', false);
       }
       edited(true);
     },
@@ -2201,12 +2173,12 @@ export function initSimulation({
       if (!S.settings) {
         return;
       }
-      changeSetting('platforms.ARM', on);
+      setPath(S.settings, 'platforms.ARM', on);
       if (on) {
-        changeSetting('platforms.RED', true);
+        setPath(S.settings, 'platforms.RED', true);
       }
       if (on && mount) {
-        changeSetting('mass.arm.mount', { face: mount.face, side: mount.side });
+        setPath(S.settings, 'mass.arm.mount', { face: mount.face, side: mount.side });
       }
       edited(true);
     },
@@ -2215,7 +2187,7 @@ export function initSimulation({
       if (!S.settings) {
         return false;
       }
-      changeSetting(path, value);
+      setPath(S.settings, path, value);
       edited();
       return true;
     },

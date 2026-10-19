@@ -19,84 +19,23 @@ MATLAB) checks that this file gives the same gains, forces and duty
 cycles as MATLAB, and that DEFAULTS are SPOT's default settings; it
 runs this file as a script (see main() at the end).
 
-Python 3.6 standard library only, and nothing else from the console
-but SPOT's constants (constants.py reads them from Constants.m),
+Python 3.6 standard library only, and nothing else from the console,
 so it can be read and run on its own.
 """
 
 import json
 import math
-import os
 import sys
 from operator import mul
-
-# SPOT's constants, through the package; run as a script (by
-# spot.control.verifyConsoleController) the package is the folder this
-# file is in.
-if __package__:
-    from .constants import C
-else:
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from spot_console.constants import C
 
 
 # Parameters
 
-NUM_THRUSTERS = C.int("NUM_THRUSTERS")
-MM_PER_M = 1000   # [mm/m] thruster_dist2CG is in mm, the mixer works in m
-
-
-def center_of_gravity(scales):
-    """Port of spot.massprops.centerOfGravity: mass, CG and moment arms.
-
-    The same operations in the same order as the MATLAB, so the
-    numbers are identical to its.
-
-    Args:
-        scales: The three scale readings [A B C] [kg] (SCALES_* in
-            Constants.m; A left-middle, B right-back, C right-front,
-            at SCALE_A, SCALE_B, SCALE_C from the body centre).
-
-    Returns:
-        (mass [kg], [X, Y] of the CG from the body centre [m], the 8
-        thruster_dist2CG [mm]: each thruster's line of action from the
-        CG).
-    """
-    a, b, c = scales
-    M = a + b + c
-
-    # Readings weighted by each scale's position.
-    X = (a * C.SCALE_A[0] + b * C.SCALE_B[0] + c * C.SCALE_C[0]) / M
-    Y = (a * C.SCALE_A[1] + b * C.SCALE_B[1] + c * C.SCALE_C[1]) / M
-
-    # Thruster offsets from the CG (1-2 push along -x, 3-4 +y, 5-6 +x,
-    # 7-8 -y).
-    e = C.BODY_HALF_SIDE - C.THRUSTER_INSET
-    thrusters = [v * MM_PER_M for v in (e - Y, -(e + Y), e - X, -(e + X),
-                                        e + Y, -(e - Y), e + X, -(e - X))]
-    return M, [X, Y], thrusters
-
-
-def platform_defaults(platform):
-    """Return a platform's entry of DEFAULTS["platforms"].
-
-    Its mass (the scales' sum, as spot.massprops.compute takes it) and
-    thruster_dist2CG from its default scale readings, its inertia from
-    its bifilar test (INERTIA_*), the nominal thrust and thrust decay,
-    and the LQR weights.
-    """
-    mass, _cg, dist2CG = center_of_gravity(C.platform("SCALES", platform))
-    return {"mass": mass, "inertia": C.platform("INERTIA", platform),
-            "thrust": C.THRUST_NOMINAL, "thrust_decay": C.THRUST_DECAY_DEFAULT,
-            "thruster_dist2CG": dist2CG, "Q": list(C.LQR_Q), "R": list(C.LQR_R)}
-
-
-# SPOT's default settings (spot.params.fromConstants), what
+# SPOT's default settings (spot.params.defaults), what
 # spot.massprops.compute makes of their mass section, and the mixer
-# block's mask values in the diagram, all from Constants.m. The
-# lab console has no settings file of the project's, so Interactive
-# Mode uses these; spot.control.verifyConsoleController checks them
-# against MATLAB.
+# block's mask values in the diagram. The lab console has no settings
+# file of the project's, so Interactive Mode uses these;
+# spot.control.verifyConsoleController checks them against MATLAB.
 #
 # Per platform: mass [kg], inertia [kg m^2] and thruster_dist2CG [mm]
 # from the default scale readings and bifilar test; thrust [N] of one
@@ -110,13 +49,41 @@ DEFAULTS = {
     # The diagram runs every baseRate = 1/sample_rate seconds, its LQR
     # and its thruster code included; its LQR gains are designed for
     # the PhaseSpace period, dataRate = 1/data_rate (spot.params.apply).
-    "sample_rate": float(C.SAMPLE_RATE),   # [Hz] s.sampleRate
-    "data_rate": float(C.DATA_RATE),       # [Hz] s.dataRate
+    "sample_rate": 20.0,                  # [Hz] s.sampleRate
+    "data_rate": 10.0,                    # [Hz] s.dataRate
     # "Calculate Duty Cycle/MATLAB Function5" mask: Maximum Number of
     # Iterations, Convergence Tolerance.
-    "max_iters": C.int("MIXER_MAX_ITERATIONS"),
-    "tol": C.MIXER_TOLERANCE,
-    "platforms": dict((p, platform_defaults(p)) for p in C.PLATFORMS),
+    "max_iters": 20,
+    "tol": 1e-6,
+    "platforms": {
+        "RED": {
+            "mass": 13.75, "inertia": 0.23543476058293455, "thrust": 0.2825,
+            "thrust_decay": 0.112,
+            "thruster_dist2CG": [84.381818181818176, -53.618181818181817,
+                                 54.381818181818176, -83.61818181818181,
+                                 53.618181818181817, -84.381818181818176,
+                                 83.61818181818181, -54.381818181818176],
+            "Q": [1, 1, 0.05, 10, 10, 1], "R": [6, 6, 6],
+        },
+        "BLACK": {
+            "mass": 13.219999999999999, "inertia": 0.24326386911004549, "thrust": 0.2825,
+            "thrust_decay": 0.112,
+            "thruster_dist2CG": [79.665658093797262, -58.334341906202717,
+                                 58.334341906202717, -79.665658093797262,
+                                 58.334341906202717, -79.665658093797262,
+                                 79.665658093797262, -58.334341906202717],
+            "Q": [1, 1, 0.05, 10, 10, 1], "R": [6, 6, 6],
+        },
+        "BLUE": {
+            "mass": 12.77, "inertia": 0.22157979686198798, "thrust": 0.2825,
+            "thrust_decay": 0.112,
+            "thruster_dist2CG": [86.267032106499599, -51.732967893500387,
+                                 57.723570869224737, -80.276429130775242,
+                                 51.732967893500387, -86.267032106499599,
+                                 80.276429130775242, -57.723570869224737],
+            "Q": [1, 1, 0.05, 10, 10, 1], "R": [6, 6, 6],
+        },
+    },
 }
 
 
@@ -316,21 +283,8 @@ def lqr_command(K, measured, desired, desired_rate):
 
 # Thruster directions in the body frame: 1, 2 push along -x, 5, 6
 # along +x, 3, 4 along +y, 7, 8 along -y.
-VEC1 = list(C.THRUSTER_DIRECTION_X)  # X
-VEC2 = list(C.THRUSTER_DIRECTION_Y)  # Y
-
-# custom_constrained_least_squares's constants, as the block has them:
-# iterations and convergence tolerance, the first step, the backtracking
-# factor and the most backtracking steps, and how the step grows (to a
-# cap) after an improving iteration or shrinks after another.
-CLS_MAX_ITERATIONS = C.int("MIXER_CLS_MAX_ITERATIONS")
-CLS_TOLERANCE = C.MIXER_CLS_TOLERANCE
-CLS_ALPHA = C.MIXER_CLS_ALPHA
-CLS_BETA = C.MIXER_CLS_BETA
-CLS_LINE_SEARCH = C.int("MIXER_CLS_LINE_SEARCH")
-CLS_STEP_GROWTH = C.MIXER_CLS_STEP_GROWTH
-CLS_STEP_CAP = C.MIXER_CLS_STEP_CAP
-CLS_STEP_SHRINK = C.MIXER_CLS_STEP_SHRINK
+VEC1 = [-1, -1, 0, 0, 1, 1, 0, 0]  # X
+VEC2 = [0, 0, 1, 1, 0, 0, -1, -1]  # Y
 
 
 def rotate_frame(Rz):
@@ -347,7 +301,7 @@ def make_h(thruster_dist2CG, F_thrusters):
 
     Block: "Generate Initial Guess/MATLAB Function".
     """
-    Mat1 = [VEC1, VEC2, [d / MM_PER_M for d in thruster_dist2CG]]
+    Mat1 = [VEC1, VEC2, [d / 1000 for d in thruster_dist2CG]]
     return matmul(Mat1, diag([f / 2 for f in F_thrusters]))
 
 
@@ -362,12 +316,12 @@ def make_h_with_decay(thruster_dist2CG, F_thrusters, thrust_decay_factor, halve=
         halve: True for MakeHWithDecay (diag(F/2)), False for
             MakeHWithDecayRecalculateForce (diag(F)).
     """
-    adjusted_dist = [d / MM_PER_M for d in thruster_dist2CG]
+    adjusted_dist = [d / 1000 for d in thruster_dist2CG]
     Mat1 = [VEC1, VEC2, adjusted_dist]
     if isinstance(thrust_decay_factor, (list, tuple)):
         factors = thrust_decay_factor
     else:
-        factors = [thrust_decay_factor] * NUM_THRUSTERS
+        factors = [thrust_decay_factor] * 8
     F_decayed = [f * e for f, e in zip(F_thrusters, factors)]
     Mat2 = diag([f / 2 for f in F_decayed] if halve else F_decayed)
     return matmul(Mat1, Mat2)
@@ -390,10 +344,10 @@ def custom_constrained_least_squares(H, b, x0):
     with a backtracking line search (the same steps and constants as
     the block).
     """
-    max_iterations = CLS_MAX_ITERATIONS
-    tolerance = CLS_TOLERANCE
-    alpha = CLS_ALPHA   # initial step size
-    beta = CLS_BETA     # backtracking factor
+    max_iterations = 100
+    tolerance = 1e-6
+    alpha = 0.01  # initial step size
+    beta = 0.5    # backtracking factor
 
     x = list(x0)
     x_prev = [v + 2 * tolerance for v in x0]
@@ -412,7 +366,7 @@ def custom_constrained_least_squares(H, b, x0):
 
         # Backtracking: the projected step, halved until it improves.
         step_size = alpha
-        for _ in range(CLS_LINE_SEARCH):
+        for _ in range(20):
             # max(0, min(1, x - step * gradient))
             x_new = [0.0 if v < 0.0 else 1.0 if v > 1.0 else v
                      for v in [xv - step_size * gv for xv, gv in zip(x, gradient)]]
@@ -428,9 +382,9 @@ def custom_constrained_least_squares(H, b, x0):
 
         # Grow the step after an improving one, else shrink it.
         if iteration > 1 and new_obj < current_obj:
-            alpha = min(alpha * CLS_STEP_GROWTH, CLS_STEP_CAP)
+            alpha = min(alpha * 1.1, 0.1)
         else:
-            alpha = alpha * CLS_STEP_SHRINK
+            alpha = alpha * 0.9
 
         x_prev = x
     return x
@@ -461,11 +415,11 @@ def check_thrust_decay(PWMs, decay_per_valve):
     # Each open thruster: its thrust share over the intervals between
     # valve closings, each with the number of valves open then.
     closing = sorted(duty)
-    thrust_decay_factor = [1.0] * NUM_THRUSTERS
-    for i in range(NUM_THRUSTERS):
+    thrust_decay_factor = [1.0] * 8
+    for i in range(8):
         if duty[i] > 0:
             share, t0 = 0.0, 0.0
-            for k in range(NUM_THRUSTERS):
+            for k in range(8):
                 t1 = min(closing[k], duty[i])
                 if t1 > t0:
                     n_open = sum(1 for d in duty if d >= t1)   # open from t0 to t1
@@ -486,7 +440,7 @@ def optimize_duty_cycle_with_decay(u_desired, x0, thruster_dist2CG, F_thrusters,
         (H_final, duty_cycles).
     """
     duty_cycles = list(x0)
-    thrust_decay_factor = [1.0] * NUM_THRUSTERS
+    thrust_decay_factor = [1.0] * 8
     prev_duty_cycles = [d + 2 * tol for d in duty_cycles]
 
     for _ in range(max_iters):
@@ -502,11 +456,10 @@ def optimize_duty_cycle_with_decay(u_desired, x0, thruster_dist2CG, F_thrusters,
 
 def thrusts(F):
     """Return the 8 thrusts from F: a list of 8, or one for all."""
-    return [float(f) for f in F] if isinstance(F, (list, tuple)) else [float(F)] * NUM_THRUSTERS
+    return [float(f) for f in F] if isinstance(F, (list, tuple)) else [float(F)] * 8
 
 
-def duty_cycles(u, theta, thruster_dist2CG, F, max_iters=DEFAULTS["max_iters"],
-                tol=DEFAULTS["tol"], thrust_decay=C.THRUST_DECAY_DEFAULT):
+def duty_cycles(u, theta, thruster_dist2CG, F, max_iters=20, tol=1e-6, thrust_decay=0.112):
     """Port of spot.control.thrusterDutyCycles.
 
     Args:
@@ -514,10 +467,8 @@ def duty_cycles(u, theta, thruster_dist2CG, F, max_iters=DEFAULTS["max_iters"],
         theta: The platform's attitude [rad].
         thruster_dist2CG: The 8 moment arms [mm].
         F: The thrusters' thrust [N] (8, or one for all).
-        max_iters, tol: The mixer's mask values (the diagram's by
-            default).
-        thrust_decay: Thrust lost per extra valve open (the default
-            until a platform's Together calibration).
+        max_iters, tol: The mixer's mask values.
+        thrust_decay: Thrust lost per extra valve open.
 
     Returns:
         (duty, Fb, H): the 8 duty cycles in [0, 1], the command in the

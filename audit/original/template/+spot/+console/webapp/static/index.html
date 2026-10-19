@@ -31,10 +31,11 @@
       <button type="button" data-page="docs" hidden title="Guides to SPOT and the lab, and a page for every function in the project, read from the code itself. Search it, and edit the code with its checks.">Documentation</button>
     </nav>
     <div id="settingsBar" class="settings-bar" role="group" aria-label="Simulation and experiment settings" hidden>
-      <span class="sb-label" title="The settings on the Simulation tab (scenario, timeline, initial conditions, platforms, control, solver), used for simulations and for building experiments. They are constants in this file in the project folder, next to every other parameter of SPOT, and written there on every change.">
-        <span class="sb-title">Settings</span><span id="settingsFile" class="sb-file mono">Constants.m</span></span>
-      <button type="button" id="simEdit" class="btn btn-sm" title="Every constant of this project's Constants.m, in its sections, with its unit and meaning: the settings, the Designer's choices, the calibration this project took and every parameter of SPOT. Edit them there; the console follows."><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></svg><span>Constants…</span></button>
-      <button type="button" id="simReset" class="btn btn-sm" title="Start from a clean slate: the template's values for every setting, the page's default view, no loaded results (you choose which)"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M4.6 15a8 8 0 1 0 1.9-8.3L4 9"/></svg><span>Reset…</span></button>
+      <span class="sb-label" title="The settings on the Simulation tab (scenario, timeline, initial conditions, platforms, control, solver), used for simulations and for building experiments. They are saved automatically to this file in the project folder.">
+        <span class="sb-title">Settings</span><span id="settingsFile" class="sb-file mono">spot_settings.json</span></span>
+      <button type="button" id="simOpen" class="btn btn-sm" title="Load settings from another file: a .json saved with Save As…, or a state saved by the old SPOT GUI (.mat). MATLAB's file dialog opens."><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Load…</span></button>
+      <button type="button" id="simSaveAs" class="btn btn-sm" title="Save a copy of the current settings to a .json file of your choice (MATLAB's file dialog opens)"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M5 3h11l3 3v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2zM8 3v5h7V3M8 21v-7h8v7"/></svg><span>Save As…</span></button>
+      <button type="button" id="simReset" class="btn btn-sm" title="Start from a clean slate: the template's default settings, the page's default view, no loaded results (you choose which)"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M4.6 15a8 8 0 1 0 1.9-8.3L4 9"/></svg><span>Reset…</span></button>
     </div>
     <div class="topstats">
       <button type="button" id="labSetupBtn" class="btn btn-sm" hidden>Lab Setup</button>
@@ -79,7 +80,7 @@
         <div class="stream-row">
           <label class="field" for="frequency">
             <span class="field-label">Frequency</span>
-            <span class="input-suffix"><input id="frequency" class="input" type="number" min="1" max="{MAX_DATA_RATE}" step="1" value="{PHASESPACE_FREQUENCY}" data-constants="max value"><span>Hz</span></span>
+            <span class="input-suffix"><input id="frequency" class="input" type="number" min="1" max="960" step="1" value="100"><span>Hz</span></span>
           </label>
           <button id="streamBtn" class="btn btn-go">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
@@ -107,7 +108,7 @@
         <details class="advanced">
           <summary>Viewer Settings</summary>
           <label class="field" for="monitorPort">
-            <span class="field-label tip" title="StreamData sends a copy of every packet to 127.0.0.1 on this port for the 3D view. SPOT's own port {PORT_PHASESPACE_CLIENT} is unaffected." data-constants="title">Viewer UDP Port</span>
+            <span class="field-label tip" title="StreamData sends a copy of every packet to 127.0.0.1 on this port for the 3D view. SPOT's own port 31534 is unaffected.">Viewer UDP Port</span>
             <span class="input-row"><input id="monitorPort" class="input" type="number" min="1024" max="65535"><button id="savePortBtn" class="btn btn-sm">Save</button></span>
           </label>
         </details>
@@ -222,7 +223,7 @@
           </div>
             </div>
           </div>
-          <span class="info-tip" title="Table {TABLE_X:2} × {TABLE_Y:2} m, origin (0, 0, 0) at the corner with the axes.&#10;Drag to orbit, right-drag to pan, scroll to zoom." data-constants="title">?</span>
+          <span class="info-tip" title="Table 3.5 × 2.4 m, origin (0, 0, 0) at the corner with the axes.&#10;Drag to orbit, right-drag to pan, scroll to zoom.">?</span>
         </div>
         <div class="legend live-only">
           <span><i style="background:#aeb5bd"></i>Chaser</span>
@@ -387,7 +388,7 @@
         <div class="card-head"><h2>Lab</h2><span id="expLabPill" class="pill">Checking…</span></div>
         <label class="field" for="expLabAddress" title="The Jetson TX2 that runs the lab console (the labConsoleAddress setting): it streams PhaseSpace to the platforms, builds and deploys the experiments, and receives the platforms' clocks, debug messages and live streams. After changing it, build again.">
           <span class="field-label">Lab Console (TX2) Address</span>
-          <input id="expLabAddress" class="input mono lab-address" spellcheck="false" autocomplete="off" placeholder="{IP_LAB_CONSOLE}" data-constants="placeholder">
+          <input id="expLabAddress" class="input mono lab-address" spellcheck="false" autocomplete="off" placeholder="192.168.1.116">
         </label>
         <p class="hint lab-url mono" id="expLabUrl"></p>
         <div class="exp-row">
@@ -399,7 +400,7 @@
         <div class="stream-row sp-top">
           <div class="field" title="The PhaseSpace data rate (dataRate in the settings, the Simulation tab's Data Rate): the cameras start at it. Locked; fixed while they stream.">
             <span class="field-label lock-label"><label for="expFrequency">Data Rate</label><button type="button" class="rate-lock" data-ratelock aria-pressed="false" aria-label="Unlock the data rate"></button></span>
-            <span class="input-suffix"><input id="expFrequency" class="input" type="number" min="1" max="{MAX_DATA_RATE}" step="1" value="{DATA_RATE}" data-constants="max value"><span>Hz</span></span>
+            <span class="input-suffix"><input id="expFrequency" class="input" type="number" min="1" max="960" step="1" value="10"><span>Hz</span></span>
           </div>
           <button type="button" id="expCameras" class="btn btn-sm" disabled>Start Cameras</button>
         </div>
@@ -536,7 +537,7 @@
     <div id="calRoot" class="cal-scroll">
       <div class="cal-head">
         <div>
-          <h2 class="tip" title="Measurements of the lab that make simulations behave as the experiments do. The lab console runs them and keeps the lab's calibration; each project takes the numbers into its Constants.m (LAB_*), which its simulations use.">Calibration</h2>
+          <h2 class="tip" title="Measurements of the lab that make simulations behave as the experiments do. The lab console runs them and keeps the lab's calibration; each project keeps a copy (spot_calibration.json, in the project folder), which its simulations use.">Calibration</h2>
         </div>
         <div class="segmented cal-sections" role="group" aria-label="Calibration">
           <button type="button" data-calsec="table" class="active">Table Slope</button>
@@ -557,8 +558,8 @@
           <span id="visionPill" class="pill">Checking…</span>
         </div>
         <div class="vision-addr">
-          <label class="field-label" for="visionHost" title="The Jetson Orin's address (SPOT Vision, port {PORT_VISION})" data-constants="title">Orin</label>
-          <input id="visionHost" class="input mono" spellcheck="false" autocomplete="off" placeholder="{IP_ORIN}" data-constants="placeholder">
+          <label class="field-label" for="visionHost" title="The Jetson Orin's address (SPOT Vision, port 8090)">Orin</label>
+          <input id="visionHost" class="input mono" spellcheck="false" autocomplete="off" placeholder="192.168.1.115">
           <button type="button" id="visionSave" class="btn btn-sm">Save</button>
           <button type="button" id="visionRefresh" class="btn btn-sm" title="Look for cameras again">↻</button>
         </div>
@@ -707,31 +708,6 @@
   </dialog>
 
 
-  <dialog id="constantsDialog" class="dialog constants-dialog" aria-labelledby="constantsTitle">
-    <div class="dialog-inner">
-      <div class="dialog-head">
-        <div class="const-title"><h2 id="constantsTitle">Constants</h2><span id="constFile" class="hint mono"></span></div>
-        <div class="const-tools">
-          <input type="search" id="constSearch" class="input" placeholder="Search names, values and comments" aria-label="Search the constants">
-          <label class="toggle" title="Only the values edited here and not saved yet"><input type="checkbox" id="constEdited"><span></span>Edited Only</label>
-          <button type="button" id="constClose" class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
-        </div>
-      </div>
-      <div class="const-body">
-        <nav id="constNav" class="const-nav" aria-label="Sections of Constants.m"></nav>
-        <div id="constList" class="const-list"></div>
-      </div>
-      <div class="dialog-foot">
-        <span id="constStatus" class="hint"></span>
-        <div>
-          <button type="button" id="constEditor" class="btn btn-sm" title="Open the file itself in MATLAB's editor">Open in MATLAB Editor</button>
-          <button type="button" id="constRevert" class="btn" title="Forget the values edited here">Revert</button>
-          <button type="button" id="constSave" class="btn btn-primary" title="Write the edited values into Constants.m (only those lines change; their comments stay), and apply them">Save Changes</button>
-        </div>
-      </div>
-    </div>
-  </dialog>
-
   <dialog id="resetDialog" class="dialog reset-dialog">
     <form method="dialog" class="dialog-inner">
       <div class="dialog-head">
@@ -741,14 +717,14 @@
       <div class="reset-body">
         <p class="hint">Start from a clean slate. Choose what goes back to its default:</p>
         <label class="reset-opt"><input type="checkbox" data-reset="settings" checked>
-          <span><b>Simulation Settings</b><span class="hint">Scenario, timeline, initial conditions, mass properties, control and solver, as the repository's template/Constants.m has them
-            (the project must sit in its projects folder). The diagram stays selected. A copy of the current Constants.m is kept in .spot_cache first.</span></span></label>
+          <span><b>Simulation Settings</b><span class="hint">Scenario, timeline, initial conditions, mass properties, control and solver, as in the template.
+            The diagram stays selected. The current settings are kept in .spot_cache, so Load… can bring them back.</span></span></label>
         <label class="reset-opt"><input type="checkbox" data-reset="view" checked>
           <span><b>Page and View</b><span class="hint">The tab shown, 3D view options, initial conditions shown, playback speed, and the Results tab's plots.
             The page reloads. (The MATLAB command history is kept.)</span></span></label>
         <label class="reset-opt"><input type="checkbox" data-reset="results" checked>
           <span><b>Loaded Results</b><span class="hint">Closes the datasets loaded for plotting and comparing. Nothing is deleted from Saved Data.</span></span></label>
-        <p class="hint">The other constants in Constants.m (your own values, the Designer, the calibration) and the files in Saved Data are not touched.</p>
+        <p class="hint">Your own SPOT_User_Parameters.m and the files in Saved Data are not touched.</p>
       </div>
       <div class="dialog-foot">
         <div>
@@ -777,7 +753,7 @@
           <li>The program on the platforms keeps the rate it was built with: after a change, build again, and start the
             cameras at the new rate before you run it.</li>
         </ul>
-        <p class="hint" data-constants="text">Keep the rate the experiment was designed for ({DATA_RATE} Hz by default); it is a whole number of Hz, 1 to {MAX_DATA_RATE}.
+        <p class="hint">Keep the rate the experiment was designed for (10 Hz by default); it is a whole number of Hz, 1 to 960.
           The lock comes back when the page is reloaded.</p>
       </div>
       <div class="dialog-foot">
@@ -849,7 +825,7 @@
       <div class="reset-body">
         <p>The lab console has a newer calibration than this project:</p>
         <ul id="calSyncList" class="cal-sync-list"></ul>
-        <p class="hint">Updating writes its numbers into this project's Constants.m (LAB_*); the next simulation uses it (the
+        <p class="hint">Updating copies it into this project's spot_calibration.json; the next simulation uses it (the
           table's slope, the thrusters' thrust, the arm). Values you have overridden are kept. Not Now keeps this
           project's, and doesn't ask again until the lab's changes.</p>
         <label class="reset-opt"><input type="checkbox" id="calSyncNever"><span><b>Never Ask Again</b><span class="hint">For this project.

@@ -6,12 +6,11 @@
 - **In the settings and the consoles:** angles in **degrees** (the initial and home poses, the arm's initial pose), rates in Hz. `spot.params.apply` converts them when it puts them in the workspace.
 - **Signal names carry their unit:** `RED_Px_m`, `RED_Rz_rad`, `RED_Vx_mpers` (m/s), `RED_Ax_mpers2` (m/s²), `RED_RzD_radpers`, `RED_Fx_N`, `RED_Tz_Nm` ([Logged Signals](page:logged-signals)).
 - **In the code's comments,** units are in brackets: `[N m]`, `[rad/s]`, `[pulses]` ([The Coding Standard](page:dev-code-standard)).
-- **The arm's servos** have units of their own (encoder pulses, 0.229 rev/min, 3.36 mA; `Constants.VEL_UNIT_RPM`, `CURRENT_UNIT`): [Dynamixel Units](page:math-dynamixel).
-- **Every such number** (the table, the units, the addresses, the defaults) is a property of `Constants` ([Constants](page:dev-constants)); the guides name it in brackets.
+- **The arm's servos** have units of their own (encoder pulses, 0.229 rev/min, 3.36 mA): [Dynamixel Units](page:math-dynamixel).
 
 ## Frames
 
-**The table frame** (the inertial frame): the origin at the corner of the table top where the 3D view draws its axes, +x along the 3.51155 m side, +y along the 2.41935 m side (about 3.5 × 2.4 m; `TABLE_X`, `TABLE_Y`), +z up. PhaseSpace reports poses in this frame, and the controllers' states, desired states and commanded forces `[Fx Fy Tz]` are all in it. A platform's attitude θ is measured from +x, counter-clockwise seen from above, wrapped to (−π, π].
+**The table frame** (the inertial frame): the origin at the corner of the table top where the 3D view draws its axes, +x along the 3.51155 m side, +y along the 2.41935 m side (about 3.5 × 2.4 m), +z up. PhaseSpace reports poses in this frame, and the controllers' states, desired states and commanded forces `[Fx Fy Tz]` are all in it. A platform's attitude θ is measured from +x, counter-clockwise seen from above, wrapped to (−π, π].
 
 **A platform's body frame:** the origin at its centre of gravity, +x out of its front face (the face with the Chaser's ZED2 camera; the control panel is on −x), +y to its left, +z up. The thrusters push along the body's ±x and ±y, so the thruster mixer rotates the commanded force into this frame before choosing the valves ([The Thruster Mixer](page:math-mixer)). Docking parts and solar panels are placed on the +x, +y and −y faces ([The Designer](page:tab-designer)).
 
@@ -21,9 +20,9 @@
 
 | In the code | On screen | Number (`WhoAmI`) | Address |
 |---|---|---|---|
-| `RED` | Chaser | 1 (`WHO_AM_I_RED`) | `192.168.1.110` (`IP_RED`) |
-| `BLACK` | Target | 2 (`WHO_AM_I_BLACK`) | `192.168.1.111` (`IP_BLACK`) |
-| `BLUE` | Obstacle | 3 (`WHO_AM_I_BLUE`) | `192.168.1.112` (`IP_BLUE`) |
+| `RED` | Chaser | 1 | `192.168.1.110` |
+| `BLACK` | Target | 2 | `192.168.1.111` |
+| `BLUE` | Obstacle | 3 | `192.168.1.112` |
 | `ARM` | Arm (on the Chaser) | | |
 
 `WhoAmI` is 0 in a simulation, where all three platforms run in one diagram.

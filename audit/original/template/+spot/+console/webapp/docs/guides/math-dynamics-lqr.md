@@ -14,7 +14,7 @@ The controller runs in discrete time, so the model is discretised with a zero-or
 
 $$x_{k+1} = A_d x_k + B_d u_k, \qquad A_d = \begin{bmatrix} I & T_s I \\ 0 & I \end{bmatrix}, \quad B_d = \begin{bmatrix} \tfrac{T_s^2}{2} M^{-1} \\ T_s M^{-1} \end{bmatrix}, \quad M = \mathrm{diag}(m, m, I_{zz}).$$
 
-$T_s$ is the **PhaseSpace period** `dataRate` (1/10 s by default, `Constants.DATA_RATE`), not the controller's step: the measurements only change at the camera rate, so that is the rate the loop effectively runs at. The matrices are `A_d_RED`, `B_d_RED`, … in the workspace.
+$T_s$ is the **PhaseSpace period** `dataRate` (1/10 s by default), not the controller's step: the measurements only change at the camera rate, so that is the rate the loop effectively runs at. The matrices are `A_d_RED`, `B_d_RED`, … in the workspace.
 
 ## The LQR gain
 
@@ -30,7 +30,7 @@ and $P$ solves the discrete algebraic Riccati equation
 
 $$P = A_d^T P A_d - A_d^T P B_d (R + B_d^T P B_d)^{-1} B_d^T P A_d + Q .$$
 
-MATLAB's `dlqr` does this (`K = dlqr(A_d, B_d, diag(Q), diag(R))`), giving the 3×6 gain `K_<PLATFORM>`. Bigger $Q$ entries make the controller care more about that state (faster, stronger), bigger $R$ entries make it thriftier with that input. The defaults, $Q = [1\ 1\ 0.05\ 10\ 10\ 1]$ and $R = [6\ 6\ 6]$ (`LQR_Q`, `LQR_R`), favour smooth motion over speed.
+MATLAB's `dlqr` does this (`K = dlqr(A_d, B_d, diag(Q), diag(R))`), giving the 3×6 gain `K_<PLATFORM>`. Bigger $Q$ entries make the controller care more about that state (faster, stronger), bigger $R$ entries make it thriftier with that input. The defaults, $Q = [1\ 1\ 0.05\ 10\ 10\ 1]$ and $R = [6\ 6\ 6]$, favour smooth motion over speed.
 
 ## The control law in the diagram
 

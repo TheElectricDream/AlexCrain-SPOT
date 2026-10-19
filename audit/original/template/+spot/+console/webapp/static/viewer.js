@@ -1,7 +1,7 @@
 // 3D view of the granite table, the spacecraft and the LEDs (three.js, z axis up, metres).
-// Table frame: (0, 0, 0) is one corner of the table top, +x runs along the long side (TABLE_X),
-// +y along the short side (TABLE_Y), +z up. PhaseSpace data arrives in this frame (converted
-// mm -> m by app.py), and so do simulation results (the diagrams' Px, Py, Rz).
+// Table frame: (0, 0, 0) is one corner of the table top, +x runs along the 3.5 m side,
+// +y along the 2.4 m side, +z up. PhaseSpace data arrives in this frame (converted mm -> m by
+// app.py), and so do simulation results (the diagrams' Px, Py, Rz).
 //
 // One viewer is shared by all pages (app.js moves it into the page shown), with three layers:
 //   live    the platforms and LEDs PhaseSpace sees
@@ -22,36 +22,21 @@ import { LineSegmentsGeometry } from './vendor/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from './vendor/lines/LineMaterial.js';
 import { armPoints, loadCad, mountPose, TABLE_URL } from './cad.js';
 import { COLORS, LINE_COLORS, LED_COLORS, TEXT_COLORS, platformName } from './platforms.js';
-import { heightCanvas, tickMarks } from './calviz.js';
-import { constant } from './constants.js';
+import { heightCanvas } from './calviz.js';
 
-// The granite table [m]: its sides (TABLE_X, TABLE_Y) and the top's thickness (TABLE_THICKNESS,
-// its CAD), read when drawn since the constants arrive with the page's state, after this module
-// loads; and the platforms' body, 2 BODY_HALF_SIDE across (paths trail its centre of mass, at
-// mid-height, BODY.size / 2).
-export const TABLE = {
-  get x() {
-    return constant('TABLE_X');
-  },
-  get y() {
-    return constant('TABLE_Y');
-  },
-  get thickness() {
-    return constant('TABLE_THICKNESS');
-  },
-};
-const BODY = {
-  get size() {
-    return 2 * constant('BODY_HALF_SIDE');
-  },
-};
+export const TABLE = { x: 3.5, y: 2.4, thickness: 0.33 };   // the granite (0.33 m thick, its CAD)
+export const CRAFT_SIZE = 0.3;
 const BODY_AXIS = 0.34;   // length of each body axis from the cube's centre [m]
+
+// Paths trail the platforms' centre of mass, at mid-height of the body.
+const PATH_Z = CRAFT_SIZE / 2;
 const PATH_WIDTH = 3.5;   // [px] paths: traced behind the platforms as they move
 
 // The platforms' colours (platforms.js): the Chaser (RED) silver, the Target (BLACK) gold, the
 // Obstacle (BLUE) blue.
 export const CRAFT_COLORS = { RED: COLORS.RED, BLACK: COLORS.BLACK, BLUE: COLORS.BLUE };
 export { LINE_COLORS, LED_COLORS };
+const NUM_LED_SLOTS = 32;
 
 // Dash and gap [m] of each overlaid result's paths, in the order they were added.
 const OVERLAY_DASHES = [[0.06, 0.035], [0.02, 0.025], [0.12, 0.04], [0.04, 0.06]];
@@ -70,24 +55,17 @@ const ZED_BOX = [0.043, 0.1753, 0.0303];   // the housing [m]: depth, width, hei
 const ZED_INTRINSICS = { width: 1280, height: 720, fx: 528, fy: 528, cx: 640, cy: 360 };
 const ZED_VFOV = 2 * Math.atan(ZED_INTRINSICS.cy / ZED_INTRINSICS.fy) * 180 / Math.PI;   // 68.6 deg
 
-/**
- * The 8 thrusters in the body frame (docs/images/ThrusterConfig.png; the mixer's H matrix in
- * spot.control.thrusterDutyCycles): the nozzle tip [x, y] [m] (NOZZLE_PROTRUSION along the
- * face's axis, THRUSTER_ARM across it, THRUSTER_INSET in from the edges) and the direction the
- * gas leaves in (the platform is pushed the other way). They sit NOZZLE_HEIGHT above the table:
- * the MJ4 nozzles, in the side panels' bottom notches.
- * @return {!Array<!Array>} [[nozzle, direction], ...] for T1 to T8.
- */
-function thrusterNozzles() {
-  const p = constant('NOZZLE_PROTRUSION');
-  const e = constant('THRUSTER_ARM');
-  return [
-    [[p, e], [1, 0]], [[p, -e], [1, 0]],         // T1, T2 push along -x
-    [[e, -p], [0, -1]], [[-e, -p], [0, -1]],     // T3, T4 push along +y
-    [[-p, -e], [-1, 0]], [[-p, e], [-1, 0]],     // T5, T6 push along +x
-    [[-e, p], [0, 1]], [[e, p], [0, 1]],         // T7, T8 push along -y
-  ];
-}
+// The 8 thrusters in the body frame (docs/images/ThrusterConfig.png; the mixer's H matrix in
+// spot.control.thrusterDutyCycles): nozzle [x, y] [m], 81 mm in from the edges, and the
+// direction the gas leaves in (the platform is pushed the other way).
+const THRUSTER_NOZZLES = [
+  [[0.1547, 0.069], [1, 0]], [[0.1547, -0.069], [1, 0]],       // T1, T2 push along -x
+  [[0.069, -0.1547], [0, -1]], [[-0.069, -0.1547], [0, -1]],   // T3, T4 push along +y
+  [[-0.1547, -0.069], [-1, 0]], [[-0.1547, 0.069], [-1, 0]],   // T5, T6 push along +x
+  [[-0.069, 0.1547], [0, 1]], [[0.069, 0.1547], [0, 1]],       // T7, T8 push along -y (nozzle tips)
+];
+// [m] above the table: the MJ4 nozzles, in the side panels' bottom notches.
+const NOZZLE_Z = 0.0276;
 
 // A text label in the 3D view (a CSS2D object), with its own background and colour if given.
 function label(text, className, background, color) {
@@ -411,14 +389,14 @@ export class Viewer {
     new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 }));
     this.scene.add(outline);
 
-    // Distance ticks along the two edges that meet at the origin (every 0.5 m, then the side).
-    for (const x of tickMarks(TABLE.x).filter(v => v > 0)) {
-      const t = label(x === TABLE.x ? `${x.toFixed(2)} m` : x.toFixed(1), 'tick-label');
+    // Distance ticks along the two edges that meet at the origin.
+    for (let x = 0.5; x <= TABLE.x + 1e-6; x += 0.5) {
+      const t = label(x >= TABLE.x - 1e-6 ? `${TABLE.x} m` : x.toFixed(1), 'tick-label');
       t.position.set(x, -0.09, 0);
       this.scene.add(t);
     }
-    for (const y of tickMarks(TABLE.y).filter(v => v > 0)) {
-      const t = label(y === TABLE.y ? `${y.toFixed(2)} m` : y.toFixed(1), 'tick-label');
+    for (const y of [0.5, 1.0, 1.5, 2.0, TABLE.y]) {
+      const t = label(y === TABLE.y ? `${TABLE.y} m` : y.toFixed(1), 'tick-label');
       t.position.set(-0.11, y, 0);
       this.scene.add(t);
     }
@@ -452,13 +430,13 @@ export class Viewer {
   _buildCraft(name, ghost = false, tagText = '') {
     const color = CRAFT_COLORS[name];
     const group = new THREE.Group();
-    const geo = new THREE.BoxGeometry(BODY.size, BODY.size, BODY.size);
+    const geo = new THREE.BoxGeometry(CRAFT_SIZE, CRAFT_SIZE, CRAFT_SIZE);
     const opacity = ghost === 'overlay' ? 0.1 : ghost ? 0.45 : 1;
     const metal = name !== 'BLUE';   // the Chaser silver, the Target gold
     const box = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color, roughness: metal ? 0.35 : 0.5, metalness: metal ? 0.45 : 0.15,
       transparent: Boolean(ghost), opacity, depthWrite: !ghost }));
-    box.position.z = BODY.size / 2;
+    box.position.z = CRAFT_SIZE / 2;
     box.castShadow = !ghost;
     box.receiveShadow = true;
     const edgeMat = ghost === 'overlay'
@@ -470,11 +448,11 @@ export class Viewer {
     if (ghost === 'overlay') {
       edges.computeLineDistances();
     }
-    edges.position.z = BODY.size / 2;
+    edges.position.z = CRAFT_SIZE / 2;
 
     // Body axes from the centre of the cube (x red, y green, z blue), so the attitude is visible.
     const axes = this._bodyAxes(ghost === 'overlay' ? 0.7 : 1);
-    axes.position.z = BODY.size / 2;
+    axes.position.z = CRAFT_SIZE / 2;
 
     // The name tag, above the +Z label.
     const shown = platformName(name);
@@ -485,7 +463,7 @@ export class Viewer {
     if (ghost) {
       tag.element.classList.add(ghost === 'overlay' ? 'overlay' : 'ghost');
     }
-    tag.position.z = BODY.size / 2 + BODY_AXIS + (ghost === 'overlay' ? 0.2 : 0.12);
+    tag.position.z = CRAFT_SIZE / 2 + BODY_AXIS + (ghost === 'overlay' ? 0.2 : 0.12);
     tag.center.set(0.5, 1);
 
     // The axes, the tag and the ZED2 housing are hidden while the ZED2 Viewpoint looks out from
@@ -514,10 +492,10 @@ export class Viewer {
       ? { transparent: true, opacity: Math.max(opacity, 0.35), depthWrite: false }
       : {};
     const [front, ly, lz] = ZED_LENSES.right;
-    const proud = front - BODY.size / 2;   // the part ahead of the cube's face
+    const proud = front - CRAFT_SIZE / 2;   // the part ahead of the cube's face
     const housing = new THREE.Mesh(new THREE.BoxGeometry(proud, ZED_BOX[1], ZED_BOX[2]),
       new THREE.MeshStandardMaterial({ color: 0x2a2d32, roughness: 0.45, metalness: 0.4, ...see }));
-    housing.position.set(BODY.size / 2 + proud / 2,
+    housing.position.set(CRAFT_SIZE / 2 + proud / 2,
       (ZED_LENSES.right[1] + ZED_LENSES.left[1]) / 2, lz);
     housing.castShadow = opacity === 1;
     group.add(housing);
@@ -534,7 +512,7 @@ export class Viewer {
   }
 
   // Three arrows from the origin, long enough to stick out of the cube (whose half-size is
-  // BODY.size / 2): +x red, +y green, +z blue, with +X/+Y/+Z beyond the tips, as the table's
+  // CRAFT_SIZE / 2): +x red, +y green, +z blue, with +X/+Y/+Z beyond the tips, as the table's
   // own axes (the labels follow the Labels switch).
   _bodyAxes(opacity = 1) {
     const group = new THREE.Group();
@@ -559,7 +537,7 @@ export class Viewer {
     return group;
   }
 
-  // PACKET_LEDS LEDs, each a dot with a halo, a drop line to the table (scaled to reach it)
+  // NUM_LED_SLOTS LEDs, each a dot with a halo, a drop line to the table (scaled to reach it)
   // and its number.
   _buildLeds() {
     const core = new THREE.SphereGeometry(0.012, 20, 14);
@@ -567,7 +545,7 @@ export class Viewer {
     const drop = new THREE.BufferGeometry()
       .setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
     this.leds = [];
-    for (let k = 0; k < constant('PACKET_LEDS'); k++) {
+    for (let k = 0; k < NUM_LED_SLOTS; k++) {
       const coreMat = new THREE.MeshBasicMaterial({ color: LED_COLORS.none });
       const haloMat = new THREE.MeshBasicMaterial({
         color: LED_COLORS.none, transparent: true, opacity: 0.25,
@@ -707,7 +685,7 @@ export class Viewer {
       arr.copyWithin(0, 6 * half, 6 * this.live.max);
       p.n = half;
     }
-    arr.set([p.last[0], p.last[1], BODY.size / 2, x, y, BODY.size / 2], 6 * p.n);
+    arr.set([p.last[0], p.last[1], PATH_Z, x, y, PATH_Z], 6 * p.n);
     p.n++;
     p.last = [x, y];
     p.seg.needsUpdate = true;
@@ -813,7 +791,7 @@ export class Viewer {
   // run from their joint toward the next, stretched to the arm's own link length.
   _setArm(arm, pts) {
     arm.pts = pts;
-    const z = BODY.size * 0.55;
+    const z = CRAFT_SIZE * 0.55;
     const pos = arm.line.geometry.attributes.position;
     pts.forEach(([x, y], k) => {
       pos.setXYZ(k, x, y, z);
@@ -978,7 +956,7 @@ export class Viewer {
     // The platform's body frame from the centre of its body, as on the other pages (the Axes
     // switch shows or hides it).
     const axes = this._bodyAxes();
-    axes.position.z = BODY.size / 2;
+    axes.position.z = CRAFT_SIZE / 2;
     group.add(axes);
 
     // The arm on its mount, at its initial pose: links and the cone end effector, joint to joint.
@@ -1146,7 +1124,7 @@ export class Viewer {
       const upto = new Int32Array(c.x.length);
       c.x.forEach((x, i) => {
         if (x != null && c.y[i] != null) {
-          pts.push(x, c.y[i], BODY.size / 2);
+          pts.push(x, c.y[i], PATH_Z);
         }
         upto[i] = pts.length / 3;
       });
@@ -1316,10 +1294,10 @@ export class Viewer {
   // side (below it seen from the top, in front of it in 3D), clear of the axes: the outer group
   // moves, only the body inside rotates.
   _makeMarker(name, text, opacity = 0.22) {
-    const h = BODY.size / 2;
+    const h = CRAFT_SIZE / 2;
     const color = LINE_COLORS[name];
     const group = new THREE.Group();
-    const fill = new THREE.Mesh(new THREE.PlaneGeometry(BODY.size, BODY.size),
+    const fill = new THREE.Mesh(new THREE.PlaneGeometry(CRAFT_SIZE, CRAFT_SIZE),
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
     fill.position.z = 0.002;
     const outline = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
@@ -1386,7 +1364,7 @@ export class Viewer {
   _buildGoalLayer() {
     this.goal = {
       group: new THREE.Group(), markers: {}, lines: {}, editable: {}, pickable: false,
-      margin: BODY.size / 2, onDrag: null, onPick: null,
+      margin: CRAFT_SIZE / 2, onDrag: null, onPick: null,
     };
     this.scene.add(this.goal.group);
     for (const name of Object.keys(CRAFT_COLORS)) {
@@ -1479,9 +1457,9 @@ export class Viewer {
         color: 0xcfe8ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending,
         depthWrite: false, side: THREE.DoubleSide,
       });
-      for (const [[x, y], [dx, dy]] of thrusterNozzles()) {
+      for (const [[x, y], [dx, dy]] of THRUSTER_NOZZLES) {
         const cone = new THREE.Mesh(geo, mat);
-        cone.position.set(x, y, constant('NOZZLE_HEIGHT'));
+        cone.position.set(x, y, NOZZLE_Z);
         cone.rotation.z = Math.atan2(dx, -dy);
         cone.visible = false;
         plumes.add(cone);
@@ -1612,7 +1590,7 @@ export class Viewer {
           Math.atan2(p.y - m.group.position.y, p.x - m.group.position.x) - this.drag.angle0;
         m.body.rotation.z = m.att;
       } else {
-        const h = this.drag.kind === 'goal' ? this.goal.margin : BODY.size / 2;
+        const h = this.drag.kind === 'goal' ? this.goal.margin : CRAFT_SIZE / 2;
         m.group.position.x = Math.min(Math.max(p.x - this.drag.offset.x, h), TABLE.x - h);
         m.group.position.y = Math.min(Math.max(p.y - this.drag.offset.y, h), TABLE.y - h);
       }

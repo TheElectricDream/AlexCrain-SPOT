@@ -8,7 +8,6 @@ Every file in `+spot` follows one written standard, [`+spot/CODE_TEMPLATE.md`](f
 - **A short comment over every block that does one thing**: what it does, with units, and the reason only when it isn't obvious. Sections (`%%` in MATLAB, a one-line title comment in Python and JavaScript) split a function into its main parts; the Reference shows them as headings.
 - **One statement per line**, at most 100 characters (Python: 99 for code, 72 for comments and docstrings).
 - **Named constants with their units**, no unexplained numbers: `CURRENT_UNIT_A = 3.36e-3;   % [A] per current unit`.
-- **Every parameter in one place**: a physical constant, a lab or hardware fact, a default, a limit or a tuning value is a property of `Constants` (`Constants.m`), read as `Constants.NAME` in MATLAB and the diagram, `C.NAME` in Python and `constant('NAME')` in the page; a local `%% Constants` section holds only the program's own values ([Constants: Every Parameter in One Place](page:dev-constants)).
 - **No names that shadow built-in functions** (`path`, `input`, `max`, `table`, ... in MATLAB; `list`, `type`, `id`, ... in Python).
 - **Python 3.6** for everything the lab console (TX2) runs.
 

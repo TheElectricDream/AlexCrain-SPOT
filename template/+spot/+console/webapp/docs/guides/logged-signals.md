@@ -34,13 +34,13 @@ Every step, the [Data Logger Subsystem](page:diagram-data-logger) records the **
 | 26 | `RED_Py_Path_m` | 1 | m | `RED_Path(2)` |
 | 27 | `RED_Rz_Path_rad` | 1 | rad | `RED_Path(3)` |
 | 28 | `ARM_Control_Mode` | 1 | – | `ARM_Control_Mode`: the arm controller that ran (0 off, 1 position, 2 custom, 3 velocity) |
-| 29 | `ARM_Shoulder_Command` | 1 | PWM (885 = 100 %, `Constants.PWM_FULL`) | `ARM_Controls(1)`: the shoulder's PWM command |
+| 29 | `ARM_Shoulder_Command` | 1 | PWM (885 = 100 %) | `ARM_Controls(1)`: the shoulder's PWM command |
 | 30 | `ARM_Elbow_Command` | 1 | N·m | `ARM_Controls(2)` |
 | 31 | `ARM_Wrist_Command` | 1 | N·m | `ARM_Controls(3)` |
-| 32 | `ARM_Rz_Shoulder_rad` | 1 | rad | `ARM_Measured_States(1)`: the shoulder angle (0 = straight out; 2π/4096 steps, `PULSES_PER_REV`) |
+| 32 | `ARM_Rz_Shoulder_rad` | 1 | rad | `ARM_Measured_States(1)`: the shoulder angle (0 = straight out; 2π/4096 steps) |
 | 33 | `ARM_Rz_Elbow_rad` | 1 | rad | `ARM_Measured_States(2)` |
 | 34 | `ARM_Rz_Wrist_rad` | 1 | rad | `ARM_Measured_States(3)` |
-| 35 | `ARM_RzD_Shoulder_radpers` | 1 | rad/s | `ARM_Measured_States(4)`: the shoulder rate (0.229 rpm steps, `VEL_UNIT_RPM`) |
+| 35 | `ARM_RzD_Shoulder_radpers` | 1 | rad/s | `ARM_Measured_States(4)`: the shoulder rate (0.229 rpm steps) |
 | 36 | `ARM_RzD_Elbow_radpers` | 1 | rad/s | `ARM_Measured_States(5)` |
 | 37 | `ARM_RzD_Wrist_radpers` | 1 | rad/s | `ARM_Measured_States(6)` |
 | 38 | `ARM_Shoulder_Path` | 1 | rad, rad/s or PWM | `ARM_Path(1)`: the arm controllers input (angle, speed or PWM by mode) |
