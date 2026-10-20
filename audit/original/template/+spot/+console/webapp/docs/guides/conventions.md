@@ -10,7 +10,7 @@
 
 ## Frames
 
-**The table frame** (the inertial frame): the origin at the corner of the table top where the 3D view draws its axes, +x along the 3.5 m side, +y along the 2.4 m side, +z up. PhaseSpace reports poses in this frame, and the controllers' states, desired states and commanded forces `[Fx Fy Tz]` are all in it. A platform's attitude θ is measured from +x, counter-clockwise seen from above, wrapped to (−π, π].
+**The table frame** (the inertial frame): the origin at the corner of the table top where the 3D view draws its axes, +x along the 3.51155 m side, +y along the 2.41935 m side (about 3.5 × 2.4 m), +z up. PhaseSpace reports poses in this frame, and the controllers' states, desired states and commanded forces `[Fx Fy Tz]` are all in it. A platform's attitude θ is measured from +x, counter-clockwise seen from above, wrapped to (−π, π].
 
 **A platform's body frame:** the origin at its centre of gravity, +x out of its front face (the face with the Chaser's ZED2 camera; the control panel is on −x), +y to its left, +z up. The thrusters push along the body's ±x and ±y, so the thruster mixer rotates the commanded force into this frame before choosing the valves ([The Thruster Mixer](page:math-mixer)). Docking parts and solar panels are placed on the +x, +y and −y faces ([The Designer](page:tab-designer)).
 

@@ -14,6 +14,16 @@ What is mounted on each platform: the docking cone, the arm, the solar panels, a
 
 On the local console, the Chaser's **Arm** and the Simulation tab's **Arm** platform are one choice: picking the arm here ticks the Arm in the Scenario and sets its mount in the settings (`mass.arm.mount`); ticking the Arm there mounts it here (replacing the cone). Dropping it puts the male cone back.
 
+## Runs flown with the arm
+
+A run keeps its arm after the design changes: the last simulation, a loaded result or an experiment may have flown the arm while the Chaser here now carries a cone. The 3D view draws the Chaser as designed, so it hides such a run's arm (its links would otherwise hang off the cone), and the first time the run is replayed (on the Simulation or Experiment tab) the page asks whether that was intended:
+
+- **Show the Arm**: draws the arm on these runs anyway, with its mount at the place the run had it (the nearest of the six places to the run's shoulder). The design doesn't change.
+- **Not Now**: keeps it hidden on these runs; the next run flown with the arm asks again.
+- **Never Ask Again**: always hides it, without asking, on this browser (`spot.designer.armNeverAsk` in its local storage). While that is set, the Chaser's card here has **Ask Again**, which turns asking back on and asks about the runs on show.
+
+The prompt comes from [viewer.js](file:viewer.js), which hides the arm and reports each run once (`armChoice`), and [designer.js](file:designer.js), which asks.
+
 ## On the lab console
 
 The same tab, without the simulation link: it decides what the lab console's 3D view draws when **Use CAD** is on. Keep it in step with yours with the Lab Console card above.

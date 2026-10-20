@@ -43,4 +43,4 @@ A PhaseSpace X2E motion-capture system: ten cameras around the table track the L
 
 ## The cameras on the Orin
 
-The Orin hosts the vision sensors the Vision tab streams: the ZED 2i stereo camera, the Intel RealSense L515 LiDAR camera, the iniVation DVXplorer event camera, and any USB camera.
+The Orin hosts the vision sensors the Vision tab streams: the ZED 2i stereo camera, the Intel RealSense L515 LiDAR camera, the iniVation DVXplorer event camera, the ICI 9320P thermal camera, and any USB camera.

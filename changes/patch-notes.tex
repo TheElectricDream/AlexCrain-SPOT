@@ -91,6 +91,7 @@ In the last pre-release we said we would be moving towards a more version-contro
     \item \textbf{Change 9:} Added Previous Runs to the Calibration tab. Any saved table, thruster or Together run can be fitted again without flying the platform, for example with another table model. Runs that were stopped early (out of air, say) are flagged.
     \item \textbf{Change 10:} Added a Vision tab for the cameras plugged into the Jetson Orin (ZED 2i, RealSense L515, DVXplorer and any USB camera), served by the new SPOT Vision service (+console/vision). Each camera streams straight from the Orin to the page, one at a time, with the settings its own library offers. A camera is only opened while it streams, so experiments can use it the rest of the time.
     \item \textbf{Change 11:} The arm calibration now warns about unreliable speed sweeps and one-sided inertia results, and its setup check scans the bus for the servos.
+    \item \textbf{Change 12:} The Vision tab streams the ICI 9320P thermal camera, through its new open-source SDK (ICI9320P), which SPOT Vision carries with it. The view shows the sensor's raw counts (there is no radiometric calibration yet) over a choice of palettes, with an automatic or fixed range, and skips the frames the camera sends while its shutter recalibrates it. The camera's housing temperature is shown too. On the Orin it needs python-libusb1, pyusb and a udev rule, which deploy\_orin.sh checks for.
 \end{itemize}
 
 % Simulink Changes Section
@@ -147,6 +148,9 @@ In the last pre-release we said we would be moving towards a more version-contro
     \item \textbf{Bug 14:} Fixed the local console sometimes showing the lab console's old state after connecting, until something on the lab console changed.
     \item \textbf{Bug 15:} Fixed two changes to the calibration file made at the same moment (an update and a run's result, say) losing one of them.
     \item \textbf{Bug 16:} Fixed the Simulation tab offering the lab's calibration again and again when the lab console's newest part was an arm measured with the motor current, which a project never takes. The Calibration tab's example arm also now shows the bench-calibrated defaults and calibrate\_arm.py's 2.5~s position steps.
+    \item \textbf{Bug 17:} Fixed the 3D view drawing a run's arm links after the Spacecraft Designer's Chaser had swapped the arm for a docking cone. A run's arm now shows only while the Chaser carries it; otherwise the page asks whether that was intended and whether to show it anyway (with its mount where the run had it), not now, or never again.
+    \item \textbf{Bug 18:} Fixed the Chaser's ZED2 model being added again on every change to the design, which left a stray copy in the 3D view once Use CAD was switched off.
+    \item \textbf{Bug 19:} Fixed the Vision tab showing a camera's old settings after a change, for the DVXplorer and USB cameras (and the ZED's saved settings as it opened): SPOT Vision listed the settings before applying the change.
 \end{itemize}
 
 \section*{\textcolor{primaryColor}{Ongoing Issues}}

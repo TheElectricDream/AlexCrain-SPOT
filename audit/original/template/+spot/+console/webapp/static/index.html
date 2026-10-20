@@ -840,6 +840,31 @@
     </form>
   </dialog>
 
+  <dialog id="armHiddenDialog" class="dialog reset-dialog">
+    <form method="dialog" class="dialog-inner">
+      <div class="dialog-head">
+        <h2>Arm Not on the Chaser</h2>
+        <button value="later" class="btn btn-ghost btn-sm" aria-label="Close">✕</button>
+      </div>
+      <div class="reset-body">
+        <p>These runs flew the Chaser with its arm, but the Spacecraft Designer's Chaser has
+          <b id="armHiddenPart"></b>:</p>
+        <ul id="armHiddenList" class="cal-sync-list"></ul>
+        <p>Was that intended? The 3D view draws the Chaser as designed, so it hides the arm. Show the Arm draws it
+          on these runs anyway, with its mount where the run had it; the design doesn't change.</p>
+        <p class="hint">Not Now keeps it hidden on these runs and asks again for the next one. Never Ask Again
+          always hides it on this browser; the Designer's Chaser card can turn asking back on.</p>
+      </div>
+      <div class="dialog-foot">
+        <div>
+          <button value="never" class="btn">Never Ask Again</button>
+          <button value="later" class="btn">Not Now</button>
+          <button value="show" class="btn btn-primary">Show the Arm</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="calThrustDialog" class="dialog reset-dialog">
     <form method="dialog" class="dialog-inner">
       <div class="dialog-head">

@@ -106,6 +106,25 @@ const ARM_FIELDS = ['static', 'coulomb', 'stribeck', 'viscous', 'armature', 'bac
  * @return {boolean}
  */
 const pwmArm = arm => Boolean(arm && arm.control === 'pwm' && (arm.version || 0) >= 2);
+
+/**
+ * The lab calibration's time as a project can take it: its newest part's (a thruster's decay
+ * counts), leaving out an arm measured with the motor current, which a project never takes. A
+ * project that took the lab's calibration shows this same time.
+ * @param {!Object} lab The lab console's calibration.
+ * @return {?string} ISO 8601 UTC; null if there is nothing to take.
+ */
+function labUpdated(lab) {
+  const times = [lab.table && lab.table.updated];
+  for (const c of Object.values(lab.thrusters || {})) {
+    times.push(c && c.updated, c && c.decay && c.decay.updated);
+  }
+  if (pwmArm(lab.arm)) {
+    times.push(lab.arm.updated);
+  }
+  const known = times.filter(t => typeof t === 'string' && t).sort();
+  return known.length ? known[known.length - 1] : null;
+}
 const ARM_MINUTES = { breakaway: 1.5, sweep: 2.5, inertia: 0.5, steps: 0.5 };   // per joint, about
 
 /**
@@ -240,27 +259,28 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     const mine = S.cal || {};
     const lab = S.labCal;
     const reach = S.lab && S.lab.reachable;
+    const labTime = lab ? labUpdated(lab) : null;
     let pill = ['No Calibration Yet', ''];
     if (!reach) {
       pill = ['Lab Console Not Reachable', ''];
     } else if (!lab) {
       pill = ['Lab Console Needs Update', 'warn'];
-    } else if (!lab.updated) {
+    } else if (!labTime) {
       pill = ['The Lab Has No Calibration', ''];
     } else if (newerSections(lab, mine).length) {
       pill = ['The Lab Has a Newer One', 'warn'];
-    } else if (!mine.updated || lab.updated > mine.updated) {
+    } else if (!mine.updated || labTime > mine.updated) {
       pill = ['Newer Values Overridden', ''];
     } else {
       pill = ['Up to Date', 'ok'];
     }
     const ask = !mine.sync || mine.sync.ask !== false;
-    const canTake = reach && lab && lab.updated && (!mine.updated || lab.updated !== mine.updated);
+    const canTake = reach && labTime && (!mine.updated || labTime !== mine.updated);
     return `<section class="card cal-sync">
       <div class="card-head"><h2>This Project and the Lab</h2><span class="pill ${pill[1]}">${pill[0]}</span></div>
       <div class="cal-sync-row">
         <div title="spot_calibration.json, in the project folder"><span class="field-label">This Project</span><b>${when(mine.updated)}</b></div>
-        <div title="Calibrations run on the lab console (its Calibration tab)"><span class="field-label">Lab Console</span><b>${reach && lab ? when(lab.updated) : '—'}</b></div>
+        <div title="Calibrations run on the lab console (its Calibration tab) that a project can take (not an arm measured with the motor current)"><span class="field-label">Lab Console</span><b>${reach && lab ? when(labTime) : '—'}</b></div>
         <div class="cal-sync-actions">
           <button type="button" class="btn btn-sm btn-primary" data-cal="take" ${canTake ? '' : 'disabled'}
             title="Copy the lab console's calibration into this project; the next simulation uses it">Update from Lab</button>
@@ -883,20 +903,21 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   }
 
   // No arm calibration yet: what one looks like, with SPOT's arm model defaults
-  // (spot.arm.defaults: its placeholder friction, the MX-64's datasheet back-EMF, and the rotor
-  // and gear inertia), and the position-steps test's goals (10, 0, -10, 20, 0, -20, 5, 0°, 2 s
-  // each) with a first-order response (0.25 s) for the measured angle.
+  // (spot.arm.defaults: the bench-calibrated MX-64's friction, back-EMF and armature), and the
+  // position-steps test's goals (10, 0, -10, 20, 0, -20, 5, 0°, 2.5 s each, calibrate_arm.py's
+  // --step-time) with a first-order response (0.25 s) for the measured angle.
   function placeholderArm() {
     const joints = [1, 2, 3].map(index => ({
-      index, name: JOINTS[index], static: 0.30, static_pos: 0.30, static_neg: 0.30,
-      coulomb: 0.20, stribeck: 0.05, viscous: 0.10, back_emf: 1.819, inertia: 3.5e-3,
+      index, name: JOINTS[index], static: 0.163, static_pos: 0.163, static_neg: 0.163,
+      coulomb: 0.123, stribeck: 0.021, viscous: 0, back_emf: 1.485, inertia: 0.0115,
     }));
     const goals = [10, 0, -10, 20, 0, -20, 5, 0].map(d => d * Math.PI / 180);
+    const stepTime = 2.5;   // [s] at each goal
     const rows = [];
     let q = 0;
-    for (let i = 0; i <= 320; i++) {
+    for (let i = 0; i <= Math.round(goals.length * stepTime / 0.05); i++) {
       const t = i * 0.05;
-      const g = goals[Math.min(goals.length - 1, Math.floor(t / 2))];
+      const g = goals[Math.min(goals.length - 1, Math.floor(t / stepTime))];
       q += (g - q) * (1 - Math.exp(-0.05 / 0.25));
       rows.push([t, g, q]);
     }
@@ -1032,22 +1053,23 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
   // Offers the lab's calibration when it is newer, unless asked not to (always, or for that
   // one), once a session.
   function maybeAsk() {
-    if (!S.local || !S.lab || !S.lab.reachable || !S.labCal || !S.labCal.updated || !S.cal) {
+    if (!S.local || !S.lab || !S.lab.reachable || !S.labCal || !labUpdated(S.labCal) || !S.cal) {
       return;
     }
     const mine = S.cal;
     const lab = S.labCal;
+    const labTime = labUpdated(lab);
     const parts = newerSections(lab, mine);
     if (!parts.length) {
       return;
     }
-    if (mine.sync && (mine.sync.ask === false || mine.sync.declined === lab.updated)) {
+    if (mine.sync && (mine.sync.ask === false || mine.sync.declined === labTime)) {
       return;
     }
-    if (S.asked === lab.updated) {
+    if (S.asked === labTime) {
       return;
     }
-    S.asked = lab.updated;
+    S.asked = labTime;
     const dialog = $('#calSyncDialog');
     $('#calSyncList').innerHTML = parts
       .map(([what, t]) => `<li><b>${what}</b><span>${when(t)}</span></li>`).join('');
@@ -1126,7 +1148,7 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     const lab = S.labCal;
     $('#calSyncDialog').close();
     onCalibration(await api('/api/calibration/sync',
-      never ? { ask: false } : { declined: lab.updated }));
+      never ? { ask: false } : { declined: labUpdated(lab) }));
     toast(never
       ? 'The lab\'s calibration won\'t be offered again (Simulation tab, Calibration: Ask ' +
         'When the Lab\'s Is Newer turns it back on).'

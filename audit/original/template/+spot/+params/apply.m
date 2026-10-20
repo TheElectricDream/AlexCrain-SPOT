@@ -32,7 +32,7 @@ function d = apply(s, root)
     TEENSY_PWM_FREQUENCY = 5;               % [Hz] PWM_FREQUENCY in teensy_pwm_control.ino
     TABLE_X = 3.51155;                      % [m] table size
     TABLE_Y = 2.41935;                      % [m]
-    LEVEL_TABLE = [0 0 0 0 0 1.75 1.2];     % tableSlope of a level table
+    LEVEL_TABLE = [0 0 0 0 0 1.755775 1.209675];   % tableSlope of a level table (centred)
 
     d = struct();
     ws = struct();   % name -> value, assigned to the base workspace at the end

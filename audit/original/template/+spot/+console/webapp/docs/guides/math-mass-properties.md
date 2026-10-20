@@ -34,7 +34,7 @@ Thrusters 1, 2, 5, 6 push along ±x (so their lever arm is a y distance), 3, 4, 
 
 The platform hangs from two parallel strings of length $L$, spaced $D$ apart, and is set swinging about the vertical axis; the period $T$ gives the moment of inertia about that axis:
 
-$$I_{zz} = \frac{T^2\, M g\, D^2}{16\,\pi^2\, L}, \qquad g = 9.81\ \text{m/s}^2 .$$
+$$I_{zz} = \frac{T^2\, M g\, D^2}{16\,\pi^2\, L}, \qquad g = 9.80665\ \text{m/s}^2 .$$
 
 (`spot.massprops.bifilarInertia`.) With the default readings this gives about 0.235 kg m² for the Chaser.
 

@@ -50,7 +50,7 @@ function c = loadCalibration(root)
     %   spot.massprops.markerLayout.
 
     %% Constants
-    TABLE_CENTRE = [1.75 1.2];   % [m] default centre of the height surface
+    TABLE_CENTRE = [1.755775 1.209675];   % [m] default centre of the height surface (the table's)
     MIN_THRUST = 0.01;           % [N] plausible thrust range
     MAX_THRUST = 2;
     MAX_DECAY = 0.5;             % plausible thrust decay per extra valve

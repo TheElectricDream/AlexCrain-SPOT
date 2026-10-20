@@ -8,7 +8,7 @@ function fig = toFigure(panels, lookup, opts)
     %
     %   A panel of <PLATFORM>_Py_m against <PLATFORM>_Px_m is drawn as the table from above:
     %   each platform's path (against its own Px), its outline at the start (faint) and the end
-    %   (with the arm), 0-3.5 x 0-2.4 m, equal axes.
+    %   (with the arm), 0-3.51155 x 0-2.41935 m, equal axes.
     %
     %   Inputs
     %     panels  struct array or cell array, each with:
@@ -155,8 +155,8 @@ end
 
 function [handles, labels] = tablePlot(ax, panel, traces, lookup)
     % Each platform's path, with its outline (and arm) at the start and the end.
-    TABLE_X = [0 3.5];      % [m]
-    TABLE_Y = [0 2.4];      % [m]
+    TABLE_X = [0 3.51155];  % [m]
+    TABLE_Y = [0 2.41935];  % [m]
     START_ALPHA = 0.2;      % start outline faint, end solid
     END_ALPHA = 1;
 

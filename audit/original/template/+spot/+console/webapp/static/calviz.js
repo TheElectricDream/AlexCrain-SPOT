@@ -3,9 +3,24 @@
 // top-down drawing of the table with the height map, its contour lines, downhill arrows, the drift
 // paths and the platform.
 
-export const TABLE = { x: 3.5, y: 2.4 };
+export const TABLE = { x: 3.51155, y: 2.41935 };   // [m] the table top, measured
 export const G = 9.80665;
-const DEFAULT_CENTRE = [1.75, 1.2];
+const DEFAULT_CENTRE = [TABLE.x / 2, TABLE.y / 2];
+
+/**
+ * Where to mark a side of the table: every 0.5 m, then the side's length (a mark within 0.25 m
+ * of the end is left out so the two don't overlap).
+ * @param {number} length The side [m].
+ * @return {!Array<number>} Positions [m] from 0.
+ */
+export function tickMarks(length) {
+  const marks = [];
+  for (let x = 0; x < length - 0.25; x += 0.5) {
+    marks.push(x);
+  }
+  marks.push(length);
+  return marks;
+}
 
 /**
  * The jet colour map: dark blue through cyan, yellow to dark red.
@@ -275,13 +290,13 @@ export function drawTable(canvas, {
   ctx.font = '11px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  for (let x = 0; x <= TABLE.x + 1e-6; x += 0.5) {
-    ctx.fillText(x >= TABLE.x - 1e-6 ? `${x.toFixed(1)} m` : x.toFixed(1), X(x), Y(0) + 5);
+  for (const x of tickMarks(TABLE.x)) {
+    ctx.fillText(x === TABLE.x ? `${x.toFixed(2)} m` : x.toFixed(1), X(x), Y(0) + 5);
   }
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  for (let y = 0; y <= TABLE.y + 1e-6; y += 0.5) {
-    ctx.fillText(y.toFixed(1), X(0) - 5, Y(y));
+  for (const y of tickMarks(TABLE.y)) {
+    ctx.fillText(y === TABLE.y ? y.toFixed(2) : y.toFixed(1), X(0) - 5, Y(y));
   }
 
   // The drifts: each a line over a dark outline, from a dot; a red cross where the pucks went

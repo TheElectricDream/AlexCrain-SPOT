@@ -8,7 +8,7 @@ and when the acceleration is linear in the unknowns once the measured path is pu
 
 ## The table's slope
 
-The table top's height (with $u = x - x_c$, $v = y - y_c$ from the table's centre, 1.75 m and 1.2 m) is
+The table top's height (with $u = x - x_c$, $v = y - y_c$ from the table's centre, 1.755775 m and 1.209675 m, unless the calibration names its own) is
 
 $$h(x, y) = a_1 u + a_2 v + a_3 u^2 + a_4 u v + a_5 v^2$$
 

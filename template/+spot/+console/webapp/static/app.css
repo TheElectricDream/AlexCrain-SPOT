@@ -1098,6 +1098,7 @@ a.btn { text-decoration: none; }
 .dz-slot.blocked { border-color: #ff6b6b; border-style: dashed; }
 .dz-slot.blocked.chosen { background: #e5484d; }
 .dz-lab { display: flex; gap: 8px; flex-wrap: wrap; }
+.dz-armask { margin: 10px 0 6px; }
 .dz-file { margin-top: auto; }
 .dz-face.off { opacity: .55; }
 .dz-face-grid.dz-face-none { display: flex; align-items: center; justify-content: center; width: 68px; height: 33px;

@@ -33,7 +33,7 @@ The **Deploy & Run** card says whether a program for this diagram already exists
 
 Under the 3D view, each platform's experiment clock is shown, with how far apart the clocks are (network delays included).
 
-While it runs: the 3D view shows the platforms live (the **Simulation** overlay replays the last simulation in step with the experiment's clock, so you can see how reality departs from the model), the Messages panel shows each platform's message, the Live Plot each platform's streams, and **Clear Paths** wipes the trails.
+While it runs: the 3D view shows the platforms live (the **Simulation** overlay replays the last simulation in step with the experiment's clock, so you can see how reality departs from the model; its arm only while the Designer's Chaser carries it, see [Runs flown with the arm](page:tab-designer#runs-flown-with-the-arm)), the Messages panel shows each platform's message, the Live Plot each platform's streams, and **Clear Paths** wipes the trails.
 
 ## Data
 

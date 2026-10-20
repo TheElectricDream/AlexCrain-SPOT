@@ -72,8 +72,8 @@ import math
 
 
 G = 9.80665                 # [m/s^2]
-CENTRE = (1.75, 1.2)        # [m] the table's centre (u, v measured from here)
-TABLE = (3.5, 2.4)          # [m] the table top (as the 3D view draws it)
+CENTRE = (1.755775, 1.209675)  # [m] the table's centre (u, v measured from here)
+TABLE = (3.51155, 2.41935)  # [m] the table top, measured (as the 3D view draws it)
 
 # Thruster directions in the body frame (control.py's VEC1, VEC2): 1, 2
 # push along -x, 5, 6 along +x, 3, 4 along +y, 7, 8 along -y.

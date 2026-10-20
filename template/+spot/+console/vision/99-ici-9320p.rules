@@ -1,0 +1,8 @@
+# The ICI 9320P thermal camera (USB vendor 2aa9) for SPOT Vision: read/write for the plugdev group,
+# so its worker (python-libusb1) can open it without root. 9f00 is the camera at power-up, 9f10 once
+# the SDK has loaded its firmware. deploy_orin.sh says when it is missing; install it on the Orin with
+#   sudo cp ~/spot_vision/99-ici-9320p.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+# then unplug and replug the camera (the user running SPOT Vision must be in plugdev).
+SUBSYSTEM=="usb", ATTR{idVendor}=="2aa9", ATTR{idProduct}=="9f00", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="2aa9", ATTR{idProduct}=="9f10", MODE="0660", GROUP="plugdev", TAG+="uaccess"

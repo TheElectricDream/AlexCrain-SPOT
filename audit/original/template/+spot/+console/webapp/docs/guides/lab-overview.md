@@ -2,7 +2,7 @@
 
 ## The table
 
-A granite table, 3.5 m × 2.4 m, levelled as well as granite allows. What is left of its slope still pulls a floating platform: the lab console's table slope calibration measures it, and simulations include it ([The Calibration Tab](page:tab-calibration)). Barriers around the edges keep a platform from leaving the table; a cover protects the surface when the lab is closed.
+A granite table, 3.51155 m × 2.41935 m (about 3.5 × 2.4), levelled as well as granite allows. What is left of its slope still pulls a floating platform: the lab console's table slope calibration measures it, and simulations include it ([The Calibration Tab](page:tab-calibration)). Barriers around the edges keep a platform from leaving the table; a cover protects the surface when the lab is closed.
 
 The **table frame** has its origin at the corner where the 3D view draws its axes, +x along the 3.5 m side, +y along the 2.4 m side, +z up ([Units, Frames and Names](page:conventions)). Positions, velocities and commanded forces in the code are in this frame.
 
@@ -43,4 +43,4 @@ A PhaseSpace X2E motion-capture system: ten cameras around the table track the L
 
 ## The cameras on the Orin
 
-The Orin hosts the vision sensors the Vision tab streams: the ZED 2i stereo camera, the Intel RealSense L515 LiDAR camera, the iniVation DVXplorer event camera, and any USB camera.
+The Orin hosts the vision sensors the Vision tab streams: the ZED 2i stereo camera, the Intel RealSense L515 LiDAR camera, the iniVation DVXplorer event camera, the ICI 9320P thermal camera, and any USB camera.

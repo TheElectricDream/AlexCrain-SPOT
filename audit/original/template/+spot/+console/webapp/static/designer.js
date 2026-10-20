@@ -10,6 +10,8 @@
 // design to the lab console, or take the lab console's. On the local console, the Chaser's arm
 // and the simulation's Arm platform are the same choice: picking the arm turns it on (and sets
 // its mount, s.mass.arm.mount), and the Simulation tab's Arm switch picks or drops the arm here.
+// A run flown with the arm is replayed without it while the Chaser here has none; the page asks
+// whether to show it anyway (Show the Arm, Not Now, or Never Ask Again on this browser).
 
 import { platformName, COLORS } from './platforms.js';
 
@@ -24,6 +26,10 @@ const FACES = [
 // Seen from outside a face, which faces its left and right edges meet.
 const EDGES = { '+x': ['−Y', '+Y'], '+y': ['+X', '−X'], '-x': ['+Y', '−Y'], '-y': ['−X', '+X'] };
 const ARM_MOUNT = { face: '+y', side: 'left' };   // the Chaser's arm coupler (info.mount.armMount)
+const ARM_NEVER_ASK = 'spot.designer.armNeverAsk';   // never ask to show a run's arm (storage)
+const DOCK_NAMES = {
+  none: 'no docking cone', male: 'the male docking cone', female: 'the female cup',
+};
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const $ = s => document.querySelector(s);
@@ -128,6 +134,7 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
         <div class="dz-where"><span class="field-label tip" title="Each face as seen from outside, with the faces its edges meet. Click a place here or a disc on the model.">${isArm ? 'Arm Mount' : 'Position'}</span><span class="mono">${slotText(dock)}</span></div>
         <div class="dz-faces">${faces}</div>
         ${blockedHere ? `<p class="hint bad" title="${esc(blockedHere)} stands out of the face here">Blocked by ${esc(blockedHere)}.</p>` : ''}
+        ${n === 'RED' && !isArm && storage.get(ARM_NEVER_ASK, false) ? `<p class="hint dz-armask">Runs flown with the arm are replayed without it, without asking.</p><button type="button" class="btn btn-sm" data-dzarmask title="Ask again whether to show a run's arm while the Chaser has none">Ask Again</button>` : ''}
       </section>
       <section class="card">
         <div class="card-head"><h2 class="tip" title="The bracket's top bar crosses the top; its legs run down the middle of the two faces the panels stand off, and the bend in one leg goes round the control panel (on −X). A 1 mm panel on each side of each frame: black cells on a white backsheet, as in the lab.">Solar Panels</h2>
@@ -218,6 +225,10 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
       await change(p => {
         p.solar.axis = b.dataset.dzaxis;
       });
+    } else if ('dzarmask' in b.dataset) {
+      storage.set(ARM_NEVER_ASK, false);
+      render();
+      viewer?.askArmsAgain();
     } else if (b.dataset.dzlab === 'send') {
       await api('/api/lab', { path: 'design', body: { design: S.design } });
       toast('The lab console now draws this design.', 'success', 3500);
@@ -276,6 +287,45 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
     }
   }
   document.addEventListener('spot-settings', ev => act(() => followSettings(ev.detail)));
+
+  // A run's arm while the Chaser has none
+
+  // The 3D view hides a replayed arm while the Chaser here has none, and says so once per run in
+  // view: ask whether that was intended and the arm should show anyway. Runs that arrive while
+  // the prompt is open join it.
+  const armDialog = $('#armHiddenDialog');
+  const armAsk = { labels: [], shows: [] };
+  if (viewer && armDialog) {
+    viewer.armChoice.onHidden = (labels, show) => {
+      if (storage.get(ARM_NEVER_ASK, false)) {
+        return;
+      }
+      armAsk.labels.push(...labels.map(l => l || 'The last simulation'));
+      armAsk.shows.push(show);
+      const dock = S.design ? S.design.platforms.RED.dock.type : 'none';
+      $('#armHiddenPart').textContent = DOCK_NAMES[dock] || dock;
+      $('#armHiddenList').innerHTML = armAsk.labels.map(l => `<li><b>${esc(l)}</b></li>`).join('');
+      if (!armDialog.open) {
+        armDialog.returnValue = '';
+        armDialog.showModal();
+      }
+    };
+
+    // Show the Arm, Not Now (also the close button and Escape), or Never Ask Again.
+    armDialog.addEventListener('close', () => {
+      const shows = armAsk.shows;
+      armAsk.labels = [];
+      armAsk.shows = [];
+      if (armDialog.returnValue === 'show') {
+        shows.forEach(show => show());
+      } else if (armDialog.returnValue === 'never') {
+        storage.set(ARM_NEVER_ASK, true);
+        render();
+        toast('Runs flown with the arm are replayed without it while the Chaser has none. ' +
+          'The Designer\'s Chaser card can turn asking back on.', 'info', 6000);
+      }
+    });
+  }
 
   // The 3D view
 

@@ -1,12 +1,13 @@
 // 3D view of the granite table, the spacecraft and the LEDs (three.js, z axis up, metres).
-// Table frame: (0, 0, 0) is one corner of the table top, +x runs along the 3.5 m side,
-// +y along the 2.4 m side, +z up. PhaseSpace data arrives in this frame (converted mm -> m by
-// app.py), and so do simulation results (the diagrams' Px, Py, Rz).
+// Table frame: (0, 0, 0) is one corner of the table top, +x runs along the 3.51155 m side,
+// +y along the 2.41935 m side, +z up. PhaseSpace data arrives in this frame (converted mm -> m
+// by app.py), and so do simulation results (the diagrams' Px, Py, Rz).
 //
 // One viewer is shared by all pages (app.js moves it into the page shown), with three layers:
 //   live    the platforms and LEDs PhaseSpace sees
 //   sim     a simulation replayed (see-through platforms, their paths, the arm), and loaded
-//           results laid over it (outlined platforms, dashed paths)
+//           results laid over it (outlined platforms, dashed paths); a run's arm only while
+//           the Designer's Chaser carries it, or where the person chose to see it anyway
 //   setup   the initial-condition poses, which can be dragged (Shift+drag rotates)
 // and, on the lab console's PhaseSpace tab, Interactive Mode's goals (dragged the same way) and
 // the thrusters it fires, drawn as plumes on the live platform.
@@ -22,9 +23,10 @@ import { LineSegmentsGeometry } from './vendor/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from './vendor/lines/LineMaterial.js';
 import { armPoints, loadCad, mountPose, TABLE_URL } from './cad.js';
 import { COLORS, LINE_COLORS, LED_COLORS, TEXT_COLORS, platformName } from './platforms.js';
-import { heightCanvas } from './calviz.js';
+import { heightCanvas, tickMarks, TABLE as TABLE_TOP } from './calviz.js';
 
-export const TABLE = { x: 3.5, y: 2.4, thickness: 0.33 };   // the granite (0.33 m thick, its CAD)
+// The granite: the top's sides (measured) and its thickness (0.33 m, its CAD).
+export const TABLE = { x: TABLE_TOP.x, y: TABLE_TOP.y, thickness: 0.33 };
 export const CRAFT_SIZE = 0.3;
 const BODY_AXIS = 0.34;   // length of each body axis from the cube's centre [m]
 
@@ -211,6 +213,9 @@ export class Viewer {
     // Spacecraft Designer: what is mounted on each platform (drawn with the CAD), and the page's
     // close-up of one platform with the 16 docking-cone places to click.
     this.design = null;
+    // A replayed arm shows only while the Designer's Chaser carries it, or for the results the
+    // person chose to see it on (shown); asked: results the page was told about (onHidden).
+    this.armChoice = { shown: new WeakSet(), asked: new WeakSet(), onHidden: null };
     this.designer = {
       active: false, group: null, slots: [], platform: null, onSlot: null, selected: null,
       savedCam: null, hover: null,
@@ -389,14 +394,14 @@ export class Viewer {
     new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 }));
     this.scene.add(outline);
 
-    // Distance ticks along the two edges that meet at the origin.
-    for (let x = 0.5; x <= TABLE.x + 1e-6; x += 0.5) {
-      const t = label(x >= TABLE.x - 1e-6 ? `${TABLE.x} m` : x.toFixed(1), 'tick-label');
+    // Distance ticks along the two edges that meet at the origin (every 0.5 m, then the side).
+    for (const x of tickMarks(TABLE.x).filter(v => v > 0)) {
+      const t = label(x === TABLE.x ? `${x.toFixed(2)} m` : x.toFixed(1), 'tick-label');
       t.position.set(x, -0.09, 0);
       this.scene.add(t);
     }
-    for (const y of [0.5, 1.0, 1.5, 2.0, TABLE.y]) {
-      const t = label(y === TABLE.y ? `${TABLE.y} m` : y.toFixed(1), 'tick-label');
+    for (const y of tickMarks(TABLE.y).filter(v => v > 0)) {
+      const t = label(y === TABLE.y ? `${y.toFixed(2)} m` : y.toFixed(1), 'tick-label');
       t.position.set(-0.11, y, 0);
       this.scene.add(t);
     }
@@ -636,6 +641,7 @@ export class Viewer {
     }
     this.sim.group.visible = this.layers.sim;
     this.setup.group.visible = this.layers.setup;
+    this._checkArms();
     for (const p of Object.values(this.live.paths)) {
       p.line.visible = this.live.on && this.layers.live;
     }
@@ -734,6 +740,7 @@ export class Viewer {
     };
     for (const name of Object.keys(CRAFT_COLORS)) {
       const g = this._buildCraft(name, ghost, label);
+      g.userData.track = track;
       this.scene.remove(g);
       track.group.add(g);
       track.crafts[name] = g;
@@ -812,6 +819,114 @@ export class Viewer {
     });
   }
 
+  // Replayed arms and the design. A run's arm is part of the Chaser: while the Designer's Chaser
+  // has none, a replayed arm is hidden (its links would hang off whatever is mounted instead)
+  // unless the person chose to see it for that result; then its Chaser also carries the arm's
+  // mount, where the run had it.
+
+  // The simulation and the loaded results.
+  _tracks() {
+    return [this.sim.primary, ...this.sim.overlays.values()];
+  }
+
+  // Whether the Designer's Chaser carries the arm (true while no design is known).
+  _armDesigned() {
+    const red = this._designOf('RED');
+    return !red || !red.dock || red.dock.type === 'arm';
+  }
+
+  // Whether a track's arm is drawn.
+  _armShown(track) {
+    const r = track.result;
+    return Boolean(r && r.arm) && (this._armDesigned() || this.armChoice.shown.has(r));
+  }
+
+  // The design a platform is drawn with: a replayed Chaser whose arm is shown although the
+  // Designer's has none carries the arm's mount at the run's place.
+  _craftDesign(u) {
+    const design = this._designOf(u.craft);
+    const track = u.craft === 'RED' ? u.track : null;
+    if (!track || this._armDesigned() || !this._armShown(track)) {
+      return design;
+    }
+    const mount = this._armMount(track.result);
+    return mount ? { ...design, dock: { type: 'arm', ...mount } } : design;
+  }
+
+  // Where a result's arm was mounted: the place whose shoulder is nearest the run's, in the
+  // Chaser's body frame at the first sample with both; null if unknown (or no CAD loaded).
+  _armMount(r) {
+    const info = this.cad.lib && this.cad.lib.info;
+    const c = r && r.arm && r.crafts.RED;
+    if (!info || !info.mount || !c) {
+      return null;
+    }
+    const [sx, sy] = r.arm[0];
+    const k = c.x.findIndex((x, i) =>
+      x != null && c.y[i] != null && c.att[i] != null && sx[i] != null && sy[i] != null);
+    if (k < 0) {
+      return null;
+    }
+    const dx = sx[k] - c.x[k];
+    const dy = sy[k] - c.y[k];
+    const ca = Math.cos(c.att[k]);
+    const sa = Math.sin(c.att[k]);
+    const bx = ca * dx + sa * dy;
+    const by = -sa * dx + ca * dy;
+    let best = null;
+    let bestD = Infinity;
+    for (const face of info.mount.faces || ['+x', '+y', '-y']) {
+      for (const side of ['left', 'right']) {
+        const [x, y] = armPoints(info, { face, side }, [0, 0, 0])[0];
+        const d = Math.hypot(x - bx, y - by);
+        if (d < bestD) {
+          best = { face, side };
+          bestD = d;
+        }
+      }
+    }
+    return best;
+  }
+
+  // Every replayed arm (and its Chaser's mount) as the design and the person's choice have it.
+  _refreshArms() {
+    for (const track of this._tracks()) {
+      this._applyCadCraft(track.crafts.RED);
+      track.arm.group.visible = this._armShown(track);
+      this._setTrackTime(track, this.sim.t);
+    }
+    this._checkArms();
+  }
+
+  // Tells the page about results in view whose arm is hidden by the design, once each:
+  // armChoice.onHidden(labels, show), labels the tracks' ('' for the simulation), show() draws
+  // their arms.
+  _checkArms() {
+    if (!this.armChoice.onHidden || !this.layers.sim || this._armDesigned()) {
+      return;
+    }
+    const fresh = this._tracks().filter(t => t.shown && t.result && t.result.arm &&
+      !this.armChoice.shown.has(t.result) && !this.armChoice.asked.has(t.result));
+    if (!fresh.length) {
+      return;
+    }
+    const results = fresh.map(t => t.result);
+    results.forEach(r => this.armChoice.asked.add(r));
+    this.armChoice.onHidden(fresh.map(t => t.label), () => {
+      results.forEach(r => this.armChoice.shown.add(r));
+      this._refreshArms();
+    });
+  }
+
+  /**
+   * Forgets which results the page was told had their arm hidden, and tells it again about
+   * those in view (the Designer's Ask Again).
+   */
+  askArmsAgain() {
+    this.armChoice.asked = new WeakSet();
+    this._checkArms();
+  }
+
   // CAD models (Use CAD)
 
   /**
@@ -865,6 +980,7 @@ export class Viewer {
       }
       this._applyCadCraft(g);
     }
+    this._refreshArms();
     if (this.designer.active) {
       this._buildDesigner();
     }
@@ -1041,13 +1157,23 @@ export class Viewer {
     const u = group.userData;
     const on = Boolean(this.cad.on && this.cad.lib);
     const ghost = this._cadGhost(u.ghost);
+    const design = this._craftDesign(u);
+    const key = JSON.stringify(design);
+    if (u.cad && u.cadDesign !== key) {
+      group.remove(u.cad);
+      u.cad = null;
+    }
     if (on && !u.cad) {
-      u.cad = this.cad.lib.platform(u.craft, ghost, this._designOf(u.craft));
+      u.cad = this.cad.lib.platform(u.craft, ghost, design);
+      u.cadDesign = key;
       group.add(u.cad);
-      if (u.housing) {
+      if (u.housing && !u.zed) {
         u.zed = this.cad.lib.zed(ghost);
         group.add(u.zed);
         u.ownParts.push(u.zed);
+      }
+      if (u.zed && u.cadGhost !== ghost) {
+        this.cad.lib.restyle(u.zed, ghost);
       }
       u.cadGhost = ghost;
     } else if (u.cad && u.cadGhost !== ghost) {
@@ -1114,7 +1240,8 @@ export class Viewer {
     for (const [name, g] of Object.entries(track.crafts)) {
       g.visible = Boolean(result && result.crafts[name]);
     }
-    track.arm.group.visible = Boolean(result && result.arm);
+    track.arm.group.visible = this._armShown(track);
+    this._applyCadCraft(track.crafts.RED);
     if (!result) {
       return;
     }
@@ -1202,7 +1329,8 @@ export class Viewer {
     if (r.arm) {
       const k = f < 0.5 ? i : j;
       const pts = [0, 1, 2, 3].map(q => [r.arm[q][0][k], r.arm[q][1][k]]);
-      track.arm.group.visible = pts.every(([x, y]) => x != null && y != null);
+      track.arm.group.visible =
+        this._armShown(track) && pts.every(([x, y]) => x != null && y != null);
       if (track.arm.group.visible) {
         this._setArm(track.arm, pts);
       }
@@ -1215,6 +1343,7 @@ export class Viewer {
    */
   setSimulation(result) {
     this._setTrackResult(this.sim.primary, result);
+    this._checkArms();
   }
 
   /**
@@ -1227,6 +1356,7 @@ export class Viewer {
     p.group.visible = on;
     if (on) {
       this._setTrackTime(p, this.sim.t);
+      this._checkArms();
     }
   }
 
@@ -1260,6 +1390,7 @@ export class Viewer {
       track.offset = o.offset || 0;
       this._setTrackTime(track, this.sim.t);
     });
+    this._checkArms();
   }
 
   /**
@@ -1268,7 +1399,7 @@ export class Viewer {
    */
   setTraces(on) {
     this.sim.traces = on;
-    for (const track of [this.sim.primary, ...this.sim.overlays.values()]) {
+    for (const track of this._tracks()) {
       for (const p of Object.values(track.paths)) {
         p.done.visible = on;
       }

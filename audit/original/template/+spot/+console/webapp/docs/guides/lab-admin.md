@@ -12,7 +12,14 @@ Copies the console (`webapp/`, `phasespace/`, `deploy/`, and the arm calibration
 
 ## `deploy_orin.sh`: install SPOT Vision on the Orin
 
-Copies `+spot/+console/vision/` to `~/spot_vision` on the Orin (`spot-vision@192.168.1.115`, override with `ORIN=`) and installs and restarts its systemd user service, `spot-vision`, which serves the cameras on port 8090 for the lab console's [Vision tab](page:tab-vision). On the Orin it checks the camera libraries and says which cameras won't stream: the ZED needs OpenCV and the ZED SDK's `pyzed` in the system Python; the RealSense L515 needs a Python with `pyrealsense2` 2.54, the last release that supports it (`REALSENSE_PYTHON=`); the DVXplorer needs iniVation's `dv-processing` (`DVS_PYTHON=`). `journalctl --user -u spot-vision -f` on the Orin shows its log.
+Copies `+spot/+console/vision/` to `~/spot_vision` on the Orin (`spot-vision@192.168.1.115`, override with `ORIN=`) and installs and restarts its systemd user service, `spot-vision`, which serves the cameras on port 8090 for the lab console's [Vision tab](page:tab-vision). On the Orin it checks the camera libraries and says which cameras won't stream: the ZED needs OpenCV and the ZED SDK's `pyzed` in the system Python; the RealSense L515 needs a Python with `pyrealsense2` 2.54, the last release that supports it (`REALSENSE_PYTHON=`); the DVXplorer needs iniVation's `dv-processing` (`DVS_PYTHON=`); the ICI 9320P thermal camera needs `python-libusb1` and `pyusb` (`python3 -m pip install --user libusb1 pyusb`; `THERMAL_PYTHON=`), its SDK being copied with SPOT Vision. The thermal camera also needs SPOT Vision's udev rule, and the Orin's user in the `plugdev` group. Both need `sudo`, which the script doesn't have, so it prints the commands when either is missing; install the rule again whenever it changes:
+
+```bash
+sudo cp ~/spot_vision/99-ici-9320p.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo usermod -aG plugdev spot-vision     # then log in again, or restart the Orin
+```
+
+`journalctl --user -u spot-vision -f` on the Orin shows its log. To check the thermal camera by hand, run `cd ~/spot_vision/vendor && python3 -m ici9320 info` on the Orin: it prints the firmware version and housing temperature.
 
 ## `spot-phasespace-console.service`
 

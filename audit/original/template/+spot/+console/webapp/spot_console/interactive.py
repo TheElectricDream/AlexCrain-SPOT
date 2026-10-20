@@ -58,7 +58,7 @@ from .hardware import NUM_THRUSTERS, hardware, hw_log
 from .phasespace import monitor, streamer
 
 
-TABLE = (3.5, 2.4)        # [m] the table top, as the 3D view draws it (static/viewer.js)
+TABLE = (3.51155, 2.41935)  # [m] the table top, measured, as the 3D view draws it (static/viewer.js)
 MARGIN = 0.2              # [m] goals stay this far inside the edges (half a platform + 5 cm)
 MIN_SEPARATION = 0.45     # [m] between goals, centre to centre (0.3 m square platforms,
                           # 0.42 m across the corners)

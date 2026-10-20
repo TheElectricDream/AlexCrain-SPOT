@@ -5,11 +5,12 @@ The cameras plugged into the Orin (spot-vision), for the lab console's
 Vision tab.
 
     python3 spot_vision.py [--port 8090] [--realsense-python PATH]
-                           [--dvs-python PATH] [--demo]
+                           [--dvs-python PATH] [--thermal-python PATH]
+                           [--demo]
 
     GET  /api/cameras
         the cameras: [{id, kind, name, serial, views: [{id, label}],
-        state, detail}]
+        state, detail, model, housing_c}]
     GET  /api/cameras/<camera>/params
         its settings: {"params": [setting, ...], "open", "saved",
         "errors"}
@@ -29,10 +30,12 @@ Each camera runs in a process of its own, vision_worker.py, with the
 Python whose library it needs: the ZED SDK's pyzed (this Python); the
 RealSense L515's pyrealsense2 2.54, the last librealsense that
 supports it, in its own environment (--realsense-python); the
-iniVation DVXplorer's dv-processing (--dvs-python); any other USB
-camera: OpenCV and v4l2-ctl; --demo adds a test pattern. A camera's
-settings are the ones its library offers (the worker lists them, with
-their ranges and defaults).
+iniVation DVXplorer's dv-processing (--dvs-python); the ICI 9320P
+thermal camera's SDK (vendor/ici9320, which needs python-libusb1 and
+pyusb: --thermal-python); any other USB camera: OpenCV and v4l2-ctl;
+--demo adds a test pattern. A camera's settings are the ones its
+library offers (the worker lists them, with their ranges and
+defaults).
 
 A camera is opened when its first viewer comes and closed IDLE_CLOSE s
 after the last one leaves, so the experiments' own vision code can
@@ -65,6 +68,7 @@ VIEWS = {
     "zed": [("left", "Left"), ("right", "Right"), ("side", "Side by Side"), ("depth", "Depth")],
     "realsense": [("color", "Colour"), ("depth", "Depth"), ("infrared", "Infrared")],
     "dvs": [("events", "Events"), ("accumulated", "Accumulated")],
+    "thermal": [("thermal", "Thermal")],
     "uvc": [("video", "Video")],
     "demo": [("pattern", "Pattern"), ("noise", "Noise")],
 }
@@ -73,6 +77,8 @@ VIEWS = {
 ZED_VENDOR = "2b03"
 INTEL_VENDOR = "8086"
 INIVATION_VENDOR = "152a"   # iniVation's event cameras (DVXplorer, DAVIS)
+ICI_VENDOR = "2aa9"         # the ICI 9320P thermal camera...
+ICI_PRODUCTS = ("9f00", "9f10")   # ... at power-up, and with the SDK's firmware
 
 # Outside the deployed folder, so a redeploy keeps it.
 SETTINGS_FILE = os.path.expanduser("~/.spot_vision_settings.json")
@@ -110,7 +116,7 @@ def discover():
     sdk_usb = set()
 
     # Cameras with their own SDK, by USB vendor: ZED, RealSense,
-    # iniVation.
+    # iniVation, ICI.
     for dev in sorted(glob.glob("/sys/bus/usb/devices/*")):
         vendor = read(os.path.join(dev, "idVendor"))
         product = read(os.path.join(dev, "idProduct"))
@@ -133,6 +139,13 @@ def discover():
             cid = "dvs-%s" % (serial or product)
             found[cid] = {"kind": "dvs", "name": "iniVation %s" % (name or "Event Camera"),
                           "serial": serial, "arg": None, "usb": read(os.path.join(dev, "speed"))}
+            sdk_usb.add(os.path.realpath(dev))
+        elif vendor == ICI_VENDOR and product in ICI_PRODUCTS:
+            # No serial number, and a new USB device once its firmware
+            # is loaded: known by its USB port (e.g. 1-2.3) instead.
+            cid = "thermal-%s" % os.path.basename(dev)
+            found[cid] = {"kind": "thermal", "name": "ICI 9320P Thermal Camera", "serial": "",
+                          "arg": None, "usb": read(os.path.join(dev, "speed"))}
             sdk_usb.add(os.path.realpath(dev))
     if DEMO:
         found["demo"] = {"kind": "demo", "name": "Test Pattern", "serial": "", "arg": None,
@@ -358,7 +371,8 @@ class Camera:
                     continue
                 with self.lock:
                     self.state, self.detail = msg.pop("state", self.state), msg.pop("detail", None)
-                    self.extra.update({k: v for k, v in msg.items() if k in ("model", "serial")})
+                    self.extra.update({k: v for k, v in msg.items()
+                                       if k in ("model", "serial", "housing_c")})
                     self.lock.notify_all()
 
         # It exited: idle, or an error with its code.
@@ -452,7 +466,9 @@ class Vision:
         """Look for cameras again; return them all.
 
         New ones are added; an unplugged one is dropped, or shows as
-        unplugged while it is still watched or open.
+        unplugged while it is still watched or open. Not while it opens:
+        the thermal camera leaves the bus for a moment as it takes its
+        firmware (its worker says if it doesn't come back).
         """
         found = discover()
         with self.lock:
@@ -463,7 +479,7 @@ class Vision:
                 cam = self.cams[cid]
                 if cid not in found and not cam.subs and cam.proc is None:
                     del self.cams[cid]
-                elif cid not in found:
+                elif cid not in found and cam.state != "opening":
                     cam.state, cam.detail = "error", "unplugged"
             return list(self.cams.values())
 
@@ -661,6 +677,9 @@ def main():
                         help="a Python with pyrealsense2 (2.54 for the L515)")
     parser.add_argument("--dvs-python", default=sys.executable,
                         help="a Python with dv-processing (iniVation's, for the DVXplorer)")
+    parser.add_argument("--thermal-python", default=sys.executable,
+                        help="a Python with python-libusb1, pyusb, numpy and OpenCV "
+                             "(the ICI 9320P thermal camera)")
     parser.add_argument("--uvc-python", default=sys.executable, help="a Python with OpenCV")
     parser.add_argument("--demo", action="store_true",
                         help="also a test pattern camera (to try the Vision tab without one)")
@@ -670,7 +689,8 @@ def main():
     global DEMO
     DEMO = args.demo
     Handler.vision = Vision({"zed": args.zed_python, "realsense": args.realsense_python,
-                             "dvs": args.dvs_python, "uvc": args.uvc_python,
+                             "dvs": args.dvs_python, "thermal": args.thermal_python,
+                             "uvc": args.uvc_python,
                              "demo": sys.executable})
 
     # Serve.

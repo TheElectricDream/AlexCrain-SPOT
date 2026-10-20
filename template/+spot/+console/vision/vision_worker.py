@@ -3,12 +3,14 @@
 Run with the Python whose library the camera needs: the ZED SDK's
 pyzed in the system Python, the RealSense L515's pyrealsense2 2.54 in
 its own environment, iniVation's dv-processing for the DVXplorer,
-OpenCV and v4l2-ctl for any other USB camera. Python 3.8+, numpy and
-OpenCV.
+python-libusb1 and pyusb for the ICI 9320P thermal camera (its SDK,
+ici9320, is in vendor/), OpenCV and v4l2-ctl for any other USB camera.
+Python 3.8+, numpy and OpenCV.
 
     python vision_worker.py zed [serial]
     python vision_worker.py realsense [serial]
     python vision_worker.py dvs [name]
+    python vision_worker.py thermal
     python vision_worker.py uvc /dev/videoN
     python vision_worker.py demo    (a test pattern: the Vision tab
                                      without a camera)
@@ -21,7 +23,7 @@ Commands come on standard input, one JSON object a line:
 Frames and news go to standard output:
     b"F <view> <length>\\n" followed by that many bytes of JPEG
     b"S <json>\\n"  {"state": "open" | "streaming" | "busy" | "error",
-                    "detail": "...", ...}
+                    "detail": "...", "model", "serial", "housing_c"}
     b"P <json>\\n"  {"params": [setting, ...], "errors": {"<id>":
                     "why"}}: the camera's settings, after a change
 A setting: {"id", "label", "group", "type": "range" | "bool" | "enum",
@@ -322,7 +324,8 @@ def run_zed(serial, cmd):
         return
     info = cam.get_camera_information()
     say("open", model=str(info.camera_model), serial=info.serial_number)
-    report(params(), apply_live(live))
+    errors = apply_live(live)
+    report(params(), errors)
 
     mat = sl.Mat()
     runtime = runtime_params()
@@ -724,7 +727,8 @@ def run_dvs(name, cmd):
                 errors[k] = str(e)
         return errors
 
-    report(params(), apply(cmd.take()))
+    errors = apply(cmd.take())
+    report(params(), errors)
     recent = []                                     # event batches (numpy) of the last window
     acc = np.zeros((H, W), np.float32)
     acc_t = time.time()
@@ -733,7 +737,8 @@ def run_dvs(name, cmd):
         cmd.poll()
         changes = cmd.take()
         if changes:
-            report(params(), apply(changes))
+            errors = apply(changes)
+            report(params(), errors)
 
         # The next events: kept for the window, and added to the
         # accumulated view (faded towards 0 first; + brighter, -
@@ -780,6 +785,222 @@ def run_dvs(name, cmd):
                  wanted["quality"], wanted["width"])
     if not cap.isRunning():
         say("error", "the event camera stopped (unplugged?)")
+
+
+# ICI 9320P thermal camera (the ici9320 SDK, in vendor/)
+
+
+THERMAL_LOST = 3.0          # [s] without a frame: the camera is gone
+THERMAL_TEMP_PERIOD = 2.0   # [s] between housing temperature readings
+THERMAL_MAX = 16383         # the sensor's largest count (14 bits)
+THERMAL_MIN_SPAN = 20       # [counts] the narrowest automatic range
+THERMAL_SMOOTH = 0.2        # how far the automatic range moves each frame
+THERMAL_SHUTTER_SHOWN = 1.0  # [s] the readout says SHUTTER after one
+
+# The palettes: id, label, and the OpenCV colour map (None: built here).
+THERMAL_PALETTES = [("iron", "Iron", None), ("white_hot", "White Hot", None),
+                    ("black_hot", "Black Hot", None), ("inferno", "Inferno", "COLORMAP_INFERNO"),
+                    ("rainbow", "Rainbow", "COLORMAP_JET")]
+
+# Iron (the SDK viewer's "ironbow"): black, purple, red, orange, yellow,
+# white; (position, RGB).
+IRON_STOPS = [(0.0, (0, 0, 0)), (0.15, (32, 0, 96)), (0.35, (140, 0, 160)),
+              (0.55, (220, 50, 40)), (0.75, (255, 150, 0)), (0.9, (255, 230, 60)),
+              (1.0, (255, 255, 255))]
+
+
+def thermal_luts():
+    """Return each palette as a lookup table: {id: 256 x 3 BGR}."""
+    ramp = np.arange(256, dtype=np.uint8)
+    pos = [s[0] for s in IRON_STOPS]
+    iron_rgb = np.stack([np.interp(ramp / 255.0, pos, [s[1][k] for s in IRON_STOPS])
+                         for k in range(3)], 1)
+    luts = {"iron": iron_rgb[:, ::-1].astype(np.uint8),
+            "white_hot": np.stack([ramp] * 3, 1),
+            "black_hot": np.stack([255 - ramp] * 3, 1)}
+    for pid, _, cmap in THERMAL_PALETTES:
+        if cmap:
+            luts[pid] = cv2.applyColorMap(ramp.reshape(256, 1), getattr(cv2, cmap)).reshape(256, 3)
+    return luts
+
+
+def run_thermal(_, cmd):
+    """Run the ICI 9320P thermal camera until told to quit.
+
+    The SDK loads the camera's firmware when it is fresh from power-up
+    (it then comes back as another USB device) and streams 320 x 240
+    raw 14-bit counts at 59.6 Hz. The counts aren't temperatures (the
+    SDK has no radiometric calibration yet): the view stretches a range
+    of them over a palette, the picture's own (automatic) or one set
+    by hand. The camera closes its shutter now and then to recalibrate
+    (flat-field correction); the frames it sends while closed are all
+    one value, and are skipped, so the picture holds meanwhile.
+
+    Args:
+        _: Unused (there is one such camera).
+        cmd: The Commands.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
+    try:
+        import usb1
+        from ici9320 import ICI9320, protocol as P
+    except ImportError as e:
+        # The SDK needs python-libusb1, and pyusb for its package's
+        # firmware loader.
+        say("error", "this Python (%s) has no %s, which the ici9320 SDK needs (pip install "
+            "--user libusb1 pyusb)" % (sys.executable,
+                                       {"usb1": "python-libusb1", "usb": "pyusb"}.get(e.name,
+                                                                                     e.name)))
+        return
+
+    luts = thermal_luts()
+    cfg = {"palette": "iron", "auto_range": True, "range_lo": 5000, "range_hi": 5500,
+           "equalize": False, "readout": True}
+
+    def params():
+        """Return the camera's settings list."""
+        auto = bool(cfg["auto_range"])
+        return [
+            setting("palette", "Palette", "Display", "enum", cfg["palette"], "iron",
+                    options=[[pid, label] for pid, label, _ in THERMAL_PALETTES]),
+            setting("auto_range", "Automatic Range", "Display", "bool", auto, True,
+                    help="Stretch the palette over the picture's own counts (0.5 % to 99.5 %), "
+                         "smoothed so it doesn't flicker; the readout shows it"),
+            setting("range_lo", "Range From", "Display", "range", cfg["range_lo"], 5000, min=0,
+                    max=THERMAL_MAX, step=1, unit="counts", inactive=auto or None,
+                    help="Without the automatic range: the palette's coldest colour at these "
+                         "raw counts"),
+            setting("range_hi", "Range To", "Display", "range", cfg["range_hi"], 5500, min=0,
+                    max=THERMAL_MAX, step=1, unit="counts", inactive=auto or None,
+                    help="... and its hottest at these"),
+            setting("equalize", "Histogram Equalisation", "Display", "bool",
+                    bool(cfg["equalize"]), False,
+                    help="Spread the colours by how many pixels have each count: more detail, "
+                         "but no longer proportional to the counts"),
+            setting("readout", "Readout", "Display", "bool", bool(cfg["readout"]), True,
+                    help="The range in raw counts, the housing temperature and the shutter, "
+                         "written on the picture"),
+        ]
+
+    def apply(values):
+        """Apply settings; return {id: why} for those that failed."""
+        errors = {}
+        for k, v in values.items():
+            if k == "palette":
+                if v in luts:
+                    cfg[k] = v
+                else:
+                    errors[k] = "no palette %s" % v
+            elif k in ("auto_range", "equalize", "readout"):
+                cfg[k] = bool(v)
+            elif k in ("range_lo", "range_hi"):
+                cfg[k] = int(max(0, min(THERMAL_MAX, as_number(v, cfg[k]))))
+        return errors
+
+    # Open it (loading its firmware if it was just plugged in).
+    cam = ICI9320()
+    try:
+        cam.open()
+    except usb1.USBErrorAccess:
+        say("error", "no permission to open the thermal camera: SPOT Vision's udev rule isn't "
+            "installed (deploy_orin.sh says how)")
+        return
+    except usb1.USBErrorBusy:
+        say("busy", "another program has the thermal camera")
+        return
+    except (RuntimeError, usb1.USBError) as e:
+        say("error", "the ici9320 SDK couldn't open the camera: %s" % e)
+        return
+    model = "ICI 9320P, firmware %d.%d" % cam.fw_version
+    say("open", model=model)
+    errors = apply(cmd.take())
+    report(params(), errors)
+
+    # The view: the counts stretched over the range, coloured, with the
+    # readout.
+    span = None   # the automatic range [lo, hi], smoothed
+
+    def render(frame, housing, shutter):
+        """Return a frame (raw counts) as the thermal view (BGR)."""
+        nonlocal span
+        counts = frame.astype(np.float32)
+        if cfg["auto_range"]:
+            lo, hi = np.percentile(counts, (0.5, 99.5))
+            hi = max(hi, lo + THERMAL_MIN_SPAN)
+            if span is None:
+                span = [lo, hi]
+            else:
+                span = [span[0] + THERMAL_SMOOTH * (lo - span[0]),
+                        span[1] + THERMAL_SMOOTH * (hi - span[1])]
+            lo, hi = span
+        else:
+            lo, hi = sorted((float(cfg["range_lo"]), float(cfg["range_hi"])))
+            hi = max(hi, lo + 1)
+        img8 = np.clip((counts - lo) / (hi - lo) * 255, 0, 255).astype(np.uint8)
+        if cfg["equalize"]:
+            img8 = cv2.equalizeHist(img8)
+        img = luts[cfg["palette"]][img8]
+        if cfg["readout"]:
+            text = "%d-%d counts" % (lo, hi)
+            if housing is not None:
+                text += "  housing %.1f C" % housing
+            if shutter:
+                text += "  SHUTTER"
+            for colour, width in (((0, 0, 0), 3), ((255, 255, 255), 1)):
+                cv2.putText(img, text, (4, img.shape[0] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.38,
+                            colour, width, cv2.LINE_AA)
+        return img
+
+    newest, housing = None, None
+    last = shutter_at = temp_at = 0.0
+    got_at = time.time()
+    try:
+        cam.start_stream()
+        while not cmd.quit:
+            cmd.poll()
+            changes = cmd.take()
+            if changes:
+                errors = apply(changes)
+                report(params(), errors)
+
+            # Every frame that came (the SDK queues them all): each one
+            # classified, as its shutter detection counts frames, and
+            # the newest whole one kept.
+            raw = cam.read_frame(0.05)
+            while raw is not None:
+                got_at = time.time()
+                if len(raw) == P.FRAME_BYTES:
+                    frame = np.frombuffer(raw, dtype="<u2").reshape(P.HEIGHT, P.WIDTH)
+                    if cam.classify_frame(frame) == "flat":
+                        shutter_at = got_at
+                    else:
+                        newest = frame
+                raw = cam.read_frame(0.0)
+            now = time.time()
+            if now - got_at > THERMAL_LOST:
+                say("error", "no frames from the thermal camera for %g s (unplugged?)"
+                    % THERMAL_LOST)
+                return
+
+            # The housing temperature, now and then (for the tab too).
+            if now - temp_at >= THERMAL_TEMP_PERIOD:
+                temp_at = now
+                try:
+                    housing = cam.temperature_c()
+                    say("streaming", model=model, housing_c=round(housing, 2))
+                except usb1.USBError:
+                    housing = None
+
+            # Send the view when a frame is due.
+            wanted = cmd.settings
+            if newest is None or "thermal" not in wanted["views"] or not cmd.due(last):
+                continue
+            last = now
+            send("thermal", render(newest, housing, now - shutter_at < THERMAL_SHUTTER_SHOWN),
+                 wanted["quality"], wanted["width"])
+            newest = None
+    finally:
+        cam.close()
 
 
 # Any other USB camera (OpenCV, v4l2-ctl)
@@ -872,7 +1093,8 @@ def run_uvc(device, cmd):
         say("busy", "OpenCV couldn't open %s (another program?)" % device)
         return
     say("open")
-    report(params(), apply(saved))
+    errors = apply(saved)
+    report(params(), errors)
     last, warm = 0.0, time.time() + WARMUP
     try:
         while not cmd.quit:
@@ -885,7 +1107,8 @@ def run_uvc(device, cmd):
                     cap.release()
                     cap = open_cap()
                     warm = time.time() + WARMUP
-                report(params(), apply(changes))
+                errors = apply(changes)
+                report(params(), errors)
 
             # The next frame; sent when due.
             ok, img = cap.read()
@@ -977,8 +1200,8 @@ def main():
     if cmd.quit:
         return
     try:
-        {"zed": run_zed, "realsense": run_realsense, "dvs": run_dvs, "uvc": run_uvc,
-         "demo": run_demo}[kind](arg, cmd)
+        {"zed": run_zed, "realsense": run_realsense, "dvs": run_dvs, "thermal": run_thermal,
+         "uvc": run_uvc, "demo": run_demo}[kind](arg, cmd)
     except ImportError as e:
         say("error", "this Python (%s) has no %s" % (sys.executable, e.name))
     except BrokenPipeError:

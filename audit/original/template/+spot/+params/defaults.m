@@ -72,9 +72,9 @@ function s = defaults()
     % and inertia are used instead.
     s.mass = struct();
     s.mass.override = false;
-    s.mass.RED   = platformMass([6.17 3.12 4.46], 3.00, 2.56, 0.28, 13.75, 0.23543476058293455);
-    s.mass.BLACK = platformMass([6.14 3.07 4.01], 3.11, 2.56, 0.28, 13.22, 0.2432638691100455);
-    s.mass.BLUE  = platformMass([5.65 3.08 4.04], 3.02, 2.56, 0.28, 12.77, 0.22157979686198798);
+    s.mass.RED   = platformMass([6.17 3.12 4.46], 3.00, 2.56, 0.28, 13.75, 0.23535436237213403);
+    s.mass.BLACK = platformMass([6.14 3.07 4.01], 3.11, 2.56, 0.28, 13.22, 0.24318079735046158);
+    s.mass.BLUE  = platformMass([5.65 3.08 4.04], 3.02, 2.56, 0.28, 12.77, 0.22150412995888016);
 
     % The arm. Phi and b0 are for its mount (Spacecraft Designer); spot.arm.mountGeometry moves
     % them with it.

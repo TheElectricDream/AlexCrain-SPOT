@@ -10,9 +10,11 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const KIND = {
-  zed: 'Stereo Camera', realsense: 'LiDAR', dvs: 'Event Camera', uvc: 'USB Camera',
-  demo: 'Test Pattern',
+  zed: 'Stereo Camera', realsense: 'LiDAR', dvs: 'Event Camera', thermal: 'Thermal Camera',
+  uvc: 'USB Camera', demo: 'Test Pattern',
 };
+// Cameras that work over USB 2 (the others offer less there, so the tab warns).
+const USB2_KINDS = new Set(['uvc', 'thermal']);
 const SIZES = [['640', 'Small'], ['960', 'Medium'], ['0', 'Full']];
 const RATES = [5, 10, 15, 30];
 const POLL = 3000;   // [ms] the camera list, while the tab is shown
@@ -109,13 +111,18 @@ export function initVision({ api, act, toast, storage }) {
     $('#visionSize').innerHTML = SIZES.map(([v, l]) =>
       `<option value="${v}" ${v === p.size ? 'selected' : ''}>${l}</option>`).join('');
 
-    // Model, serial number and USB speed (a warning for a USB 3 camera on USB 2).
+    // Model, serial number, the thermal camera's housing temperature and USB speed (a warning for
+    // a USB 3 camera on USB 2).
     const usb = Number(cam.usb_speed_mbps);
     $('#visionMeta').innerHTML = [
       cam.model && cam.model !== cam.name ? esc(cam.model) : '',
       cam.serial ? `#${esc(cam.serial)}` : '',
+      cam.housing_c != null && cam.state === 'streaming'
+        ? `<span class="tip" title="The camera's own temperature (not the scene's)">Housing ` +
+          `${Number(cam.housing_c).toFixed(1)} °C</span>`
+        : '',
       usb
-        ? (usb < 5000 && cam.kind !== 'uvc'
+        ? (usb < 5000 && !USB2_KINDS.has(cam.kind)
           ? '<span class="warn-text" title="Plug it into a USB 3 port: over USB 2 it offers ' +
             'lower resolutions and frame rates">USB 2</span>'
           : `USB ${usb >= 5000 ? '3' : '2'}`)

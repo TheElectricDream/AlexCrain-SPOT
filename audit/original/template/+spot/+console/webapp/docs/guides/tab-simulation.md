@@ -75,7 +75,7 @@ When it finishes, the status says how much was simulated, how long it took and h
 
 ## Playback and Compare
 
-The bar under the 3D view: play and pause (Space), the time and a scrubber marked with the phases, the phase being shown, and the speed. **Compare** lists the results loaded on the Results tab: switch one on to draw it over this run, as outlined platforms with dashed paths, with a time offset to line them up. **Load Results…** loads a saved run, and **Keep This Simulation** keeps the last run as a dataset when you run again. **Replay Saved Results…** (on the empty table) replays an experiment or saved simulation on its own.
+The bar under the 3D view: play and pause (Space), the time and a scrubber marked with the phases, the phase being shown, and the speed. **Compare** lists the results loaded on the Results tab: switch one on to draw it over this run, as outlined platforms with dashed paths, with a time offset to line them up. **Load Results…** loads a saved run, and **Keep This Simulation** keeps the last run as a dataset when you run again. **Replay Saved Results…** (on the empty table) replays an experiment or saved simulation on its own. A run's arm is drawn only while the Designer's Chaser carries the arm; otherwise the page asks whether to show it anyway ([Runs flown with the arm](page:tab-designer#runs-flown-with-the-arm)).
 
 ## The 3D view
 
