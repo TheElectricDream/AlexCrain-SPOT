@@ -42,14 +42,16 @@ function p = plan(s, root)
     plant = [model '/Simulate Plant Dynamics'];
     if getSimulinkBlockHandle(plant) ~= -1
         p.changes = [{sprintf('comment out %s', plant)}, p.changes];
-    elseif isempty(find_system(model, 'LookUnderMasks', 'all', 'Variant', 'on'))
+    elseif isempty(find_system(model, 'LookUnderMasks', 'all', ...
+                               'MatchFilter', @Simulink.match.allVariants, 'Variant', 'on'))
         p.warnings{end + 1} = sprintf( ...
             ['The diagram has no "%s" block to comment out and no Variant Subsystem: the ' ...
              'simulated plant would be built into the program.'], plant);
     end
 
-    % Continuous-time blocks.
-    blocks = find_system(model, 'FindAll', 'on', 'Type', 'Block');
+    % Continuous-time blocks, in every choice of a Variant Subsystem.
+    blocks = find_system(model, 'FindAll', 'on', 'MatchFilter', @Simulink.match.allVariants, ...
+                         'Type', 'Block');
     types = string(get_param(blocks, 'BlockType'));
     nDerivative = nnz(types == "Derivative");
     nIntegrator = nnz(types == "Integrator");

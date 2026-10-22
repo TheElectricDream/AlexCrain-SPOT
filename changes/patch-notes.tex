@@ -50,6 +50,7 @@ In the last pre-release we said we would be moving towards a more version-contro
     \item \textbf{Change 4:} The PhaseSpace data rate, the thruster PWM frequency and the lab console's address are now settings in the console rather than variables in the initializer. The arm's old gain and friction variables (Kp\_sharm, Gamma, Tz\_lim and friends) have been removed, as the arm model and its controllers now set these themselves.
     \item \textbf{Change 5:} The project's calibration moved from resources/spot\_calibration.json to spot\_calibration.json, next to spot\_settings.json and spot\_design.json. Older projects are moved across the first time the console starts, and MATLAB still reads the old location until then. The arm calibration script moved from resources/arm\_calibration to +spot/+arm/calibration.
     \item \textbf{Change 6:} The table is 3.51155~m $\times$ 2.41935~m everywhere, as measured (the page, the Python and the 2D figures used 3.5 $\times$ 2.4), with the height surface centred on it; and g is 9.80665~m/s$^2$ in the bifilar inertia (was 9.81), so the default inertias are 0.03\,\% lower.
+    \item \textbf{Change 7:} When the template holds more than one diagram, New\_SPOT\_\allowbreak Project asks which one the project should start from (a list, or the Command Window without a desktop), and copies only that one; a third argument names it directly. With a single diagram nothing changes.
 \end{itemize}
 
 % GUI Changes Section

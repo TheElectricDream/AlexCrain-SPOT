@@ -18,6 +18,7 @@ In MATLAB, in the folder that holds `New_SPOT_Project.m`:
 New_SPOT_Project                          % asks for the name (a dialog, or the Command Window)
 New_SPOT_Project('MyProject')             % creates projects/MyProject with MyProject.slx
 New_SPOT_Project('MyProject', 'D:\SPOT')  % creates D:\SPOT\MyProject instead
+New_SPOT_Project('MyProject', [], 'Template_LinearFlow.slx')  % starts it from that diagram
 folder = New_SPOT_Project('MyProject');   % also returns the new folder ('' if cancelled)
 ```
 
@@ -27,6 +28,10 @@ Then `cd` into the project and run `SPOT` ([Quick Start: Your First Simulation](
 
 The name is also the **Simulink model's name**, so it must be a valid MATLAB name: letters, digits and `_`, starting with a letter, at most 63 characters, not a MATLAB keyword (`end`, `for`, ...), not `spot` or `SPOT_User_Parameters`, and not the name of an existing MATLAB function (a model called `plot` would hide `plot`). A name with a problem is refused with the reason, and the dialog asks again.
 
+## The diagram
+
+A project has one diagram. When the template holds more than one `.slx`, `New_SPOT_Project` asks which one to start from, after the name: a list in a dialog, or a numbered list in the Command Window without a desktop. Cancelling creates nothing. The third argument names the diagram directly (with or without `.slx`), which skips the question; a name the template doesn't have is refused with the list of the ones it does. With a single diagram in the template, nothing is asked.
+
 ## What is copied
 
 Everything at the top of the template, except:
@@ -35,7 +40,7 @@ Everything at the top of the template, except:
 - Simulink's build files (`slprj`, `*.slxc`, `*.autosave`, `*_ert_rtw`), Python's `__pycache__` folders and the lab console's StreamData builds;
 - the developers' `documentation/` sources and `STATUS.md`.
 
-The diagram is copied as `<name>.slx`; Simulink takes a model's name from its file name, so nothing inside it changes. This documentation is part of `+spot`, so every project has it, and notes you add in a project stay with that project.
+The chosen diagram is copied as `<name>.slx`, and the template's other diagrams stay behind; Simulink takes a model's name from its file name, so nothing inside it changes. This documentation is part of `+spot`, so every project has it, and notes you add in a project stay with that project.
 
 ## Moving your work to a newer template
 

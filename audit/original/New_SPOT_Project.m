@@ -1,29 +1,36 @@
-function target = New_SPOT_Project(name, location)
+function target = New_SPOT_Project(name, location, diagram)
     %NEW_SPOT_PROJECT Create a new SPOT project from the template.
     %   New_SPOT_Project asks for the project's name and creates projects/<name>.
     %   New_SPOT_Project('MyProject') creates projects/MyProject.
     %   New_SPOT_Project('MyProject', folder) creates folder/MyProject instead.
+    %   New_SPOT_Project('MyProject', [], 'Template_LinearFlow.slx') starts it from that diagram.
     %   target = New_SPOT_Project(...) also returns the new project's folder ('' if cancelled).
     %
-    %   A project is a copy of the template folder (next to this file) with its Simulink diagram
+    %   A project is a copy of the template folder (next to this file) with one Simulink diagram,
     %   renamed to <name>.slx, so the name is also the diagram's name: letters, digits and _,
-    %   starting with a letter. The template's caches, builds, saved data, settings and
-    %   documentation stay behind, so the console starts the new project with the default
-    %   settings. Afterwards: cd into the project and run SPOT.
+    %   starting with a letter. When the template holds more than one diagram, it asks which
+    %   one to start from; the others stay behind. The template's caches, builds, saved data,
+    %   settings and documentation stay behind too, so the console starts the new project with
+    %   the default settings. Afterwards: cd into the project and run SPOT.
     %
     %   Inputs
     %     name      the project's name (optional: asked for in a dialog, or in the Command
     %               Window without a desktop)
     %     location  the folder to create it in (optional: projects/, next to this file)
+    %     diagram   the template's diagram to start from, e.g. 'Template_LinearFlow.slx'
+    %               (optional: the template's only diagram, or asked for in a list, or in the
+    %               Command Window without a desktop, when it has several)
     %
     %   Outputs
-    %     target    the new project's folder; '' if the name was not given
+    %     target    the new project's folder; '' if the name or the diagram was not given
     %
     %   Behavior
     %     1. Checks the name (a valid diagram name, not one of SPOT's or MATLAB's own).
-    %     2. Copies the template's top level, except what is left out and Simulink's build
-    %        files, then removes Python caches and the lab console's local builds.
-    %     3. Copies the user guide if the template has one, the diagram as <name>.slx, and
+    %     2. Picks the diagram: the template's only one, or the one given or chosen.
+    %     3. Copies the template's top level, except what is left out, the diagrams and
+    %        Simulink's build files, then removes Python caches and the lab console's local
+    %        builds.
+    %     4. Copies the user guide if the template has one, the diagram as <name>.slx, and
     %        makes an empty Saved Data folder.
     %     On an error the half-made project is removed.
     %
@@ -56,25 +63,46 @@ function target = New_SPOT_Project(name, location)
         location = fullfile(root, 'projects');
     end
 
-    % The template's one diagram, and a folder not taken yet.
-    diagram = dir(fullfile(template, '*.slx'));
-    if numel(diagram) ~= 1
-        error('SPOT:newProject', ...
-            'The template (%s) must hold exactly one diagram (.slx); it has %d.', ...
-            template, numel(diagram));
-    end
+    % A folder not taken yet.
     target = fullfile(char(location), name);
     if exist(target, 'file')
         error('SPOT:newProject', '%s already exists. Choose another name or location.', target);
     end
 
+    % The template's diagram to start from: its only one, else the one given or chosen
+    % (cancelled: nothing to do).
+    found = dir(fullfile(template, '*.slx'));
+    diagrams = {found.name};
+    if isempty(diagrams)
+        error('SPOT:newProject', 'The template (%s) has no diagram (.slx).', template);
+    end
+    if nargin < 3 || isempty(diagram)
+        if isscalar(diagrams)
+            diagram = diagrams{1};
+        else
+            diagram = askDiagram(diagrams);
+            if isempty(diagram)
+                target = '';
+                return
+            end
+        end
+    end
+    diagram = char(diagram);
+    if ~endsWith(diagram, '.slx')
+        diagram = [diagram '.slx'];
+    end
+    if ~ismember(diagram, diagrams)
+        error('SPOT:newProject', 'The template has no diagram %s; it has %s.', ...
+            diagram, strjoin(diagrams, ', '));
+    end
+
     %% Copy
     mkdir(target);
     try
-        % Everything at the top of the template, except what is left out and Simulink's build
-        % files.
+        % Everything at the top of the template, except what is left out, the diagrams (the
+        % chosen one is copied below) and Simulink's build files.
         items = dir(template);
-        items = items(~ismember({items.name}, [LEAVE_OUT, {diagram.name}]) ...
+        items = items(~ismember({items.name}, [LEAVE_OUT, diagrams]) ...
                       & ~endsWith({items.name}, BUILD_SUFFIXES));
         for k = 1:numel(items)
             copyfile(fullfile(template, items(k).name), fullfile(target, items(k).name));
@@ -97,7 +125,7 @@ function target = New_SPOT_Project(name, location)
         end
 
         % The diagram, named after the project, and an empty folder for the results.
-        copyfile(fullfile(template, diagram.name), fullfile(target, [name '.slx']));
+        copyfile(fullfile(template, diagram), fullfile(target, [name '.slx']));
         mkdir(fullfile(target, 'Saved Data'));
     catch err
         % Don't leave a half-made project behind.
@@ -156,6 +184,49 @@ function name = askName()
         else
             fprintf('%s\n', problem);
         end
+    end
+end
+
+function diagram = askDiagram(diagrams)
+    %ASKDIAGRAM The template diagram to start the project from (a list, or the Command Window).
+    %   diagram = askDiagram(diagrams) asks which of diagrams (file names) to use; '' if
+    %   cancelled.
+
+    %% Constants
+    PROMPT = {'The template has more than one diagram.', ...
+              'Which one should the project start from?'};
+    LIST_SIZE = [360 120];   % [width height] of the dialog's list [pixels]
+
+    %% Ask
+    diagram = '';
+
+    % A list to pick from, with a desktop.
+    if usejava('desktop')
+        choice = listdlg('ListString', diagrams, 'SelectionMode', 'single', ...
+                         'PromptString', PROMPT, 'Name', 'New SPOT Project', ...
+                         'ListSize', LIST_SIZE);
+        if ~isempty(choice)
+            diagram = diagrams{choice};
+        end
+        return
+    end
+
+    % Without one, a numbered list in the Command Window, until a number is given.
+    fprintf('%s\n', PROMPT{:});
+    for k = 1:numel(diagrams)
+        fprintf('  %d  %s\n', k, diagrams{k});
+    end
+    while true
+        answer = strtrim(input(sprintf('Number (1-%d, Enter to cancel): ', numel(diagrams)), 's'));
+        if isempty(answer)
+            return
+        end
+        choice = str2double(answer);
+        if choice >= 1 && choice <= numel(diagrams) && choice == round(choice)
+            diagram = diagrams{choice};
+            return
+        end
+        fprintf('Type a number from 1 to %d.\n', numel(diagrams));
     end
 end
 

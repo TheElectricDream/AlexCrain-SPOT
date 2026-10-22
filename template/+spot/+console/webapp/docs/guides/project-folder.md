@@ -15,7 +15,7 @@ What is in a SPOT project, and what each part is for. Paths are relative to the 
 └── .spot_cache/               the console's state on this computer (safe to delete)
 ```
 
-A project is made by [`New_SPOT_Project`](page:new-project), which copies the repository's `template/` folder and renames the diagram. The template's own settings, saved data, caches and documentation sources are not copied, so a new project starts from the default settings.
+A project is made by [`New_SPOT_Project`](page:new-project), which copies the repository's `template/` folder and renames the diagram (the one you choose, when the template has several). The template's own settings, saved data, caches and documentation sources are not copied, so a new project starts from the default settings.
 
 ## The `+spot` packages
 

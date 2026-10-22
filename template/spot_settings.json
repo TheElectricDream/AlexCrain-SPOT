@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "diagram": "Template_v5_0_0_2026a_Jetson_PSClock.slx",
+  "diagram": "Template_LinearFlow.slx",
   "platforms": {
     "RED": true,
     "BLACK": true,
