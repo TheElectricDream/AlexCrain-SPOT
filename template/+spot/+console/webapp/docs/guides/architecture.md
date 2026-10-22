@@ -16,7 +16,7 @@ SPOT is five kinds of computer and the programs that connect them. This page is 
 
 **The platforms** each run a Jetson (Ubuntu) with the compiled diagram, which reads the PhaseSpace packets (`spot.hardware.phasespaceLatest`), computes the control, and writes the thruster packet to a **Teensy** over USB serial ([teensy_pwm_control.ino](file:teensy_pwm_control.ino)); the Chaser's Jetson also drives the arm's **Dynamixel** servos in PWM control (`spot.hardware.ArmPWM`). A small shell agent ([spot_agent.sh](file:spot_agent.sh)) lets the lab console manage them over SSH with a restricted key.
 
-**The Jetson Orin** (`192.168.1.115`) runs **SPOT Vision** ([spot_vision.py](file:spot_vision.py)), a small web service on port 8090 that streams the cameras plugged into it (the ZED 2i, the RealSense L515, the DVXplorer, USB cameras) to the lab console's Vision tab. A camera is only opened while it streams, so experiments can use it the rest of the time. The Chaser's program can also exchange UDP packets with the Orin (its states out, a vision estimate in).
+**The Jetson Orin** (`192.168.1.115`) runs **SPOT Vision** ([spot_vision.py](file:spot_vision.py)), a small web service on port 8090 that streams the cameras plugged into it (the ZED 2i, the RealSense L515, the DVXplorer, USB cameras) to the lab console's Vision tab. A camera is only opened while it streams or an experiment records it, so experiments can use it the rest of the time. An experiment's recordings stay on the Orin's disk until Collect copies them into the run ([Camera Recordings](page:camera-recordings)). The Chaser's program can also exchange UDP packets with the Orin (its states out, a vision estimate in).
 
 ## One diagram, two runs
 
@@ -28,6 +28,7 @@ The Simulink diagram ([The Simulink Diagram: Overview and Step Order](page:diagr
 2. Each platform's program sends its own clock back (UDP 48720–48722). When the lab console has heard all of them, it arms the clock in the stream (`exp start 3`); three seconds later every program leaves phase 0 at the same instant ([PhaseSpace Camera Code](page:diagram-phasespace)).
 3. Each program sends its debug message (55001–55003) and its live streams (55011–55013) to the lab console, which forwards them to the Experiment tab's Messages panel and Live Plot.
 4. Each program logs its 108 signals to its `ExpLog` file. After **Stop**, **Collect** fetches them to the lab console, then to your `Saved Data/` folder, where MATLAB decodes them ([Logged Signals](page:logged-signals)).
+5. Cameras chosen in the Recording card record on the Orin from the start to the stop, and the lab console relays each packet's experiment clock to it (UDP 31545), so every frame gets the experiment time. Collect copies the recordings from the Orin straight into `Saved Data/<run>/cameras/` ([Camera Recordings](page:camera-recordings)).
 
 ## Ports and addresses
 
@@ -42,6 +43,7 @@ The Simulink diagram ([The Simulink Diagram: Overview and Step Order](page:diagr
 | | UDP 55011 / 55012 / 55013 | live streams |
 | Platforms → network | UDP 33001–33003 broadcast | heartbeats ([Check Connection](page:diagram-outgoing)) |
 | RED ↔ Orin | UDP 46875 / 36845 | states out, vision estimate in |
+| Lab console → Orin | UDP 31545 | the experiment clock, while cameras record |
 | Lab console → platforms | SSH 22 (`spot_agent.sh`) | deploy, start, stop, status, data, Teensy stream |
 | Local console | `127.0.0.1:<random>` + token | the page; the worker's socket is another random port |
 
@@ -55,7 +57,7 @@ All addresses are settings or constants in one place each: the lab console's in 
 | `spot_design.json` | what is mounted on each platform | the Designer |
 | `SPOT_User_Parameters.m` | your own workspace variables | you |
 | `spot_calibration.json` (optional) | the project's copy of the lab's calibration (the table's slope, each thruster's thrust and the thrust decay, the arm's joint friction and inertia) and any values you override, and where each platform's PhaseSpace LEDs are; an `arm_calibration.json` from `calibrate_arm.py` run by hand still works, and the newer of the two arm calibrations is used | Update from Lab, the overrides on the Simulation tab's Calibration pane ([Calibration Tab](page:tab-calibration)), the Platforms pane's Thruster and LED Layout |
-| `Saved Data/<run>/` | saved simulations and collected experiments | Save Results, Collect |
+| `Saved Data/<run>/` | saved simulations and collected experiments (with `cameras/`, the recordings) | Save Results, Collect |
 | `.spot_cache/` | the console's port and token, the last simulation's replay, logs | the console (not to be committed) |
 | `~/ExperimentSoftware/MATLAB_ws`, `~/ExperimentData` (on the TX2) | the compiled programs; collected runs | the build, Collect |
 | `~/.spot_calibration.json` (on the TX2) | the lab's calibration | the Calibration tab's runs |

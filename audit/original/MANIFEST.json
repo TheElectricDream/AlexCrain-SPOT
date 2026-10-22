@@ -49,6 +49,7 @@
   "template/+spot/+console/webapp/app.py",
   "template/+spot/+console/webapp/docs/toc.json",
   "template/+spot/+console/webapp/docs/guides/architecture.md",
+  "template/+spot/+console/webapp/docs/guides/camera-recordings.md",
   "template/+spot/+console/webapp/docs/guides/conventions.md",
   "template/+spot/+console/webapp/docs/guides/data-stores.md",
   "template/+spot/+console/webapp/docs/guides/dev-code-standard.md",

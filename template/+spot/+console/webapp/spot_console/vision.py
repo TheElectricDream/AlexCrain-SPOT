@@ -6,20 +6,40 @@ the Orin for the list; its address is a setting ("vision": host and
 port). The video goes from the Orin straight to the page, so it never
 loads the TX2.
 
+An experiment can also record cameras (experiment.py): SPOT Vision
+records on the Orin's own disk, and while it does, this console relays
+the experiment clock of each PhaseSpace packet to it (ClockRelay, UDP
+CLOCK_PORT), so every frame gets its experiment time. The recordings
+go from the Orin straight to the local console when the data is
+collected.
+
 Part of the SPOT Console (webapp/app.py starts it).
 """
 
 import ipaddress
 import json
+import math
+import socket
+import struct
+import threading
 import urllib.error
 import urllib.request
 
 from .common import ApiError
 from .events import settings
+from .phasespace import monitor
 
 DEFAULT_VISION = {"host": "192.168.1.115", "port": 8090, "user": "spot-vision"}
 
 STATUS_TIMEOUT = 3   # [s] asking for the camera list
+
+# Recording (spot_vision.py's CLOCK_PORT and CLOCK_FORMAT: magic,
+# sequence, packet time [s], experiment clock [s], NaN until armed).
+CLOCK_PORT = 31545
+CLOCK_MAGIC = b"SPCK"
+CLOCK_FORMAT = "<4sIdd"
+RECORD_START_TIMEOUT = 40   # [s] SPOT Vision waits up to 25 s for each camera
+RECORD_STOP_TIMEOUT = 60    # [s] ... and 30 s for each to close its files
 
 
 def config():
@@ -38,16 +58,18 @@ def status():
 
     Returns:
         A dict with url, config, reachable, cameras (a list), host
-        (the Orin's name) and error (None, or why it can't be
-        reached).
+        (the Orin's name), disk ({"free", "total"} where recordings
+        go), recording (the one in progress, or None) and error (None,
+        or why it can't be reached).
     """
     base = url()
     out = {"url": base, "config": config(), "reachable": False, "cameras": [], "host": None,
-           "error": None}
+           "disk": None, "recording": None, "error": None}
     try:
         with urllib.request.urlopen(base + "/api/cameras", timeout=STATUS_TIMEOUT) as response:
             data = json.loads(response.read().decode("utf-8"))
-        out.update(reachable=True, cameras=data.get("cameras", []), host=data.get("host"))
+        out.update(reachable=True, cameras=data.get("cameras", []), host=data.get("host"),
+                   disk=data.get("disk"), recording=data.get("recording"))
     except urllib.error.URLError as e:
         # Refused: the service isn't running; otherwise the Orin isn't
         # answering.
@@ -132,6 +154,93 @@ def set_params(camera, body):
     if not isinstance(values, dict):
         raise ApiError("values must be {setting id: value}.")
     return _orin(_camera_path(camera), {"values": values, "reset": bool(body.get("reset"))})
+
+
+# Recording, for experiments
+
+
+def record_start(session, cameras):
+    """Have SPOT Vision record cameras, and relay the clock to it.
+
+    Args:
+        session: The recording's name (the experiment's).
+        cameras: The cameras' ids.
+
+    Returns:
+        SPOT Vision's status of the recording.
+
+    Raises:
+        ApiError: if it can't start (SPOT Vision says why); then no
+            camera records.
+    """
+    result = _orin("/api/record/start", {"session": session, "cameras": list(cameras)},
+                   timeout=RECORD_START_TIMEOUT)
+    relay.start(config()["host"])
+    return result
+
+
+def record_stop(session):
+    """Stop the clock relay and the recording; return session.json.
+
+    None if SPOT Vision wasn't recording it.
+
+    Raises:
+        ApiError: if SPOT Vision can't be reached.
+    """
+    relay.stop()
+    return _orin("/api/record/stop", {"session": session},
+                 timeout=RECORD_STOP_TIMEOUT).get("stopped")
+
+
+class ClockRelay:
+    """Sends SPOT Vision each PhaseSpace packet's clocks when recording.
+
+    A monitor listener: StreamData's local copy of every packet, as the
+    platforms get it, so the recording's frames are timed on the same
+    experiment clock as the platforms.
+    """
+
+    def __init__(self):
+        """Start not relaying."""
+        self._lock = threading.Lock()
+        self._target = None
+        self._sock = None
+        self._seq = 0
+
+    def start(self, host):
+        """Relay to SPOT Vision on host."""
+        with self._lock:
+            if self._sock is None:
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self._target, self._seq = (host, CLOCK_PORT), 0
+        monitor.add_listener(self._on_frame)
+
+    def stop(self):
+        """Stop relaying."""
+        monitor.remove_listener(self._on_frame)
+        with self._lock:
+            self._target = None
+
+    def _on_frame(self, frame):
+        """Send one packet's packet time and experiment clock."""
+        with self._lock:
+            target, sock = self._target, self._sock
+            self._seq = (self._seq + 1) & 0xFFFFFFFF
+            seq = self._seq
+        if target is None:
+            return
+        nan = float("nan")
+        t, exp = frame.get("t"), frame.get("exp")
+        data = struct.pack(CLOCK_FORMAT, CLOCK_MAGIC, seq,
+                           t if t is not None and math.isfinite(t) else nan,
+                           exp if exp is not None else nan)
+        try:
+            sock.sendto(data, target)
+        except OSError:
+            pass
+
+
+relay = ClockRelay()
 
 
 def parse_vision(value):

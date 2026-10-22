@@ -5,7 +5,7 @@
     "RED": true,
     "BLACK": true,
     "BLUE": true,
-    "ARM": true
+    "ARM": false
   },
   "sampleRate": 20,
   "dataRate": 10,
@@ -72,8 +72,8 @@
     },
     "BLUE": {
       "initial": [
-        0.513,
-        0.768,
+        1.611,
+        0.924,
         -120
       ],
       "home": [

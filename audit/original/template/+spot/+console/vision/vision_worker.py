@@ -19,6 +19,8 @@ Commands come on standard input, one JSON object a line:
     {"views": ["left", "depth"], "fps": 15, "quality": 80,
      "width": 960}                  what to send (again when it changes)
     {"params": {"<id>": value, ...}}  settings to apply
+    {"record": {"folder": "/path"}}   record into this folder (new)
+    {"record": null}                  stop recording
     {"quit": true}
 Frames and news go to standard output:
     b"F <view> <length>\\n" followed by that many bytes of JPEG
@@ -26,17 +28,29 @@ Frames and news go to standard output:
                     "detail": "...", "model", "serial", "housing_c"}
     b"P <json>\\n"  {"params": [setting, ...], "errors": {"<id>":
                     "why"}}: the camera's settings, after a change
+    b"R <json>\\n"  {"recording": bool, "frames", "bytes", "files",
+                    "error", "note", "done"}: a recording's progress
+                    (each RECORD_REPORT s), and "done" once closed
 A setting: {"id", "label", "group", "type": "range" | "bool" | "enum",
 "min", "max", "step", "value", "default", "options": [[value, label],
 ...], "reopen": (changing it reopens the camera), "help", "unit",
 "inactive"}.
 
-The camera is opened when the first view is asked for and closed when
-the process ends; spot_vision.py ends it a few seconds after the last
-viewer leaves, so experiments on the Orin can have the camera the rest
-of the time.
+The camera is opened when the first view (or a recording) is asked for
+and closed when the process ends; spot_vision.py ends it a few seconds
+after the last viewer leaves and the recording ends, so experiments on
+the Orin can have the camera the rest of the time.
+
+A recording is the camera's own data in its library's format where it
+has one (the ZED's SVO, the RealSense's bag, the DVXplorer's AEDAT4
+events; the thermal camera's raw counts; other cameras as MJPEG
+video), whatever is being watched, and frames.csv: a row per frame (per
+event batch for the DVXplorer) with its time on the Orin's monotonic
+clock (orin_time [s], the clock spot_vision.py's experiment clock is
+fitted to) and the camera's own time stamp.
 """
 import json
+import math
 import os
 import re
 import select
@@ -55,6 +69,8 @@ WARMUP = 1.0
 
 TOOL_TIMEOUT = 5         # [s] for v4l2-ctl
 FRAME_WAIT_MS = 2000     # [ms] for the L515's next frames
+RECORD_REPORT = 1.0      # [s] between a recording's progress reports
+FRAME_LOG = "frames.csv"
 
 
 # Talking to spot_vision.py
@@ -115,9 +131,10 @@ class Commands:
     """
 
     def __init__(self):
-        """Start with nothing to send."""
+        """Start with nothing to send, and not recording."""
         self.settings = {"views": [], "fps": 15, "quality": 80, "width": 0}
         self.pending = {}
+        self.record = None    # {"folder"} while asked to record
         self.quit = False
         self._buf = b""
 
@@ -153,6 +170,10 @@ class Commands:
                     return changed
                 if isinstance(msg.get("params"), dict):
                     self.pending.update(msg["params"])
+                if "record" in msg:
+                    record = msg["record"]
+                    self.record = record if isinstance(record, dict) and record.get(
+                        "folder") else None
                 for k in ("views", "fps", "quality", "width"):
                     if k in msg:
                         self.settings[k] = msg[k]
@@ -166,6 +187,151 @@ class Commands:
     def due(self, last):
         """Return whether the next frame is due (at the wanted fps)."""
         return time.time() - last >= 1.0 / max(1, float(self.settings["fps"]))
+
+    def wanted(self):
+        """Return whether anything is wanted: a view or a recording."""
+        return bool(self.settings["views"]) or self.record is not None
+
+
+class Recording:
+    """A recording in progress: its folder, frame log and progress.
+
+    The camera's own files go in the folder too (path(name)); the frame
+    log is frames.csv, with the columns given. Progress goes to
+    spot_vision.py as R lines.
+    """
+
+    def __init__(self, folder, columns):
+        """Start one: the folder, and the frame log's header.
+
+        Args:
+            folder: Where it goes (made if missing).
+            columns: The frame log's column names (after "frame", the
+                index log() adds).
+        """
+        self.folder = folder
+        os.makedirs(folder, exist_ok=True)
+        self._log = open(os.path.join(folder, FRAME_LOG), "w")
+        self._log.write(",".join(["frame"] + list(columns)) + "\n")
+        self.frames = 0
+        self.error = None
+        self.note = None      # something to know, not a failure
+        self._reported = 0.0
+        self.report()
+
+    def path(self, name):
+        """Return the path of one of its files."""
+        return os.path.join(self.folder, name)
+
+    def log(self, *values):
+        """Add a frame's row to the frame log (its index first)."""
+        self._log.write(",".join([str(self.frames)] + [
+            "" if v is None else ("%.6f" % v if isinstance(v, float) else str(v))
+            for v in values]) + "\n")
+        self.frames += 1
+        if time.time() - self._reported >= RECORD_REPORT:
+            self.report()
+
+    def report(self, done=False):
+        """Send the recording's progress (done: it is closed)."""
+        self._reported = time.time()
+        files, size = [], 0
+        for name in sorted(os.listdir(self.folder)):
+            try:
+                size += os.path.getsize(os.path.join(self.folder, name))
+                files.append(name)
+            except OSError:
+                pass
+        OUT.write(b"R " + json.dumps({"recording": not done, "frames": self.frames,
+                                      "bytes": size, "files": files, "error": self.error,
+                                      "note": self.note, "done": done}).encode() + b"\n")
+        OUT.flush()
+
+    def fail(self, why):
+        """Note why the recording went wrong (it goes on if it can)."""
+        self.error = why
+        self.report()
+
+    def close_log(self):
+        """Close the frame log (no more frames), to finish its rows."""
+        if not self._log.closed:
+            self._log.close()
+
+    def close(self):
+        """Close the frame log and send the last report."""
+        self.close_log()
+        self.report(done=True)
+
+
+def not_recording(folder, why):
+    """Tell spot_vision.py a recording couldn't start, and why."""
+    OUT.write(b"R " + json.dumps({"recording": False, "frames": 0, "bytes": 0, "files": [],
+                                  "error": why, "done": True, "folder": folder}).encode() + b"\n")
+    OUT.flush()
+
+
+def frame_writer(rec, name, size, fps):
+    """Open an MJPEG .avi in a recording, for 8-bit pictures.
+
+    Args:
+        rec: The Recording.
+        name: The file's name.
+        size: (width, height).
+        fps: The nominal frame rate (the frame log has the real times).
+
+    Returns:
+        A cv2.VideoWriter, or None (the recording notes why).
+    """
+    writer = cv2.VideoWriter(rec.path(name), cv2.VideoWriter_fourcc(*"MJPG"), float(fps),
+                             (int(size[0]), int(size[1])))
+    if not writer.isOpened():
+        rec.fail("OpenCV couldn't open %s for writing" % name)
+        return None
+    return writer
+
+
+def host_to_orin(seconds):
+    """Return a time on this computer's wall clock as orin_time.
+
+    The cameras' libraries stamp frames on the wall clock; the frame
+    log's orin_time is the monotonic clock. None if the time is more
+    than a minute from now (a camera's own clock, not the host's).
+
+    Args:
+        seconds: The wall-clock time [s since 1970].
+    """
+    now = time.monotonic()
+    t = seconds - (time.time() - now)
+    return t if abs(t - now) < 60 else None
+
+
+def sync_recording(rec, cmd, start, stop=None):
+    """Start or stop a recording as cmd.record asks.
+
+    Args:
+        rec: The Recording now, or None.
+        cmd: The Commands.
+        start: start(folder) -> a Recording, or None if it couldn't
+            (it has said why).
+        stop: stop(rec), called before it closes; or None.
+
+    Returns:
+        The Recording now, or None.
+    """
+    want = cmd.record["folder"] if cmd.record else None
+    if rec is not None and rec.folder != want:
+        if stop:
+            try:
+                stop(rec)
+            except Exception as e:
+                rec.error = rec.error or "%s: %s" % (type(e).__name__, e)
+        rec.close()
+        rec = None
+    if want and rec is None:
+        rec = start(want)
+        if rec is None:
+            cmd.record = None   # said why; not tried again each loop
+    return rec
 
 
 def colour_depth(depth_m, near=0.2, far=5.0):
@@ -225,9 +391,14 @@ def run_zed(serial, cmd):
 
     # The settings: defaults, then what was saved for it (the live ones
     # applied once open).
+    # SVO compression modes this SDK has (H264 and H265 use the Orin's
+    # hardware encoder).
+    COMPRESSIONS = [n for n in ("H264", "H265", "LOSSLESS")
+                    if hasattr(getattr(sl, "SVO_COMPRESSION_MODE", None), n)]
+
     cfg = {"resolution": "HD720", "camera_fps": 30, "depth_mode": "PERFORMANCE",
            "depth_min": 0.3, "depth_max": 20.0, "confidence": 95, "texture_confidence": 100,
-           "fill_mode": False}
+           "fill_mode": False, "svo_compression": "H264"}
     cfg.update({k: v for k, v in cmd.take().items()})
     live = {k: v for k, v in cfg.items() if k in {x[0] for x in VIDEO} | {x[0] for x in FLAGS}}
 
@@ -272,6 +443,15 @@ def run_zed(serial, cmd):
             setting("fill_mode", "Fill Holes", "Depth", "bool", bool(cfg["fill_mode"]), False,
                     help="A dense depth map, the holes filled in"),
         ]
+        if COMPRESSIONS:
+            out.append(setting(
+                "svo_compression", "SVO Compression", "Recording", "enum",
+                cfg["svo_compression"], "H264",
+                options=[[m, {"H264": "H.264", "H265": "H.265 (smaller)",
+                              "LOSSLESS": "Lossless (large)"}[m]] for m in COMPRESSIONS],
+                help="How an experiment's recording (an SVO file: both images, every "
+                     "frame, readable by the ZED SDK, which can compute depth from it "
+                     "again) is compressed"))
         return out
 
     def open_camera():
@@ -327,9 +507,25 @@ def run_zed(serial, cmd):
     errors = apply_live(live)
     report(params(), errors)
 
+    def start_recording(folder):
+        """Record every frame into an SVO file; return the Recording."""
+        version = str(getattr(sl.Camera, "get_sdk_version", lambda: "3")())
+        major_minor = tuple(int(n) for n in re.findall(r"\d+", version)[:2])
+        name = "zed.svo2" if major_minor >= (4, 1) else "zed.svo"
+        rec = Recording(folder, ["orin_time", "arrival_time", "camera_time_ns"])
+        mode = getattr(sl.SVO_COMPRESSION_MODE, str(cfg["svo_compression"]),
+                       sl.SVO_COMPRESSION_MODE.H264)
+        err = cam.enable_recording(sl.RecordingParameters(rec.path(name), mode))
+        if err != sl.ERROR_CODE.SUCCESS:
+            rec.fail("the ZED SDK couldn't record: %s" % err)
+            rec.close()
+            return None
+        return rec
+
     mat = sl.Mat()
     runtime = runtime_params()
     last, warm = 0.0, time.time() + WARMUP
+    rec = None
     try:
         while not cmd.quit:
             # Settings changes: camera ones reopen it, the others apply
@@ -340,8 +536,13 @@ def run_zed(serial, cmd):
                 reopen = {k: v for k, v in changes.items()
                           if k in ("resolution", "camera_fps", "depth_mode", "depth_min",
                                    "depth_max")}
-                cfg.update(changes)
                 errors = {}
+                if rec and reopen:
+                    # Reopening would end the SVO file mid-run.
+                    errors = {k: "not while recording (it reopens the camera)" for k in reopen}
+                    changes = {k: v for k, v in changes.items() if k not in reopen}
+                    reopen = {}
+                cfg.update(changes)
                 if reopen:
                     cam.close()
                     err = open_camera()
@@ -355,12 +556,19 @@ def run_zed(serial, cmd):
                 runtime = runtime_params()
                 report(params(), errors)
 
+            # Recording: every grabbed frame goes into the SVO file.
+            rec = sync_recording(rec, cmd, start_recording, lambda _: cam.disable_recording())
+
             # Grab; send the views wanted when a frame is due.
             wanted = cmd.settings
             views = [v for v in wanted["views"] if v in VIEWS]
             if cam.grab(runtime) != sl.ERROR_CODE.SUCCESS:
                 time.sleep(0.01)
                 continue
+            if rec:
+                stamp = cam.get_timestamp(sl.TIME_REFERENCE.IMAGE).get_nanoseconds()
+                arrival = time.monotonic()
+                rec.log(host_to_orin(stamp / 1e9) or arrival, arrival, stamp)
             now = time.time()
             if not views or now < warm or not cmd.due(last):
                 continue
@@ -372,6 +580,9 @@ def run_zed(serial, cmd):
                      if img.ndim == 3 and img.shape[2] == 4 else img,
                      wanted["quality"], wanted["width"])
     finally:
+        if rec:
+            cam.disable_recording()
+            rec.close()
         cam.close()
 
 
@@ -520,36 +731,83 @@ def run_realsense(serial, cmd):
                     errors[k] = str(e)
         return errors
 
-    pipe, running_views, last, warm = None, None, 0.0, 0.0
+    # A recording keeps the colour and depth streams (and any other
+    # being watched as it starts) in a bag file, librealsense's own
+    # format.
+    REC_STREAMS = ["color", "depth"]
+
+    def stamp(frames, arrival):
+        """Return a frameset's orin_time, from its global time stamp.
+
+        librealsense's global time domain (and the system one) is this
+        computer's clock [ms]; otherwise its arrival time.
+        """
+        domain = str(frames.get_frame_timestamp_domain()).lower()
+        if "global" in domain or "system" in domain:
+            return host_to_orin(frames.get_timestamp() / 1000.0) or arrival
+        return arrival
+
+    pipe, running, last, warm = None, None, 0.0, 0.0
+    rec, segment, bag = None, 0, None
     errors = apply(saved)
     report(params(), errors)
     try:
         while not cmd.quit:
             # Settings changes: a new mode restarts the streams (the
-            # settings report follows).
+            # settings report follows), except while recording.
             changed = cmd.poll(0.0 if pipe else 0.2)
             changes = cmd.take()
             restart = False
             if changes:
                 chosen = {k: changes.pop(k) for k in [k for k in changes if k.startswith("mode.")]}
+                refused = {}
+                if rec and chosen:
+                    refused = {k: "not while recording (it restarts the streams)" for k in chosen}
+                    chosen = {}
                 modes.update(chosen)
                 restart = bool(chosen)
                 errors = apply(changes)
+                errors.update(refused)
                 if not restart:
                     report(params(), errors)
             wanted = cmd.settings
             views = sorted(v for v in wanted["views"] if v in STREAMS)
 
-            # (Re)start the streams the views need.
-            if restart or views != running_views or changed and pipe is None:
+            # Recording: starting or stopping it restarts the streams
+            # (stopping them closes the bag file).
+            want = cmd.record["folder"] if cmd.record else None
+            if (rec.folder if rec else None) != want:
+                if pipe:
+                    pipe.stop()
+                    pipe, running = None, None
+                if rec:
+                    rec.close()
+                rec, segment = None, 0
+                if want:
+                    rec = Recording(want, ["orin_time", "arrival_time", "camera_time_ms", "file",
+                                           "color_frame", "depth_frame"])
+                restart = True
+
+            # The streams: the views', and a recording's. While it
+            # records they stay as they are (a view it lacks shows
+            # nothing).
+            streams = sorted(set(views) | set(REC_STREAMS)) if rec else views
+            if rec and pipe is not None and not restart:
+                streams = running
+
+            # (Re)start the streams.
+            if restart or streams != running or changed and pipe is None:
                 if pipe:
                     pipe.stop()
                     pipe = None
-                running_views = views
-                if not views:
-                    if restart:
+                running = streams
+                if not streams:
+                    if restart and not rec:
                         report(params())
                     continue
+                if rec:
+                    segment += 1
+                    bag = "realsense_%d.bag" % segment
 
                 # The chosen mode of each stream, else the first that
                 # works.
@@ -557,7 +815,7 @@ def run_realsense(serial, cmd):
                 for attempt in range(3):
                     cfg = rs.config()
                     cfg.enable_device(dev.get_info(rs.camera_info.serial_number))
-                    for view in views:
+                    for view in streams:
                         stream, fmt, fallback = STREAMS[view]
                         chosen = modes.get("mode." + view)
                         match = re.match(r"(\d+)x(\d+)@(\d+)$", chosen or "")
@@ -567,6 +825,8 @@ def run_realsense(serial, cmd):
                         else:
                             width, height, rate = fallback[min(attempt, len(fallback) - 1)]
                         cfg.enable_stream(stream, width, height, fmt, rate)
+                    if rec:
+                        cfg.enable_record_to_file(rec.path(bag))
                     try:
                         candidate = rs.pipeline(ctx)
                         candidate.start(cfg)
@@ -576,30 +836,43 @@ def run_realsense(serial, cmd):
                         why = str(e)
                 if pipe is None:
                     say("busy" if "busy" in why.lower() else "error",
-                        "librealsense couldn't start %s: %s" % (", ".join(views), why))
-                    running_views = None
+                        "librealsense couldn't start %s: %s" % (", ".join(streams), why))
+                    if rec:
+                        rec.fail("librealsense couldn't start the streams: %s" % why)
+                        rec.close()
+                        rec, cmd.record = None, None
+                    running = None
                     time.sleep(2)
                     continue
-                if restart:
+                if restart and not rec:
                     report(params())
-                say("streaming", views=views, model=dev.get_info(rs.camera_info.name),
+                say("streaming", views=streams, model=dev.get_info(rs.camera_info.name),
                     serial=dev.get_info(rs.camera_info.serial_number))
                 last, warm = 0.0, time.time() + WARMUP
             if not pipe:
                 continue
 
-            # The next frames; send the views when a frame is due.
+            # The next frames (logged when recording); send the views
+            # when a frame is due.
             try:
                 frames = pipe.wait_for_frames(FRAME_WAIT_MS)
             except RuntimeError as e:
                 say("error", "no frames from the L515: %s" % e)
                 continue
+            if rec:
+                arrival = time.monotonic()
+                color, depth = frames.get_color_frame(), frames.get_depth_frame()
+                rec.log(stamp(frames, arrival), arrival, frames.get_timestamp(), bag,
+                        color.get_frame_number() if color else None,
+                        depth.get_frame_number() if depth else None)
             now = time.time()
             if now < warm or not cmd.due(last):
                 continue
             last = now
-            scale = dev.first_depth_sensor().get_depth_scale() if "depth" in views else 0.00025
+            scale = dev.first_depth_sensor().get_depth_scale() if "depth" in running else 0.00025
             for view in views:
+                if view not in running:
+                    continue
                 if view == "color":
                     frame = frames.get_color_frame()
                     if frame:
@@ -619,7 +892,8 @@ def run_realsense(serial, cmd):
     finally:
         if pipe:
             pipe.stop()
-
+        if rec:
+            rec.close()
 
 # DVXplorer Micro (iniVation dv-processing)
 
@@ -727,8 +1001,47 @@ def run_dvs(name, cmd):
                 errors[k] = str(e)
         return errors
 
+    def start_recording(folder):
+        """Record the events: AEDAT4 (dv-processing's), else raw.
+
+        Returns:
+            The Recording, with .writer (a MonoCameraWriter) or .raw (a
+            file of the event array's rows, its layout in
+            events_bin.json).
+        """
+        rec = Recording(folder, ["orin_time", "arrival_time", "first_us", "last_us", "events"])
+        rec.writer = rec.raw = None
+        try:
+            rec.writer = dv.io.MonoCameraWriter(rec.path("events.aedat4"), cap)
+        except Exception as e:
+            rec.raw = open(rec.path("events.bin"), "wb")
+            rec.note = ("no AEDAT4 writer (%s: %s): the events are in events.bin instead"
+                        % (type(e).__name__, e))
+        return rec
+
+    def stop_recording(rec):
+        """Close the events file (the AEDAT4 writer writes on close)."""
+        if rec.raw:
+            rec.raw.close()
+        rec.writer = None
+
+    def record_batch(rec, batch, ev):
+        """Write an event batch; log it (at its newest event's time)."""
+        arrival = time.monotonic()
+        if rec.writer is not None:
+            rec.writer.writeEvents(batch)
+        else:
+            if rec.frames == 0:
+                with open(rec.path("events_bin.json"), "w") as f:
+                    json.dump({"dtype": [list(field) for field in ev.dtype.descr],
+                               "byteorder": sys.byteorder, "rows": "one per event"}, f)
+            rec.raw.write(ev.tobytes())
+        first, last_us = int(ev["timestamp"][0]), int(ev["timestamp"][-1])
+        rec.log(host_to_orin(last_us / 1e6) or arrival, arrival, first, last_us, len(ev))
+
     errors = apply(cmd.take())
     report(params(), errors)
+    rec = None
     recent = []                                     # event batches (numpy) of the last window
     acc = np.zeros((H, W), np.float32)
     acc_t = time.time()
@@ -739,13 +1052,16 @@ def run_dvs(name, cmd):
         if changes:
             errors = apply(changes)
             report(params(), errors)
+        rec = sync_recording(rec, cmd, start_recording, stop_recording)
 
-        # The next events: kept for the window, and added to the
-        # accumulated view (faded towards 0 first; + brighter, -
+        # The next events: recorded, kept for the window, and added to
+        # the accumulated view (faded towards 0 first; + brighter, -
         # darker).
         batch = cap.getNextEventBatch()
         if batch is not None and len(batch) > 0:
             ev = batch.numpy()
+            if rec:
+                record_batch(rec, batch, ev)
             recent.append(ev)
             now = time.time()
             acc *= float(np.exp(-(now - acc_t) / max(cfg["decay_ms"] / 1000.0, 1e-3)))
@@ -783,6 +1099,9 @@ def run_dvs(name, cmd):
         if "accumulated" in wanted["views"]:
             send("accumulated", np.clip(128 + 40 * acc, 0, 255).astype(np.uint8),
                  wanted["quality"], wanted["width"])
+    if rec:
+        stop_recording(rec)
+        rec.close()
     if not cap.isRunning():
         say("error", "the event camera stopped (unplugged?)")
 
@@ -829,12 +1148,14 @@ def run_thermal(_, cmd):
 
     The SDK loads the camera's firmware when it is fresh from power-up
     (it then comes back as another USB device) and streams 320 x 240
-    raw 14-bit counts at 59.6 Hz. The counts aren't temperatures (the
-    SDK has no radiometric calibration yet): the view stretches a range
-    of them over a palette, the picture's own (automatic) or one set
-    by hand. The camera closes its shutter now and then to recalibrate
-    (flat-field correction); the frames it sends while closed are all
-    one value, and are skipped, so the picture holds meanwhile.
+    raw 14-bit counts at 59.6 Hz, each frame timed on the sensor's own
+    clock (the SDK's frame clock: ici9320.timing). The counts aren't
+    temperatures (the SDK has no radiometric calibration yet): the view
+    stretches a range of them over a palette, the picture's own
+    (automatic) or one set by hand. The camera closes its shutter now
+    and then to recalibrate (flat-field correction); the frames it sends
+    while closed are all one value, and are skipped, so the picture
+    holds meanwhile.
 
     Args:
         _: Unused (there is one such camera).
@@ -843,7 +1164,7 @@ def run_thermal(_, cmd):
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor"))
     try:
         import usb1
-        from ici9320 import ICI9320, protocol as P
+        from ici9320 import ICI9320, protocol as P, retime
     except ImportError as e:
         # The SDK needs python-libusb1, and pyusb for its package's
         # firmware loader.
@@ -855,7 +1176,7 @@ def run_thermal(_, cmd):
 
     luts = thermal_luts()
     cfg = {"palette": "iron", "auto_range": True, "range_lo": 5000, "range_hi": 5500,
-           "equalize": False, "readout": True}
+           "equalize": False, "readout": True, "record_fps": 30}
 
     def params():
         """Return the camera's settings list."""
@@ -880,6 +1201,11 @@ def run_thermal(_, cmd):
             setting("readout", "Readout", "Display", "bool", bool(cfg["readout"]), True,
                     help="The range in raw counts, the housing temperature and the shutter, "
                          "written on the picture"),
+            setting("record_fps", "Recording Rate", "Recording", "enum", int(cfg["record_fps"]),
+                    30, options=[[0, "Every Frame (59.6 fps)"], [30, "30 fps"], [15, "15 fps"],
+                                 [10, "10 fps"], [5, "5 fps"]],
+                    help="How many raw frames an experiment's recording keeps a second (each "
+                         "is 150 kB: 9 MB/s for every frame)"),
         ]
 
     def apply(values):
@@ -895,7 +1221,47 @@ def run_thermal(_, cmd):
                 cfg[k] = bool(v)
             elif k in ("range_lo", "range_hi"):
                 cfg[k] = int(max(0, min(THERMAL_MAX, as_number(v, cfg[k]))))
+            elif k == "record_fps":
+                cfg[k] = int(max(0, min(60, as_number(v, cfg[k]))))
         return errors
+
+    def start_recording(folder):
+        """Record raw frames: thermal_raw.bin, 240 x 320 uint16 each.
+
+        orin_time is the middle of the frame's readout; sensor_frame
+        its number (a gap: frames not kept, or lost).
+        """
+        rec = Recording(folder, ["orin_time", "arrival_time", "sensor_frame", "shutter",
+                                 "housing_c"])
+        rec.raw = open(rec.path("thermal_raw.bin"), "wb")
+        rec.last = -math.inf
+        rec.arrivals = []   # every frame's arrival while recording, kept or not
+        rec.kept = []       # each kept frame's place in arrivals
+        return rec
+
+    def stop_recording(rec):
+        """Close the files; time the frames again over the whole run.
+
+        ici9320.retime fits the sensor's clock to every frame's arrival
+        at once, so the frames just after a lost one (which the live
+        clock numbers late) and those that waited out a stall get their
+        own times; the frame log's orin_time and sensor_frame are
+        rewritten with them.
+        """
+        rec.raw.close()
+        rec.close_log()
+        if not rec.kept:
+            return
+        times, index = retime(rec.arrivals)
+        log = rec.path(FRAME_LOG)
+        with open(log) as src:
+            rows = [line.rstrip("\n").split(",") for line in src]
+        for row, place in zip(rows[1:], rec.kept):
+            row[1] = "%.6f" % (times[place] - P.READOUT_S / 2)
+            row[3] = str(int(index[place]))
+        with open(log + ".tmp", "w") as dst:
+            dst.writelines(",".join(row) + "\n" for row in rows)
+        os.replace(log + ".tmp", log)
 
     # Open it (loading its firmware if it was just plugged in).
     cam = ICI9320()
@@ -951,7 +1317,7 @@ def run_thermal(_, cmd):
                             colour, width, cv2.LINE_AA)
         return img
 
-    newest, housing = None, None
+    newest, housing, rec = None, None, None
     last = shutter_at = temp_at = 0.0
     got_at = time.time()
     try:
@@ -962,20 +1328,33 @@ def run_thermal(_, cmd):
             if changes:
                 errors = apply(changes)
                 report(params(), errors)
+            rec = sync_recording(rec, cmd, start_recording, stop_recording)
 
-            # Every frame that came (the SDK queues them all): each one
-            # classified, as its shutter detection counts frames, and
-            # the newest whole one kept.
-            raw = cam.read_frame(0.05)
-            while raw is not None:
+            # Every frame that came (the SDK queues them, timed): each
+            # one classified, as its shutter detection counts frames;
+            # recorded raw at the chosen rate, with its shutter state;
+            # the newest whole one kept for the view.
+            frame = cam.read_stamped(0.05)
+            while frame is not None:
                 got_at = time.time()
-                if len(raw) == P.FRAME_BYTES:
-                    frame = np.frombuffer(raw, dtype="<u2").reshape(P.HEIGHT, P.WIDTH)
-                    if cam.classify_frame(frame) == "flat":
+                if rec:
+                    rec.arrivals.append(frame.arrival)
+                if len(frame.data) == P.FRAME_BYTES:
+                    counts = np.frombuffer(frame.data, dtype="<u2").reshape(P.HEIGHT, P.WIDTH)
+                    kind = cam.classify_frame(counts)
+                    if kind == "flat":
                         shutter_at = got_at
                     else:
-                        newest = frame
-                raw = cam.read_frame(0.0)
+                        newest = counts
+                    fps = cfg["record_fps"]
+                    spacing = 1.0 / fps - P.FRAME_PERIOD_S / 2 if fps else 0.0
+                    if rec and frame.time - rec.last >= spacing:
+                        rec.last = frame.time
+                        rec.raw.write(frame.data)
+                        rec.kept.append(len(rec.arrivals) - 1)
+                        rec.log(frame.time - P.READOUT_S / 2, frame.arrival, frame.index, kind,
+                                None if housing is None else round(housing, 2))
+                frame = cam.read_stamped(0.0)
             now = time.time()
             if now - got_at > THERMAL_LOST:
                 say("error", "no frames from the thermal camera for %g s (unplugged?)"
@@ -1000,6 +1379,9 @@ def run_thermal(_, cmd):
                  wanted["quality"], wanted["width"])
             newest = None
     finally:
+        if rec:
+            stop_recording(rec)
+            rec.close()
         cam.close()
 
 
@@ -1050,6 +1432,15 @@ def v4l2_controls(device):
     return out
 
 
+RECORD_RATES = [[0, "Every Frame"], [30, "30 fps"], [15, "15 fps"], [10, "10 fps"],
+                [5, "5 fps"]]
+
+
+def rate_due(last, fps):
+    """Return whether a recorded frame is due (fps 0: every frame)."""
+    return not fps or time.monotonic() - last >= 1.0 / fps
+
+
 def run_uvc(device, cmd):
     """Run a USB (UVC) camera until told to quit.
 
@@ -1059,6 +1450,7 @@ def run_uvc(device, cmd):
     """
     saved = cmd.take()
     size = saved.pop("size", "1280x720")
+    record_fps = int(as_number(saved.pop("record_fps", 0)))
 
     def open_cap():
         """Open it at the chosen size, as MJPEG."""
@@ -1074,7 +1466,11 @@ def run_uvc(device, cmd):
         """Return the settings: the size, then its V4L2 controls."""
         return [setting("size", "Resolution", "Stream", "enum", size, "1280x720", reopen=True,
                         options=[[s, s.replace("x", " × ")]
-                                 for s in ("640x480", "800x600", "1280x720", "1920x1080")])
+                                 for s in ("640x480", "800x600", "1280x720", "1920x1080")]),
+                setting("record_fps", "Recording Rate", "Recording", "enum", record_fps, 0,
+                        options=RECORD_RATES,
+                        help="How many frames an experiment's recording (MJPEG video) keeps a "
+                             "second")
                 ] + v4l2_controls(device)
 
     def apply(values):
@@ -1092,36 +1488,67 @@ def run_uvc(device, cmd):
     if not cap.isOpened():
         say("busy", "OpenCV couldn't open %s (another program?)" % device)
         return
+    def start_recording(folder):
+        """Record MJPEG video; the file opens with the first frame."""
+        rec = Recording(folder, ["orin_time", "arrival_time"])
+        rec.writer, rec.last = None, 0.0
+        return rec
+
+    def stop_recording(rec):
+        """Close the video file."""
+        if rec.writer is not None:
+            rec.writer.release()
+
     say("open")
     errors = apply(saved)
     report(params(), errors)
-    last, warm = 0.0, time.time() + WARMUP
+    last, warm, rec = 0.0, time.time() + WARMUP, None
     try:
         while not cmd.quit:
-            # Settings changes: a new size reopens it.
+            # Settings changes: a new size reopens it (not while
+            # recording).
             cmd.poll()
             changes = cmd.take()
             if changes:
-                if "size" in changes:
+                refused = {}
+                if "size" in changes and rec:
+                    changes.pop("size")
+                    refused["size"] = "not while recording (it reopens the camera)"
+                elif "size" in changes:
                     size = changes.pop("size")
                     cap.release()
                     cap = open_cap()
                     warm = time.time() + WARMUP
+                if "record_fps" in changes:
+                    record_fps = int(as_number(changes.pop("record_fps"), record_fps))
                 errors = apply(changes)
+                errors.update(refused)
                 report(params(), errors)
+            rec = sync_recording(rec, cmd, start_recording, stop_recording)
 
-            # The next frame; sent when due.
+            # The next frame: recorded at its rate, sent when due.
             ok, img = cap.read()
             if not ok:
                 say("error", "no frames from %s" % device)
                 time.sleep(1)
                 continue
+            if rec and rate_due(rec.last, record_fps):
+                rec.last = arrival = time.monotonic()
+                if rec.writer is None:
+                    rec.writer = frame_writer(rec, "video.avi", (img.shape[1], img.shape[0]),
+                                              record_fps or cap.get(cv2.CAP_PROP_FPS) or 30)
+                if rec.writer is not None:
+                    rec.writer.write(img)
+                    rec.log(arrival, arrival)
             wanted = cmd.settings
             now = time.time()
             if "video" in wanted["views"] and now >= warm and cmd.due(last):
                 last = now
                 send("video", img, wanted["quality"], wanted["width"])
     finally:
+        if rec:
+            stop_recording(rec)
+            rec.close()
         cap.release()
 
 
@@ -1130,7 +1557,8 @@ def run_uvc(device, cmd):
 
 def run_demo(_, cmd):
     """Send a moving test pattern until told to quit."""
-    cfg = {"brightness": 0, "speed": 1.0, "pattern": "bars", "invert": False, "noise": 10}
+    cfg = {"brightness": 0, "speed": 1.0, "pattern": "bars", "invert": False, "noise": 10,
+           "record_fps": 30}
     cfg.update(cmd.take())
 
     def params():
@@ -1143,11 +1571,25 @@ def run_demo(_, cmd):
                 setting("speed", "Speed", "Motion", "range", cfg["speed"], 1.0, min=0, max=5,
                         step=0.1, unit="×"),
                 setting("noise", "Noise", "Motion", "range", cfg["noise"], 10, min=0, max=60,
-                        step=1, help="The noise view's amount")]
+                        step=1, help="The noise view's amount"),
+                setting("record_fps", "Recording Rate", "Recording", "enum",
+                        int(cfg["record_fps"]), 30, options=RECORD_RATES[1:],
+                        help="How many frames of the pattern an experiment's recording (MJPEG "
+                             "video) keeps a second")]
+
+    def start_recording(folder):
+        """Record the pattern as MJPEG video."""
+        rec = Recording(folder, ["orin_time", "arrival_time"])
+        rec.writer = frame_writer(rec, "pattern.avi", (1280, 720), cfg["record_fps"])
+        rec.last = 0.0
+        if rec.writer is None:
+            rec.close()
+            return None
+        return rec
 
     say("open", model="Test Pattern")
     report(params())
-    t0, last = time.time(), 0.0
+    t0, last, rec = time.time(), 0.0, None
     bars = np.array([[255, 255, 255], [0, 255, 255], [255, 255, 0], [0, 255, 0], [255, 0, 255],
                      [0, 0, 255], [255, 0, 0], [0, 0, 0]], np.uint8)
     while not cmd.quit:
@@ -1156,13 +1598,18 @@ def run_demo(_, cmd):
         if changes:
             cfg.update({k: v for k, v in changes.items() if k in cfg})
             report(params())
+        rec = sync_recording(rec, cmd, start_recording, lambda r: r.writer.release())
         wanted = cmd.settings
-        if not wanted["views"] or not cmd.due(last):
+        show = bool(wanted["views"]) and cmd.due(last)
+        keep = rec is not None and rate_due(rec.last, int(as_number(cfg["record_fps"], 30)))
+        if not show and not keep:
             continue
-        last = time.time()
+        drawn = time.time()
+        if show:
+            last = drawn
 
         # The pattern, moving sideways; brightness, inversion, the time.
-        shift = int((last - t0) * 60 * float(cfg["speed"]))
+        shift = int((drawn - t0) * 60 * float(cfg["speed"]))
         x = (np.arange(1280) + shift) % 1280
         if cfg["pattern"] == "checker":
             yy, xx = np.mgrid[0:720, 0:1280]
@@ -1176,13 +1623,22 @@ def run_demo(_, cmd):
         cv2.putText(img, time.strftime("%H:%M:%S"), (40, 680), cv2.FONT_HERSHEY_SIMPLEX, 2,
                     (40, 40, 40), 5)
 
-        # The views: the pattern, and the pattern with noise.
+        # Recorded; the views: the pattern, and the pattern with noise.
+        if keep:
+            rec.last = time.monotonic()
+            rec.writer.write(img)
+            rec.log(rec.last, rec.last)
+        if not show:
+            continue
         if "pattern" in wanted["views"]:
             send("pattern", img, wanted["quality"], wanted["width"])
         if "noise" in wanted["views"]:
             noise = np.random.normal(0, float(cfg["noise"]), img.shape)
             send("noise", np.clip(img + noise, 0, 255).astype(np.uint8), wanted["quality"],
                  wanted["width"])
+    if rec:
+        rec.writer.release()
+        rec.close()
 
 
 def main():
@@ -1194,8 +1650,8 @@ def main():
     kind, arg = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else None)
     cmd = Commands()
 
-    # Nothing to open until someone wants a view.
-    while not cmd.settings["views"] and not cmd.quit:
+    # Nothing to open until someone wants a view or a recording.
+    while not cmd.wanted() and not cmd.quit:
         cmd.poll(1.0)
     if cmd.quit:
         return

@@ -34,6 +34,10 @@ EXE_NAME = "StreamData"
 # UDP packet layout, see StreamData.cc. Positions arrive in mm and are
 # sent to the browser in m.
 NUM_RIGID_FIELDS = 19
+# The experiment clock's slot (LED 31's x; StreamData's
+# EXP_CLOCK_INDEX): NaN until an experiment is armed, then [s] from its
+# start (negative while counting down).
+EXP_CLOCK_INDEX = NUM_RIGID_FIELDS + 3 * 31
 
 # (platform, index of its x, index of its vx) in a packet.
 CRAFTS = (("RED", 1, 10), ("BLACK", 4, 13), ("BLUE", 7, 16))
@@ -418,9 +422,10 @@ def parse_packet(data):
     """Decode one StreamData packet.
 
     Returns:
-        {"t", "crafts": {NAME: {"tracked", "x", "y", "att", "vx", "vy",
-        "w"}} [m, rad], "leds": [[id, x, y, z]] [m], "values"}; None
-        if the packet is too short.
+        {"t", "exp", "crafts": {NAME: {"tracked", "x", "y", "att",
+        "vx", "vy", "w"}} [m, rad], "leds": [[id, x, y, z]] [m],
+        "values"}; None if the packet is too short. t is the packet
+        time [s]; exp the experiment clock [s] (None until armed).
     """
     n = len(data) // 4
     if n < NUM_RIGID_FIELDS:
@@ -442,7 +447,8 @@ def parse_packet(data):
     leds = [[k, values[i] / 1000, values[i + 1] / 1000, values[i + 2] / 1000]
             for k, i in enumerate(range(NUM_RIGID_FIELDS, n - 2, 3))
             if all(math.isfinite(v) for v in values[i:i + 3])]
-    return {"t": finite(values[0]), "crafts": crafts, "leds": leds, "values": n}
+    exp = finite(values[EXP_CLOCK_INDEX]) if n > EXP_CLOCK_INDEX else None
+    return {"t": finite(values[0]), "exp": exp, "crafts": crafts, "leds": leds, "values": n}
 
 
 class Monitor:

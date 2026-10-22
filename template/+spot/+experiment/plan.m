@@ -23,8 +23,7 @@ function p = plan(s, root)
     p.board = board;
     p.program = [board.workspaceDir model '.elf'];
     p.platforms = names(cellfun(@(n) logical(s.platforms.(n)), names));
-    p.changes = {sprintf('comment out %s/Simulate Plant Dynamics', model), ...
-                 'solver: Fixed-step ode4', 'hardware board: NVIDIA Jetson', ...
+    p.changes = {'solver: Fixed-step ode4', 'hardware board: NVIDIA Jetson', ...
                  'simMode = 0 while building'};
     p.warnings = {};
 
@@ -38,12 +37,15 @@ function p = plan(s, root)
         p.warnings{end + 1} = 'No platform is selected (Scenario): nothing would be deployed.';
     end
 
-    % The plant block the build comments out.
+    % The plant block the build comments out. A diagram without one should switch to its
+    % hardware itself with simMode, e.g. through a Variant Subsystem.
     plant = [model '/Simulate Plant Dynamics'];
-    try
-        get_param(plant, 'Handle');
-    catch
-        p.warnings{end + 1} = sprintf('The diagram has no "%s" block to comment out.', plant);
+    if getSimulinkBlockHandle(plant) ~= -1
+        p.changes = [{sprintf('comment out %s', plant)}, p.changes];
+    elseif isempty(find_system(model, 'LookUnderMasks', 'all', 'Variant', 'on'))
+        p.warnings{end + 1} = sprintf( ...
+            ['The diagram has no "%s" block to comment out and no Variant Subsystem: the ' ...
+             'simulated plant would be built into the program.'], plant);
     end
 
     % Continuous-time blocks.

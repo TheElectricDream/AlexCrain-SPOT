@@ -44,6 +44,11 @@ F_GATEFULL = 0x0800
 F_SAS = 0x1000
 F_INV = 0x2000
 
+# Timing (docs/FINDINGS.md section 6): the sensor reads a frame out while RDY0 (frame valid) is
+# high, and starts the next one a period later, on its own clock.
+FRAME_PERIOD_S = 0.01678   # 59.6 Hz
+READOUT_S = 0.0164         # a frame's pixels are read out over this long, ending at its end
+
 WIDTH, HEIGHT = 320, 240
 FRAME_WORDS = WIDTH * HEIGHT
 FRAME_BYTES = FRAME_WORDS * 2     # 153600

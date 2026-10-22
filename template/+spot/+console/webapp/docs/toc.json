@@ -22,7 +22,7 @@
     ]},
     {"title": "The Local Console", "pages": [
       {"id": "tab-simulation", "file": "guides/tab-simulation.md", "summary": "Scenario, platforms, calibration, control, running and replaying."},
-      {"id": "tab-experiment", "file": "guides/tab-experiment.md", "summary": "Cameras, building, deploying, running and collecting."},
+      {"id": "tab-experiment", "file": "guides/tab-experiment.md", "summary": "Cameras, building, recording, deploying, running and collecting."},
       {"id": "tab-results", "file": "guides/tab-results.md", "summary": "Plotting simulations, experiments and any .mat file."},
       {"id": "tab-designer", "file": "guides/tab-designer.md", "summary": "Docking cones, the arm and solar panels on each platform."},
       {"id": "tab-documentation", "file": "guides/tab-documentation.md", "summary": "Searching, the reference pages, editing code, notes and guides."}
@@ -39,7 +39,8 @@
       {"id": "settings-file", "file": "guides/settings-file.md", "summary": "Every key of spot_settings.json."},
       {"id": "workspace-variables", "file": "guides/workspace-variables.md", "summary": "What the diagram reads from MATLAB's workspace."},
       {"id": "user-parameters", "file": "guides/user-parameters.md", "summary": "SPOT_User_Parameters.m: your own variables."},
-      {"id": "logged-signals", "file": "guides/logged-signals.md", "summary": "The 108 signals every run records."}
+      {"id": "logged-signals", "file": "guides/logged-signals.md", "summary": "The 108 signals every run records."},
+      {"id": "camera-recordings", "file": "guides/camera-recordings.md", "summary": "The Orin's cameras recorded with an experiment: files, timing, reading them."}
     ]},
     {"title": "The Simulink Diagram", "pages": [
       {"id": "diagram-overview", "file": "guides/diagram-overview.md", "summary": "One diagram for simulations and experiments, and the order of a step."},

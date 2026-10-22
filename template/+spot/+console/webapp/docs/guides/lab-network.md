@@ -31,6 +31,9 @@ The lab console's address is a project setting (`labConsoleAddress`, the Experim
 | | UDP 55001 / 55002 / 55003 | debug messages |
 | | UDP 55011 / 55012 / 55013 | Live Stream signals |
 | Chaser ↔ Orin | UDP 46875 / 36845 | the Chaser's states out, a vision estimate in |
+| lab console → Orin | UDP 31545 | while cameras record: each PhaseSpace packet's experiment clock, for timing the frames ([Camera Recordings](page:camera-recordings)) |
+| lab console → Orin | TCP 8090 | SPOT Vision: starting and stopping a recording with the experiment |
+| Orin → your computer | TCP 8090 | Collect: the recordings, straight from the Orin |
 | lab console → platforms | SSH 22 | `spot_agent.sh`: deploy, start, stop, status, data, the Teensy's stream |
 | your computer → TX2 | SSH 22 | MATLAB's remote build; the deployment scripts |
 

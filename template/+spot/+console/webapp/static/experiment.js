@@ -1,10 +1,13 @@
 // Experiment tab (local console): build the selected diagram on the lab console (TX2) from this
-// MATLAB, have the lab console deploy it to the platforms, start and stop it, watch it live, and
-// collect the data. The lab console does everything on the hardware; this page only reaches it
-// through the local server (POST /api/lab), which refuses when the lab network isn't reachable.
+// MATLAB, have the lab console deploy it to the platforms, start and stop it (recording the Orin's
+// cameras with it, if chosen), watch it live, and collect the data. The lab console does
+// everything on the hardware; this page only reaches it through the local server (POST
+// /api/lab), which refuses when the lab network isn't reachable. The cameras' recordings come
+// from the Orin straight to this computer (the local server's camera_download).
 
 import { PLATFORM_KEYS as PLATFORMS, platformName, swatch } from './platforms.js';
 import { handleLockClick, isUnlocked, onLockChange, paintLocks } from './ratelock.js';
+import { KIND } from './vision.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" ' +
@@ -14,6 +17,14 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtTime = t =>
   new Date(t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const fmtBytes = n => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB`
+  : n >= 1e6 ? `${Math.round(n / 1e6)} MB` : `${Math.round((n || 0) / 1e3)} kB`);
+const fmtDur = s => (s >= 60 ? `${Math.floor(s / 60)} min${s % 60 ? ` ${Math.round(s % 60)} s` : ''}`
+  : `${Math.round(s)} s`);
+
+const VISION_POLL = 4000;   // [ms] the Orin's cameras, disk and recording, while the tab is shown
+const START_MARGIN = 30;    // [s] recorded besides the phases: the start (countdown), Stop
+const DISK_STOP = 1e9;      // [bytes] free: SPOT Vision stops a recording (spot_vision.py)
 
 // Replace an element's HTML only when it changed (keeps open <details> and scroll positions).
 function setHTML(el, html) {
@@ -45,6 +56,8 @@ export function initExperiment({
     lab: { reachable: false }, stream: {}, monitor: {}, hardware: {}, experiment: {}, build: {},
     matlab: { connected: false }, plan: null, connected: null, lastFrame: 0, shown: false,
     buildOnLab: null,
+    vision: null, visionTimer: 0,   // the Orin's SPOT Vision (lab console's /api/vision)
+    camDownload: {},                // copying a recording into the run (local server)
   };
   const matlab = (cmd, args = {}) => api('/api/matlab', { cmd, args }).then(r => r.result);
   const lab = (path, body = {}) => api('/api/lab', { path, body }).then(r => r.result);
@@ -55,6 +68,179 @@ export function initExperiment({
     return s ? PLATFORMS.filter(n => s.platforms[n]) : [];
   }
   const model = () => ((getSim().settings || {}).diagram || '').replace(/\.slx$/, '');
+
+  // Recording
+
+  // Whether the lab console and SPOT Vision can record (older versions don't say "recording" and
+  // "disk"): '' if so, else what to update.
+  function recordUpdate() {
+    if (!('recording' in (S.experiment || {}))) {
+      return 'the lab console (+spot/+console/deploy/deploy_tx2.sh)';
+    }
+    return S.vision && S.vision.reachable && !S.vision.disk
+      ? 'SPOT Vision on the Orin (+spot/+console/deploy/deploy_orin.sh)' : '';
+  }
+
+  // The cameras chosen to record (kept in this browser), of those on the Orin now; none if the
+  // lab can't record.
+  const recordChoice = () => storage.get('spot.exp.record', {});
+  function recorded() {
+    const chosen = recordChoice();
+    return recordUpdate() ? []
+      : ((S.vision && S.vision.cameras) || []).filter(c => chosen[c.id]);
+  }
+
+  // The experiment's length [s]: its phases (the settings' timing, as spot.params.timing adds
+  // them up), or null.
+  function experimentSeconds() {
+    const t = (getSim().settings || {}).timing;
+    if (!t) {
+      return null;
+    }
+    const on = t.on || {};
+    const subOn = on.subPhases || [];
+    return (t.phase0 || 0) + (t.phase1 || 0) + (on.phase2 === false ? 0 : t.phase2 || 0) +
+      (t.subPhases || []).reduce((a, d, k) => a + (subOn[k] === false ? 0 : d || 0), 0) +
+      (on.phase4 === false ? 0 : t.phase4 || 0) + (t.phase5 || 0);
+  }
+
+  // What recording the chosen cameras would take, against the Orin's free disk: {text, kind}
+  // (kind '' fits, 'warn' over half of it, 'bad' more than it has), or null if none is chosen.
+  function recordEstimate() {
+    const cams = recorded();
+    const seconds = experimentSeconds();
+    if (!cams.length || seconds == null) {
+      return null;
+    }
+    const rate = cams.reduce((a, c) => a + ((c.record_rate || {}).bytes_per_s || 0), 0);
+    const total = rate * (seconds + START_MARGIN);
+    const free = S.vision.disk ? S.vision.disk.free : null;
+    const rough = cams.some(c => !(c.record_rate || {}).measured);
+    const kind = free == null ? '' : total > free - DISK_STOP ? 'bad'
+      : total > free / 2 ? 'warn' : '';
+    const text = `Recording ${cams.length} camera${cams.length === 1 ? '' : 's'}: about ` +
+      `${fmtBytes(total)} for this ${fmtDur(seconds)} experiment (${fmtBytes(rate)}/s` +
+      `${rough ? ', a rough estimate until each camera has recorded once' : ''}); ` +
+      (free == null ? 'the Orin\'s free space is unknown.'
+        : `the Orin has ${fmtBytes(free)} free.`) +
+      (kind === 'bad' ? ' That doesn\'t fit: the recording stops itself when 1 GB is left.' : '');
+    return { text, kind };
+  }
+
+  // The Recording card: a switch per camera on the Orin, its rate and its recording now; the
+  // estimate; the last recording.
+  function renderRecording(canExp, running) {
+    const v = S.vision;
+    const rec = (S.experiment || {}).recording;
+    const live = (v && v.recording && v.recording.cameras) || {};
+    const chosen = recordChoice();
+    const pill = $('#expRecPill');
+    const recording = rec && ['recording', 'stopping'].includes(rec.state);
+    const n = recorded().length;
+    pill.className = `pill ${recording ? 'live' : n ? 'ok' : ''}`;
+    pill.textContent = recording ? (rec.state === 'stopping' ? 'Closing Files' : 'Recording')
+      : n ? `${n} Camera${n === 1 ? '' : 's'}` : 'Off';
+    pill.hidden = !canExp;
+
+    // The cameras.
+    let html;
+    if (!canExp) {
+      html = '';
+    } else if (!v) {
+      html = '<p class="hint">Looking for the Orin\'s cameras…</p>';
+    } else if (!v.reachable) {
+      html = `<p class="hint warn-text">The Orin (SPOT Vision) isn't reachable` +
+        `${v.error ? `: ${esc(v.error)}` : ''}. Experiments run without recording.</p>`;
+    } else if (recordUpdate()) {
+      html = `<p class="hint warn-text">To record cameras, update ${esc(recordUpdate())}.</p>`;
+    } else if (!v.cameras.length) {
+      html = '<p class="hint">No cameras are plugged into the Orin.</p>';
+    } else {
+      html = v.cameras.map(c => {
+        const rate = c.record_rate || {};
+        const now = (live[c.id] || {}).recording;
+        const busy = c.state === 'busy';
+        const state = now
+          ? `<div class="hint exp-rec-live">● Recording · ${now.frames} frames · ` +
+            `${fmtBytes(now.bytes)}${now.error ? ` · <span class="bad">${esc(now.error)}</span>` : ''}</div>`
+          : busy ? `<div class="hint warn-text">In use by another program: ${esc(c.detail || '')}</div>`
+          : '';
+        return `<div class="exp-rec-cam">
+          <label class="toggle" title="Record the ${esc(c.name)} with the experiment"><input type="checkbox" data-rec="${esc(c.id)}"
+            ${chosen[c.id] ? 'checked' : ''} ${running ? 'disabled' : ''}><span></span>${esc(c.name)}</label>
+          <div class="hint">${esc(KIND[c.kind] || c.kind)} · ${fmtBytes(rate.bytes_per_s || 0)}/s
+            <span class="muted">(${rate.measured ? 'measured' : 'estimate'})</span></div>${state}</div>`;
+      }).join('');
+    }
+    setHTML($('#expRecCams'), html);
+
+    // The estimate (or the last recording's outcome), and what recording means for the cameras.
+    const est = $('#expRecEstimate');
+    const e = canExp && v && v.reachable ? recordEstimate() : null;
+    if (rec && !recording && rec.state === 'failed') {
+      est.className = 'hint bad';
+      est.textContent = `The recording ${rec.session} failed: ${rec.error}`;
+    } else if (rec && rec.state === 'stopped' && !running && rec.result) {
+      const r = rec.result;
+      const problems = Object.values(r.cameras || {}).filter(c => c.error)
+        .map(c => `${c.name}: ${c.error}`);
+      const copied = S.camDownload.session === rec.session && S.camDownload.state === 'done';
+      est.className = `hint ${problems.length || !r.timed ? 'warn-text' : ''}`;
+      est.textContent = `Recorded ${fmtBytes(r.bytes || 0)} (${rec.session}); ` +
+        (copied ? `collected into ${S.camDownload.folder}.` : 'Collect brings it into the run.') +
+        (r.timed ? '' : ' No experiment clock reached the Orin, so the ' +
+        'frames have no experiment time.') + (r.note ? ` ${r.note}.` : '') +
+        (problems.length ? ` ${problems.join('; ')}.` : '');
+    } else if (e) {
+      est.className = `hint ${e.kind === 'bad' ? 'bad' : e.kind === 'warn' ? 'warn-text' : ''}`;
+      est.textContent = `${e.text} The recorded cameras are held by SPOT Vision until the ` +
+        'experiment stops, so your own code on the Orin can\'t open them (the Vision tab ' +
+        'still shows them).';
+    } else {
+      est.className = 'hint';
+      est.textContent = '';
+    }
+  }
+
+  // The Orin's cameras, every VISION_POLL ms while the tab is shown and the lab is reachable.
+  function pollVision() {
+    clearTimeout(S.visionTimer);
+    if (!S.shown) {
+      return;
+    }
+    const again = () => {
+      S.visionTimer = setTimeout(pollVision, VISION_POLL);
+    };
+    if (!S.lab.reachable || !S.lab.experiments) {
+      again();
+      return;
+    }
+    lab('vision').then(v => {
+      S.vision = v;
+      render();
+    }).catch(() => {}).finally(again);
+  }
+
+  // Copying a recording into the run (the local server): a line under Collect's.
+  function renderCamDownload() {
+    const d = S.camDownload || {};
+    const out = $('#expCamOut');
+    out.hidden = !d.state || d.state === 'idle';
+    if (d.state === 'copying') {
+      const secs = Math.max(1, Date.now() / 1000 - d.started);
+      out.className = 'hint mono';
+      out.textContent = `Cameras: ${fmtBytes(d.done || 0)}` +
+        `${d.total != null ? ` of ${fmtBytes(d.total)}` : ''} from the Orin ` +
+        `(${fmtBytes((d.done || 0) / secs)}/s)${d.file ? ` · ${d.file}` : ''}`;
+    } else if (d.state === 'done') {
+      out.className = 'hint mono';
+      out.textContent = `✓ Cameras: ${fmtBytes(d.done || 0)} in ${d.folder}` +
+        (d.freed ? ' (deleted from the Orin)' : ' (still on the Orin: it couldn\'t be deleted)');
+    } else if (d.state === 'failed') {
+      out.className = 'hint mono bad';
+      out.textContent = `✕ Cameras: ${d.error}`;
+    }
+  }
 
   // Rendering
 
@@ -263,6 +449,9 @@ export function initExperiment({
     if (canExp && model() && model() !== S.buildFor) {
       refreshBuildOnLab();
     }
+
+    renderRecording(canExp, running);
+    renderCamDownload();
 
     // Clocks over the view.
     setHTML($('#expClocks'), Object.entries(clocks).filter(([, c]) => c.age < 3)
@@ -512,12 +701,35 @@ export function initExperiment({
         'they are. Start anyway?')) {
       return;
     }
+    const cams = S.vision && S.vision.reachable ? recorded() : [];
+    const est = recordEstimate();
+    const recText = cams.length
+      ? `\n\nRecording: ${cams.map(c => c.name).join(', ')}.\n${est ? est.text : ''}`
+      : '';
     if (!confirm(`Start ${model()} on the ${selected().map(platformName).join(', ')}? ` +
-        'Make sure the table is clear and the E-stop is at hand.')) {
+        `Make sure the table is clear and the E-stop is at hand.${recText}`)) {
+      return;
+    }
+    if (est && est.kind === 'bad' && !confirm('The recording won\'t fit on the Orin\'s disk ' +
+        '(it will stop itself when 1 GB is left, before the experiment ends). Start anyway?')) {
       return;
     }
     viewer?.clearLivePaths();
-    await lab('experiment/start', { platforms: selected() });
+    await lab('experiment/start', { platforms: selected(), cameras: cams.map(c => c.id) });
+  });
+
+  // A camera switched on or off for recording (remembered in this browser).
+  $('#expRecCams').addEventListener('change', ev => {
+    const box = ev.target.closest('[data-rec]');
+    if (!box) {
+      return;
+    }
+    const chosen = { ...recordChoice(), [box.dataset.rec]: box.checked };
+    if (!box.checked) {
+      delete chosen[box.dataset.rec];
+    }
+    storage.set('spot.exp.record', chosen);
+    render();
   });
 
   $('#expStop').onclick = () => act(async () => {
@@ -536,6 +748,13 @@ export function initExperiment({
       throw new Error('Nothing was collected.');
     }
     const got = await api('/api/lab/download', { run });
+
+    // The cameras' recording: copied from the Orin in the background (a line of its own).
+    const rec = st.last_run.recording;
+    if (rec) {
+      S.camDownload = await api('/api/lab/download_cameras', { run, recording: rec });
+      renderCamDownload();
+    }
     if (!got.files.length) {
       out.textContent = `No data files came back (${run}).`;
       return;
@@ -605,6 +824,7 @@ export function initExperiment({
       S.experiment = snap.experiment || {};
       S.build = st.build || {};
       S.matlab = st.matlab || S.matlab;
+      S.camDownload = st.camera_download || S.camDownload;
       if (snap.led_owner) {
         viewer?.setLedOwner(snap.led_owner);
       }
@@ -687,14 +907,28 @@ export function initExperiment({
       S.matlab = m;
       render();
     },
+    // Copying a recording into the run: progress, done or failed (a toast when it ends).
+    onCameraDownload(d) {
+      const ended = S.camDownload.state === 'copying' && d.state !== 'copying';
+      S.camDownload = d;
+      renderCamDownload();
+      if (ended) {
+        render();
+        toast(d.state === 'done' ? `The cameras' recording is in ${d.folder}`
+          : `Copying the cameras' recording failed: ${d.error}`,
+        d.state === 'done' ? 'success' : 'error', d.state === 'done' ? 5000 : 12000);
+      }
+    },
     show() {
       S.shown = true;
       layers();
       render();
       refreshBuildOnLab();
+      pollVision();
     },
     hide() {
       S.shown = false;
+      clearTimeout(S.visionTimer);
     },
   };
 }

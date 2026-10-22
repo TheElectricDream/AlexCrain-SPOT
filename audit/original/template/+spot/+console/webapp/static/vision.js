@@ -9,7 +9,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const KIND = {
+export const KIND = {
   zed: 'Stereo Camera', realsense: 'LiDAR', dvs: 'Event Camera', thermal: 'Thermal Camera',
   uvc: 'USB Camera', demo: 'Test Pattern',
 };

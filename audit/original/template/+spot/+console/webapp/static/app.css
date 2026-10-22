@@ -789,6 +789,13 @@ a.btn { text-decoration: none; }
 .exp-diagram:empty { display: none; }
 .exp-clock { font-size: 12px; color: #cfd5df; white-space: nowrap; }
 .exp-remove { padding: 2px 4px; color: var(--muted); }
+/* Recording: a row per camera on the Orin (its switch, its rate, its recording) */
+.exp-rec-cams { display: flex; flex-direction: column; gap: 8px; }
+.exp-rec-cam { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--border); }
+.exp-rec-cam .toggle { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.exp-rec-cam .hint { margin-top: 4px; }
+.exp-rec-cam .exp-rec-live { color: var(--ok); }
+#expRecEstimate:empty { display: none; }
 .exp-remove svg { width: 15px; height: 15px; display: block; }
 .exp-remove:hover:not(:disabled) { color: #ff7b7f; }
 

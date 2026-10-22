@@ -662,6 +662,7 @@ function connect() {
   on('lab_monitor', d => experiment.onMonitor(d));
   on('lab_hardware', d => experiment.onHardware(d));
   on('lab_experiment', d => experiment.onExperiment(d));
+  on('camera_download', d => experiment.onCameraDownload(d));
   on('lab_live_data', d => livePlot.experimentData(d));
   on('sim', d => {
     if (!d.running && d.ok) {

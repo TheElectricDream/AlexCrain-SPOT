@@ -112,6 +112,7 @@ def app_state(client_ip=None):
                 "logs": hub.history(), "matlab": matlab.status(), "sim": sim_runner.status(),
                 "build": build_runner.status(), "lab_url": local.lab.url,
                 "lab": local.lab.status(), "design": design_store.get(),
+                "camera_download": local.camera_download.status(),
                 "calibration": calibration_store.get(),
                 "deploy": deployer.status(local.lab.status()["reachable"])}
 
@@ -499,7 +500,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = experiment.deploy(str(body.get("model", "")), body.get("platforms"),
                                            requester)
             elif path == "/api/experiment/start":
-                result = experiment.start(body.get("platforms"), requester)
+                result = experiment.start(body.get("platforms"), requester, body.get("cameras"))
             elif path == "/api/experiment/stop":
                 result = experiment.stop(requester)
             elif path == "/api/experiment/fetch":
@@ -716,6 +717,12 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/lab/download":
             return download_run(str(body.get("run", ""))), 200
+
+        # An experiment's camera recordings, from the Orin into its run
+        # (in the background: camera_download events).
+        if path == "/api/lab/download_cameras":
+            return local.camera_download.start(str(body.get("run", "")),
+                                               body.get("recording")), 200
         if path == "/api/shutdown":
             threading.Thread(target=LOCAL["server"].shutdown, daemon=True).start()
             return {"ok": True}, 200

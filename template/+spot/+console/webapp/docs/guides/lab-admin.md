@@ -19,7 +19,7 @@ sudo cp ~/spot_vision/99-ici-9320p.rules /etc/udev/rules.d/ && sudo udevadm cont
 sudo usermod -aG plugdev spot-vision     # then log in again, or restart the Orin
 ```
 
-`journalctl --user -u spot-vision -f` on the Orin shows its log. To check the thermal camera by hand, run `cd ~/spot_vision/vendor && python3 -m ici9320 info` on the Orin: it prints the firmware version and housing temperature.
+Experiments' recordings go to `~/spot_vision_recordings/` on the Orin, outside the deployed folder, so a redeploy keeps them. Collect deletes each recording once it has been copied; the service's `--recordings FOLDER` puts them elsewhere (a larger disk, say). Recording cameras with an experiment needs this SPOT Vision and the lab console of the same version, so deploy both after an update. `journalctl --user -u spot-vision -f` on the Orin shows its log. To check the thermal camera by hand, run `cd ~/spot_vision/vendor && python3 -m ici9320 info` on the Orin: it prints the firmware version and housing temperature.
 
 ## `spot-phasespace-console.service`
 

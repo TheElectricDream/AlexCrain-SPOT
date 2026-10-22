@@ -437,6 +437,12 @@
       </section>
 
       <section class="card">
+        <div class="card-head"><h2 class="tip" title="Record the Jetson Orin's cameras with the experiment: on the Orin's own disk, every frame timed on the experiment's clock; Collect brings the recordings into the run's folder">Recording</h2><span id="expRecPill" class="pill" hidden></span></div>
+        <div id="expRecCams" class="exp-rec-cams"></div>
+        <p id="expRecEstimate" class="hint"></p>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h2>Deploy &amp; Run</h2><span id="expPhasePill" class="pill" hidden></span></div>
         <div class="exp-row">
           <span id="expProgram" class="hint mono">No build found on the TX2 yet.</span>
@@ -453,8 +459,9 @@
 
       <section class="card">
         <div class="card-head"><h2>Data</h2>
-          <button type="button" id="expData" class="btn btn-sm" title="Copies the platforms' ExpLog files into Saved Data and converts them with MATLAB">Collect</button></div>
+          <button type="button" id="expData" class="btn btn-sm" title="Copies the platforms' ExpLog files into Saved Data and converts them with MATLAB, and the cameras' recordings from the Orin">Collect</button></div>
         <p id="expDataOut" class="hint mono"></p>
+        <p id="expCamOut" class="hint mono" hidden></p>
       </section>
     </aside>
 

@@ -10,9 +10,13 @@ frames at 60 Hz. Pure python: python-libusb1 + numpy, runs on x86 and ARM (Jetso
         cam.start_stream()
         for frame in cam.frames(10):      # numpy uint16 (240, 320)
             ...
+        f = cam.read_stamped()            # Frame: data, time, arrival, index
+
+Frame times: see ici9320.timing.
 """
-from .device import ICI9320  # noqa: F401
+from .device import ICI9320, Frame  # noqa: F401
+from .timing import FrameClock, retime  # noqa: F401
 from .fx2loader import parse_ihex, load_firmware, find_bare_device, wait_for_device  # noqa: F401
 from . import protocol  # noqa: F401
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

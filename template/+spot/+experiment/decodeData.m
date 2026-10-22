@@ -2,10 +2,12 @@ function files = decodeData(folder, s, root)
     %DECODEDATA Turn the experiment data files (ExpLog*) into MATLAB timeseries.
     %   files = spot.experiment.decodeData(folder, s, root) reads every ExpLog* file in
     %   folder/<PLATFORM>/ (as the console downloads them into "Saved Data"), splits the columns
-    %   into the signals of the diagram's "Data Logger Subsystem/Data Logging Bus" (column 1 is
-    %   time), and saves each as <PLATFORM>_<n>.mat holding dataClass_rt (a struct of
-    %   timeseries) next to it. The diagram is compiled (model update, no code generation) to
-    %   learn the signal widths.
+    %   into the logged signals (column 1 is time), and saves each as <PLATFORM>_<n>.mat holding
+    %   dataClass_rt (a struct of timeseries) next to it. The diagram is compiled (model update,
+    %   no code generation) to learn the signals. They are the inputs of the diagram's
+    %   "Data Logger Subsystem/Data Logging Bus" (the v5 template), or, in a diagram without
+    %   that block, the fields of the LogPacket bus type (diagram.buses.define), in the order
+    %   diagram.hardware.logVector writes them.
     %
     %   Inputs
     %     folder  the run's folder
@@ -23,23 +25,12 @@ function files = decodeData(folder, s, root)
     feval(model, [], [], [], 'compile');
     terminate = onCleanup(@() feval(model, [], [], [], 'term'));
 
-    % The logging bus's inputs.
-    portHandles = get_param([model '/Data Logger Subsystem/Data Logging Bus'], 'PortHandles');
-    hierarchy = get_param(portHandles.Inport, 'SignalHierarchy');
-    if ~iscell(hierarchy)
-        hierarchy = {hierarchy};
-    end
-
-    % Each input's width and name (unnamed ones numbered).
-    widths = zeros(1, numel(hierarchy));
-    names = cell(1, numel(hierarchy));
-    for k = 1:numel(hierarchy)
-        dims = get_param(portHandles.Inport(k), 'CompiledPortDimensions');
-        widths(k) = dims(2);
-        names{k} = hierarchy{k}.SignalName;
-        if isempty(names{k})
-            names{k} = sprintf('UnnamedSignal_%d', k);
-        end
+    % The logging bus's inputs, else the LogPacket bus type's fields.
+    loggingBus = [model '/Data Logger Subsystem/Data Logging Bus'];
+    if getSimulinkBlockHandle(loggingBus) ~= -1
+        [names, widths] = busInputs(loggingBus);
+    else
+        [names, widths] = logPacketFields(model);
     end
 
     %% Each platform's logs
@@ -69,4 +60,38 @@ function files = decodeData(folder, s, root)
             files{end + 1} = matFile; %#ok<AGROW>
         end
     end
+end
+
+function [names, widths] = busInputs(block)
+    % Name and width of each input of a Bus Creator in the compiled diagram (unnamed ones
+    % numbered).
+    portHandles = get_param(block, 'PortHandles');
+    hierarchy = get_param(portHandles.Inport, 'SignalHierarchy');
+    if ~iscell(hierarchy)
+        hierarchy = {hierarchy};
+    end
+    widths = zeros(1, numel(hierarchy));
+    names = cell(1, numel(hierarchy));
+    for k = 1:numel(hierarchy)
+        dims = get_param(portHandles.Inport(k), 'CompiledPortDimensions');
+        widths(k) = dims(2);
+        names{k} = hierarchy{k}.SignalName;
+        if isempty(names{k})
+            names{k} = sprintf('UnnamedSignal_%d', k);
+        end
+    end
+end
+
+function [names, widths] = logPacketFields(model)
+    % Name and width of each field of the LogPacket bus type, which compiling the diagram put
+    % in the base workspace (its InitFcn runs diagram.buses.define).
+    if ~evalin('base', 'exist(''LogPacket'', ''var'')')
+        error('spot:experiment:decodeData', ...
+            ['%s has neither a "Data Logger Subsystem/Data Logging Bus" block nor a LogPacket ' ...
+             'bus type, so the columns of its data files are unknown.'], model);
+    end
+    logPacket = evalin('base', 'LogPacket');
+    elements = logPacket.Elements;
+    names = {elements.Name};
+    widths = arrayfun(@(e) prod(e.Dimensions), elements);
 end

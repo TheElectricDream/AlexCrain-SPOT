@@ -1,8 +1,9 @@
 """Experiments on the platforms, run from the lab console.
 
 Finding the build, deploying it, starting and stopping it, following
-the platforms' clocks, debug messages and live streams, and collecting
-the data files.
+the platforms' clocks, debug messages and live streams, recording the
+Orin's cameras (SPOT Vision, vision.py) with it, and collecting the
+data files.
 
 Part of the SPOT Console (webapp/app.py starts it).
 """
@@ -18,6 +19,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import vision
 from .common import ApiError, decode, shown, shown_list
 from .events import hub, settings
 from .hardware import StepFailed, hardware, in_parallel, platform_run
@@ -69,6 +71,7 @@ STATUS_TIMEOUT = 15
 STOP_TIMEOUT = 30
 DATA_TIMEOUT = 300
 CLEAN_TIMEOUT = 30
+RECORD_WAIT = 90           # [s] Collect waits this long for a recording to close
 
 
 class Experiment:
@@ -89,6 +92,7 @@ class Experiment:
         self.stopped = None
         self.note = None
         self.last_run = None  # {"run", "files"} from the last data collection
+        self.run = None       # the run's name, from its first collection
         self.clocks = {}      # NAME -> [experiment time, received]
         # The agreed start: idle, waiting, counting, running, failed.
         self.sync = {"state": "idle"}
@@ -99,6 +103,11 @@ class Experiment:
         # [t, v...], "last"}
         self.live = {}
         self.live_new = {}    # "PLATFORM/name" -> rows not yet sent to the pages
+        # The cameras recorded with the last start (SPOT Vision):
+        # {"session", "cameras", "url", "state" (recording, stopping,
+        # stopped, failed), "started", "result", "error"}; None
+        # without.
+        self.recording = None
 
     def status(self):
         """Return everything the Experiment tab shows."""
@@ -109,6 +118,7 @@ class Experiment:
                 "started": self.started, "stopped": self.stopped, "note": self.note,
                 "platforms": {n: dict(p) for n, p in self.platforms.items()},
                 "last_run": self.last_run,
+                "recording": dict(self.recording) if self.recording else None,
                 "clocks": {n: {"t": clock[0], "age": round(now - clock[1], 2)}
                            for n, clock in self.clocks.items()},
                 "sync": dict(self.sync, spread_ms=self._spread_ms(now)),
@@ -270,13 +280,19 @@ class Experiment:
         self._log("deploy %s" % ("done" if all(ok.values()) else "failed: " + self.note))
         self._publish()
 
-    def start(self, platforms, requester):
+    def start(self, platforms, requester, cameras=None):
         """Start the deployed program on platforms.
+
+        Args:
+            platforms: The platforms' keys.
+            requester: Who asked.
+            cameras: The Orin's cameras to record (their ids), or none.
+                They all record before any program starts.
 
         Raises:
             ApiError: if it isn't deployed there, PhaseSpace isn't
-                streaming, a calibration runs, or a platform isn't
-                ready.
+                streaming, a calibration runs, a platform isn't ready,
+                or a camera can't record.
         """
         names = self._check_platforms(platforms)
 
@@ -312,12 +328,44 @@ class Experiment:
                 raise ApiError("The %s's Teensy is already in use by %s."
                                % (shown(n), ", ".join(probe["others"])))
 
+        # The cameras: every one recording before the programs start, or
+        # the experiment doesn't start.
+        cameras = [str(c) for c in cameras or []]
+        recording = None
+        if cameras:
+            session = "%s_%s" % (model, time.strftime("%Y%m%d_%H%M%S"))
+            try:
+                vision.record_start(session, cameras)
+            except ApiError as e:
+                raise ApiError("The cameras couldn't start recording, so the experiment wasn't "
+                               "started: %s" % e)
+            recording = {"session": session, "cameras": cameras, "url": vision.url(),
+                         "state": "recording", "started": time.time(), "result": None,
+                         "error": None}
+            self._log("recording %s on the Orin (%s)" % (", ".join(cameras), session))
+        with self._lock:
+            self.recording = recording
+
+        # The programs; a recording doesn't outlive a start that failed.
+        try:
+            return self._start_programs(names, model, requester)
+        except Exception:
+            self._stop_recording()
+            raise
+
+    def _start_programs(self, names, model, requester):
+        """Start the program on each platform; agree the start.
+
+        start's second half, once everything is checked (and the
+        cameras record).
+        """
         # A fresh start: no clocks, messages or streams from an earlier
         # run, and no experiment clock in the stream (the new programs
         # wait at 0).
         with self._lock:
             self.phase, self.by, self.started, self.stopped, self.note = (
                 "starting", requester, time.time(), None, None)
+            self.run = None
             self.clocks = {}
             self.sync = {"state": "waiting", "waiting_for": list(names)}
             self.debug = {n: [] for n in EXP_DEBUG_PORTS}
@@ -453,6 +501,7 @@ class Experiment:
                         self.note = "The program has ended on every platform."
                 self._log("the program has ended on every platform")
                 self._publish()
+                self._stop_recording()
                 return
 
     def stop(self, requester, note=None):
@@ -483,7 +532,9 @@ class Experiment:
         ok = in_parallel(names, one)
         self._mark_crashed(ok)
 
-        # The experiment clock ends with the programs.
+        # The experiment clock ends with the programs; then the
+        # recording (in the background: closing its files takes a
+        # moment).
         streamer.command("exp clear")
         with self._lock:
             self.sync = {"state": "idle"}
@@ -493,7 +544,41 @@ class Experiment:
                 else "Could not confirm the stop on %s: use the E-stop." % shown_list(
                     n for n, v in ok.items() if not v))
         self._publish()
+        threading.Thread(target=self._stop_recording, daemon=True).start()
         return self.status()
+
+    def _stop_recording(self):
+        """Stop the cameras' recording, if one is going.
+
+        Keeps a summary of it (size, frames, errors) for the pages; the
+        files stay on the Orin until collected.
+        """
+        with self._lock:
+            rec = self.recording
+            if not rec or rec["state"] != "recording":
+                return
+            rec["state"] = "stopping"
+        self._publish()
+        result, error = None, None
+        try:
+            result = vision.record_stop(rec["session"])
+            if result is None:
+                error = "SPOT Vision wasn't recording it any more (restarted?)"
+        except ApiError as e:
+            error = str(e)
+        with self._lock:
+            rec["error"] = error
+            rec["state"] = "stopped" if result else "failed"
+            if result:
+                rec["result"] = {
+                    "bytes": result.get("bytes"), "note": result.get("note"),
+                    "clock_samples": result.get("clock_samples"),
+                    "timed": bool((result.get("clock") or {}).get("experiment")),
+                    "cameras": {cid: {k: cam.get(k) for k in ("name", "frames", "error", "note")}
+                                for cid, cam in (result.get("cameras") or {}).items()}}
+        self._log("recording %s: %s" % (rec["session"], error or "stopped, %.1f GB"
+                                        % ((result.get("bytes") or 0) / 1e9)))
+        self._publish()
 
     # Data
 
@@ -502,6 +587,8 @@ class Experiment:
 
         Also writes each platform's debug messages, as the console
         received them, and frees the platform's disk once copied.
+        Collecting the same experiment again uses the same run (and
+        folder), e.g. after copying its recording failed.
 
         Raises:
             ApiError: while an experiment is busy, or with none.
@@ -512,7 +599,20 @@ class Experiment:
             if not self.model or not self.platforms:
                 raise ApiError("No experiment to collect data from.")
             model, names = self.model, list(self.platforms)
-        run = "%s_%s" % (model, time.strftime("%Y%m%d_%H%M%S"))
+
+        # The cameras' recording, closed first (the local console takes
+        # it from the Orin).
+        deadline = time.time() + RECORD_WAIT
+        while True:
+            with self._lock:
+                rec = dict(self.recording) if self.recording else None
+            if not rec or rec["state"] not in ("recording", "stopping") or time.time() > deadline:
+                break
+            if rec["state"] == "recording":
+                self._stop_recording()
+            time.sleep(0.5)
+        with self._lock:
+            run = self.run = self.run or "%s_%s" % (model, time.strftime("%Y%m%d_%H%M%S"))
         folder = EXP_DATA_ROOT / run
 
         def one(key):
@@ -558,8 +658,12 @@ class Experiment:
         result = in_parallel(names, one)
         result = {n: ({"files": [], "error": r.error} if isinstance(r, StepFailed) else r)
                   for n, r in result.items()}
+        recorded = None
+        if rec and rec["state"] == "stopped":
+            recorded = {k: rec[k] for k in ("session", "cameras", "url", "result")}
         with self._lock:
-            self.last_run = {"run": run, "files": result, "at": time.time()}
+            self.last_run = {"run": run, "files": result, "at": time.time(),
+                             "recording": recorded}
         self._log("collected data into %s (by %s)" % (folder, requester))
         self._publish()
         return self.status()

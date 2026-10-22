@@ -6,17 +6,29 @@ master that samples the sensor's 16-bit bus on every RDY1 strobe while RDY0 (fra
 valid) is high, and marks every frame boundary with a short or zero-length USB packet.
 Frames are 320x240 little-endian 16-bit words holding 14-bit raw counts.
 
+Each frame is stamped (time.monotonic()) when its last bytes arrive, and read_stamped() gives
+its true end of readout from those stamps (timing.FrameClock: the sensor's period is fixed).
+
 Works on x86 and ARM Linux (python-libusb1 + numpy only).
 """
 import os
 import struct
 import threading
 import time
-from collections import deque
+from collections import deque, namedtuple
 
 import usb1
 
 from . import protocol as P
+from .timing import FrameClock
+
+# A frame from read_stamped():
+#   data     its bytes (P.FRAME_BYTES when complete)
+#   time     its end of readout, time.monotonic()'s clock [s]: the arrivals fitted to the
+#            sensor's fixed period (FrameClock); the readout began P.READOUT_S before
+#   arrival  when its last bytes arrived (time.monotonic(), in the USB callback) [s]
+#   index    the sensor's frame number since the stream started; a gap is a lost frame
+Frame = namedtuple("Frame", "data time arrival index")
 
 FIRMWARE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware", "ici9320.ihx")
 
@@ -53,6 +65,7 @@ class ICI9320:
         self.ctx = usb1.USBContext()
         self.handle = None
         self._rx = None
+        self.clock = FrameClock()
 
     # ------------------------------------------------------------ open/close
     def __enter__(self):
@@ -179,6 +192,7 @@ class ICI9320:
         if self._rx:
             return
         self.vendor_out(P.VR_STREAM_STOP)
+        self.clock.reset()
         self._rx = _AsyncReader(self.ctx, self.handle, P.EP_VIDEO, n_transfers, transfer_bytes)
         self._rx.start()
         flags = P.F_WORDWIDE | P.F_INTCLK | P.F_48MHZ
@@ -195,11 +209,26 @@ class ICI9320:
 
     def read_frame(self, timeout=1.0):
         """Return the next frame as bytes (153600 bytes when complete) or None on timeout."""
-        return self._rx.get_frame(timeout) if self._rx else None
+        frame = self.read_stamped(timeout)
+        return frame.data if frame else None
 
-    def frames(self, n=None, timeout=1.0, skip_shutter=True, lookahead=8):
+    def read_stamped(self, timeout=1.0):
+        """Return the next frame as a Frame (data, time, arrival, index), or None on timeout.
+
+        Every frame, whole or not, goes through the frame clock, so read_frame() and this may
+        be mixed.
         """
-        Generator of numpy (240,320) uint16 arrays of raw 14-bit counts.
+        got = self._rx.get_frame(timeout) if self._rx else None
+        if got is None:
+            return None
+        data, arrival = got
+        t, index = self.clock.update(arrival)
+        return Frame(data, t, arrival, index)
+
+    def frames(self, n=None, timeout=1.0, skip_shutter=True, lookahead=8, stamped=False):
+        """
+        Generator of numpy (240,320) uint16 arrays of raw 14-bit counts; with stamped=True,
+        of (array, Frame) pairs, the Frame giving its time and number (see read_stamped).
         Incomplete frames are dropped. The camera performs an autonomous flat-field
         correction (shutter) every ~30 s while warming up and every ~2 min when stable.
         Its only unambiguous signature is one or more sentinel frames in which every pixel
@@ -212,22 +241,24 @@ class ICI9320:
         pending = deque()
         i = 0
         while n is None or i < n:
-            f = self.read_frame(timeout)
+            f = self.read_stamped(timeout)
             if f is None:
                 return
-            if len(f) != P.FRAME_BYTES:
+            if len(f.data) != P.FRAME_BYTES:
                 self._rx.incomplete += 1
                 continue
-            fr = np.frombuffer(f, dtype="<u2").reshape(P.HEIGHT, P.WIDTH)
+            fr = np.frombuffer(f.data, dtype="<u2").reshape(P.HEIGHT, P.WIDTH)
+            out = (fr, f) if stamped else fr
             kind = self.classify_frame(fr)
             if not skip_shutter:
-                yield fr
+                yield out
                 i += 1
                 continue
             if kind == "flat":
                 # paddle was closed in the frames just before: keep the most uniform as reference
                 if pending:
-                    ref = min(pending, key=lambda x: float(x.std()))
+                    ref = min(pending, key=lambda x: float((x[0] if stamped else x).std()))
+                    ref = ref[0] if stamped else ref
                     try:
                         t = self.temperature_c()
                     except Exception:
@@ -238,7 +269,7 @@ class ICI9320:
                 continue
             if kind == "settling":
                 continue
-            pending.append(fr)
+            pending.append(out)
             if len(pending) > lookahead:
                 yield pending.popleft()
                 i += 1
@@ -278,6 +309,7 @@ class _AsyncReader:
         self.transfers = []
 
     def _cb(self, xfer):
+        arrival = time.monotonic()    # first: when the transfer was handed to Python
         st = xfer.getStatus()
         if st == usb1.TRANSFER_COMPLETED:
             n = xfer.getActualLength()
@@ -289,7 +321,7 @@ class _AsyncReader:
                 # actual length < requested means the device delimited a frame
                 if n < self.size or n == 0 or len(self.cur) >= P.FRAME_BYTES:
                     if self.cur:
-                        self.frames.append(bytes(self.cur))
+                        self.frames.append((bytes(self.cur), arrival))
                         self.total_frames += 1
                         self.cur = bytearray()
                         self.cv.notify()
@@ -338,6 +370,7 @@ class _AsyncReader:
         self.transfers = []
 
     def get_frame(self, timeout):
+        """Return the next (bytes, arrival time), or None on timeout."""
         with self.cv:
             if not self.frames:
                 self.cv.wait(timeout)

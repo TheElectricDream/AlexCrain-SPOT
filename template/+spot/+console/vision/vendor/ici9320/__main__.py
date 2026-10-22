@@ -1,4 +1,4 @@
-"""python3 -m ici9320 {info|grab|png} ..."""
+"""python3 -m ici9320 {info|grab|png|reload|watch|timing} ..."""
 import argparse
 import sys
 import time
@@ -19,6 +19,9 @@ def main():
     sub.add_parser("reload", help="reload the packaged firmware through the resident loader")
     p = sub.add_parser("watch", help="stream and report shutter (FFC) events as they happen")
     p.add_argument("-t", type=float, default=300)
+    p = sub.add_parser("timing", help="stream N frames; report the frame period, the arrivals' "
+                                      "delays and lost frames")
+    p.add_argument("-n", type=int, default=1200)
     args = ap.parse_args()
 
     with ICI9320() as cam:
@@ -37,7 +40,8 @@ def main():
                 if len(f) == P.FRAME_BYTES:
                     got.append(f)
             dt = time.time() - t0
-            st = cam.stream_stats
+            rx = cam._rx
+            st = dict(bytes=rx.total_bytes, frames=rx.total_frames, errors=rx.errors)
             cam.stop_stream()
             total = sum(sizes.values())
             print(f"{len(got)} complete / {total} frames in {dt:.2f}s -> {total/dt:.1f} fps; sizes {sizes}; stats {st}")
@@ -62,6 +66,26 @@ def main():
             print(f"{n} frames, {cam.shutter_events} shutter events; last closed-paddle mean "
                   f"{cam.last_shutter['mean']:.1f} at housing {cam.last_shutter['temperature_c']} °C" if cam.last_shutter else f"{n} frames, no shutter events")
             cam.stop_stream()
+        elif args.cmd == "timing":
+            import numpy as np
+            from .timing import retime
+            cam.start_stream()
+            got = [cam.read_stamped(1.0) for _ in range(args.n)]
+            cam.stop_stream()
+            got = [f for f in got if f is not None]
+            if len(got) < 2:
+                sys.exit("no frames")
+            a = np.array([f.arrival for f in got])
+            times, index = retime(a)
+            live = np.array([f.time for f in got])
+            period = (times[-1] - times[0]) / max(1, index[-1] - index[0])
+            delay = (a - times) * 1000
+            print(f"{len(got)} frames, period {period * 1000:.4f} ms ({1 / period:.3f} Hz), "
+                  f"lost {int(index[-1] - index[0] + 1 - len(got))}")
+            print(f"arrival after the fitted end of readout: median {np.median(delay):.2f} ms, "
+                  f"95% {np.percentile(delay, 95):.2f} ms, max {delay.max():.2f} ms")
+            print(f"live times (FrameClock) against the fit: "
+                  f"max {np.abs(live[100:] - times[100:]).max() * 1000:.2f} ms after 100 frames")
         elif args.cmd == "png":
             import numpy as np
             from PIL import Image

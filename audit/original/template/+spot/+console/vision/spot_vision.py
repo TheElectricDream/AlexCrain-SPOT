@@ -6,7 +6,7 @@ Vision tab.
 
     python3 spot_vision.py [--port 8090] [--realsense-python PATH]
                            [--dvs-python PATH] [--thermal-python PATH]
-                           [--demo]
+                           [--recordings FOLDER] [--demo]
 
     GET  /api/cameras
         the cameras: [{id, kind, name, serial, views: [{id, label}],
@@ -23,8 +23,29 @@ Vision tab.
         width; 0 = full)
     GET  /snapshot/<camera>/<view>.jpg
         one frame (?q=95&w=0)
+    POST /api/record/start  {"session": name, "cameras": [id, ...]}
+        record them (all, or none and why: 409) until stopped
+    POST /api/record/stop   {"session": name}
+        stop; returns its session.json (with "files" and "bytes")
+    GET  /api/record
+        {"active", "recordings": [...], "disk": {"free", "total"}}
+    GET  /api/record/<session>
+        its files [{"path", "size"}] and session.json
+    GET  /recordings/<session>/<path>
+        one of its files
+    POST /api/record/delete {"session": name}
     GET  /
         a plain page listing them (for checking by hand)
+
+Experiments record cameras through the lab console (its experiment.py):
+each camera's worker writes into RECORD_ROOT/<session>/<camera>/ on
+the Orin's disk (nothing goes over the network while it runs), and the
+lab console relays the experiment clock of every PhaseSpace packet to
+UDP CLOCK_PORT. When the recording stops, the clock is fitted to the
+Orin's monotonic clock and every frame log gets experiment_time
+(README.txt in the folder says what each file is). The local console
+then copies the folder into the run's Saved Data and deletes it here.
+A recording stops itself when the disk is nearly full (DISK_STOP).
 
 Each camera runs in a process of its own, vision_worker.py, with the
 Python whose library it needs: the ZED SDK's pyzed (this Python); the
@@ -49,8 +70,12 @@ Python 3.8+, standard library only; installed by
 import argparse
 import glob
 import json
+import math
 import os
 import re
+import shutil
+import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -83,6 +108,34 @@ ICI_PRODUCTS = ("9f00", "9f10")   # ... at power-up, and with the SDK's firmware
 # Outside the deployed folder, so a redeploy keeps it.
 SETTINGS_FILE = os.path.expanduser("~/.spot_vision_settings.json")
 DEMO = False
+
+# Experiments' recordings: a folder per session (RECORD_ROOT/<session>/
+# <camera>/), and the experiment clock the lab console relays.
+RECORD_ROOT = os.path.expanduser("~/spot_vision_recordings")
+RATES_FILE = os.path.expanduser("~/.spot_vision_rates.json")   # measured bytes/s
+SESSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
+CLOCK_PORT = 31545           # UDP, from the lab console during a recording
+CLOCK_MAGIC = b"SPCK"
+CLOCK_FORMAT = "<4sIdd"      # magic, sequence, packet time [s], experiment clock [s] (NaN: none)
+CLOCK_FILE = "clock.csv"
+FRAME_LOG = "frames.csv"     # each camera's, from its worker
+DISK_REFUSE = 2e9            # [bytes] free: no recording starts below this
+DISK_STOP = 1e9              # [bytes] free: a recording stops below this
+RECORD_START_TIMEOUT = 25.0  # [s] for a camera to start recording (the ZED opens slowly)
+RECORD_STOP_TIMEOUT = 30.0   # [s] for it to close its files
+FIT_QUANTILE = 0.9           # the clock fit's offset: the least delayed packets (see fit_clock)
+FILE_CHUNK = 1 << 20         # [bytes] a recording's files are sent this much at a time
+
+# Rough recording rates before a camera has recorded once (then its
+# measured rate is used): bytes a pixel, by kind and format.
+ZED_SIZES = {"HD2K": (2208, 1242, 15), "HD1080": (1920, 1080, 30), "HD720": (1280, 720, 60),
+             "VGA": (672, 376, 100)}   # width, height, fastest fps
+ZED_BYTES_PER_PIXEL = {"H264": 0.05, "H265": 0.03, "LOSSLESS": 1.0}   # both images, compressed
+BAG_COMPRESSION = 0.8        # the RealSense bag's LZ4 on raw colour and depth
+MJPEG_BYTES_PER_PIXEL = 0.15
+DVS_RATE = 2e6               # [bytes/s] events depend on the scene
+THERMAL_FRAME = 320 * 240 * 2
+THERMAL_RATE = 59.6          # [Hz]
 
 FIRST_FRAME_TIMEOUT = 15.0   # [s] opening the ZED takes a few seconds
 FRAME_TIMEOUT = 5.0          # [s] between frames of a stream
@@ -193,6 +246,9 @@ class Camera:
         self.params, self.param_errors, self.params_seq = [], {}, 0
         # What was set: sent each time it opens.
         self.saved = load_settings().get(cid, {})
+        # A recording: {"folder", "frames", "bytes", "files", "error",
+        # "note", "done"} from the worker's R lines; None when none.
+        self.recording = None
 
     def status(self):
         """Return what the Vision tab shows of the camera."""
@@ -202,7 +258,9 @@ class Camera:
                          "views": [{"id": view_id, "label": label}
                                    for view_id, label in VIEWS[self.info["kind"]]],
                          "state": self.state, "detail": self.detail,
-                         "viewers": len(self.subs)}, **self.extra)
+                         "viewers": len(self.subs), "record_rate": record_rate(self),
+                         "recording": dict(self.recording) if self.recording else None},
+                        **self.extra)
 
     # Viewers
 
@@ -290,7 +348,56 @@ class Camera:
                 self.lock.wait(end - time.time())
         return self.settings()
 
+    # Recording (for an experiment: Vision.record_start)
+
+    def start_recording(self, folder, timeout=RECORD_START_TIMEOUT):
+        """Have the worker record into folder (opening the camera).
+
+        Returns:
+            The recording's state once the worker has started it (or
+            said why not); "done" is set if it didn't start.
+        """
+        with self.lock:
+            self.recording = {"folder": folder, "frames": 0, "bytes": 0, "files": [],
+                              "error": None, "note": None, "done": False, "started": False}
+            self._ensure_worker()
+            self._send_settings()
+            self._command({"record": {"folder": folder}})
+            end = time.time() + timeout
+            while (not self.recording["started"] and not self.recording["done"]
+                   and time.time() < end):
+                self.lock.wait(end - time.time())
+            if not self.recording["started"] and not self.recording["done"]:
+                self.recording.update(done=True, error="the camera didn't start recording "
+                                                       "within %g s" % timeout)
+            return dict(self.recording)
+
+    def stop_recording(self, timeout=RECORD_STOP_TIMEOUT):
+        """Have the worker close its recording; return its state."""
+        with self.lock:
+            if not self.recording:
+                return None
+            if not self.recording["done"]:
+                self._command({"record": None})
+                end = time.time() + timeout
+                while not self.recording["done"] and time.time() < end:
+                    self.lock.wait(end - time.time())
+                if not self.recording["done"]:
+                    self.recording.update(done=True, error="the camera didn't close its "
+                                                           "recording within %g s" % timeout)
+            self.idle_since = time.time()
+            last, self.recording = dict(self.recording), None
+            return last
+
     # The worker (call with the lock held)
+
+    def _command(self, msg):
+        """Send the worker a command, if it runs."""
+        if self.proc and self.proc.poll() is None:
+            try:
+                self.proc.stdin.write((json.dumps(msg) + "\n").encode())
+            except (BrokenPipeError, OSError):
+                pass
 
     def _ensure_worker(self):
         """Start the worker (if not running), with kept settings."""
@@ -363,6 +470,18 @@ class Camera:
                     self.params, self.param_errors = msg.get("params", []), msg.get("errors", {})
                     self.params_seq += 1
                     self.lock.notify_all()
+            elif line.startswith(b"R "):
+                # A recording's progress (and its end).
+                try:
+                    msg = json.loads(line[2:])
+                except ValueError:
+                    continue
+                with self.lock:
+                    if self.recording is not None:
+                        self.recording.update({k: msg.get(k) for k in (
+                            "frames", "bytes", "files", "error", "note", "done")})
+                        self.recording["started"] = True
+                        self.lock.notify_all()
             elif line.startswith(b"S "):
                 # Its state, and the model and serial it found.
                 try:
@@ -378,6 +497,9 @@ class Camera:
         # It exited: idle, or an error with its code.
         code = proc.wait()
         with self.lock:
+            if self.proc is proc and self.recording and not self.recording["done"]:
+                self.recording.update(done=True, error=self.recording["error"] or self.detail or
+                                      "its worker stopped (code %s)" % code)
             if self.proc is proc:
                 self.proc = None
                 if self.state not in ("busy", "error"):
@@ -398,7 +520,8 @@ class Camera:
         """
         with self.lock:
             proc = self.proc
-            if not proc or self.subs or time.time() - self.idle_since < IDLE_CLOSE:
+            if (not proc or self.subs or self.recording
+                    or time.time() - self.idle_since < IDLE_CLOSE):
                 return
             self.proc = None
             self.state, self.detail = "idle", None
@@ -415,9 +538,200 @@ class Camera:
             proc.kill()
 
 
+# Recording rates (for the Experiment tab's estimate)
+
+
+def mode_size(value, default):
+    """Return (width, height, fps) from "WxH@fps" (or default)."""
+    match = re.match(r"(\d+)x(\d+)@(\d+)$", str(value or ""))
+    return tuple(int(g) for g in match.groups()) if match else default
+
+
+def formula_rate(kind, saved):
+    """Return a camera's rough recording rate [bytes/s], by settings."""
+    if kind == "zed":
+        w, h, top = ZED_SIZES.get(saved.get("resolution"), ZED_SIZES["HD720"])
+        fps = min(int(saved.get("camera_fps", 30)), top)
+        return 2 * w * h * fps * ZED_BYTES_PER_PIXEL.get(saved.get("svo_compression"), 0.05)
+    if kind == "realsense":
+        cw, ch, cf = mode_size(saved.get("mode.color"), (1280, 720, 30))
+        dw, dh, df = mode_size(saved.get("mode.depth"), (1024, 768, 30))
+        return BAG_COMPRESSION * (cw * ch * 3 * cf + dw * dh * 2 * df)
+    if kind == "dvs":
+        return DVS_RATE
+    if kind == "thermal":
+        return THERMAL_FRAME * (float(saved.get("record_fps", 30)) or THERMAL_RATE)
+    if kind == "uvc":
+        w, h = (int(x) for x in str(saved.get("size", "1280x720")).split("x"))
+        return w * h * MJPEG_BYTES_PER_PIXEL * (float(saved.get("record_fps", 0)) or 30)
+    return 1280 * 720 * MJPEG_BYTES_PER_PIXEL * float(saved.get("record_fps", 30))
+
+
+def record_rate(cam):
+    """Return {"bytes_per_s", "measured"}: a camera's recording rate.
+
+    Measured, if it has recorded with the settings it has now; else
+    estimated from them.
+    """
+    kept = load_json(RATES_FILE).get(cam.id)
+    if kept and kept.get("settings") == cam.saved and kept.get("bytes_per_s"):
+        return {"bytes_per_s": kept["bytes_per_s"], "measured": True}
+    try:
+        rate = formula_rate(cam.info["kind"], cam.saved)
+    except (TypeError, ValueError):
+        rate = formula_rate(cam.info["kind"], {})
+    return {"bytes_per_s": round(rate), "measured": False}
+
+
+def disk():
+    """Return the recordings' disk: {"path", "free", "total"} [B]."""
+    os.makedirs(RECORD_ROOT, exist_ok=True)
+    usage = shutil.disk_usage(RECORD_ROOT)
+    return {"path": RECORD_ROOT, "free": usage.free, "total": usage.total}
+
+
+# The experiment clock: fitted to this computer's monotonic clock
+
+
+def fit_clock(samples):
+    """Fit a clock to orin_time: clock = offset + slope * orin_time.
+
+    Each sample is the clock's value in a packet and when it arrived:
+    the clock had moved on by the packet's delay, so the slope is a
+    least-squares fit and the offset the FIT_QUANTILE of the clock less
+    slope * orin_time, near the least delayed packets.
+
+    Args:
+        samples: [(orin_time, clock)] with finite values.
+
+    Returns:
+        {"offset", "slope", "samples", "spread_ms"}, or None (none).
+    """
+    n = len(samples)
+    if not n:
+        return None
+    if n == 1:
+        slope = 1.0
+    else:
+        mx = sum(t for t, _ in samples) / n
+        my = sum(c for _, c in samples) / n
+        sxx = sum((t - mx) ** 2 for t, _ in samples)
+        slope = (sum((t - mx) * (c - my) for t, c in samples) / sxx) if sxx > 0 else 1.0
+    rest = sorted(c - slope * t for t, c in samples)
+    offset = rest[min(n - 1, int(FIT_QUANTILE * n))]
+    return {"offset": offset, "slope": slope, "samples": n,
+            "spread_ms": round(1000 * (rest[-1] - rest[0]), 2)}
+
+
+def clock_fits(path):
+    """Return the experiment clock's and the packet time's fits.
+
+    From a session's clock.csv (orin_time, packet_time,
+    experiment_clock). The packet time is fitted over its last stretch
+    without a jump back (StreamData restarts it with the stream).
+    """
+    exp, packet = [], []
+    try:
+        with open(path) as f:
+            next(f, None)
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) < 3:
+                    continue
+                try:
+                    t, pt, ec = (float(v) for v in parts[:3])
+                except ValueError:
+                    continue
+                if math.isfinite(ec):
+                    exp.append((t, ec))
+                if math.isfinite(pt):
+                    if packet and pt < packet[-1][1]:
+                        packet = []
+                    packet.append((t, pt))
+    except OSError:
+        pass
+    return {"experiment": fit_clock(exp), "phasespace": fit_clock(packet)}
+
+
+def add_clock_columns(path, fits):
+    """Add experiment_time and phasespace_time to a frame log.
+
+    From its orin_time column (empty where a clock has no fit).
+    """
+    def at(fit, t):
+        """Return a fit's clock at orin_time t, as text."""
+        return "" if fit is None or t is None else "%.6f" % (fit["offset"] + fit["slope"] * t)
+
+    tmp = path + ".tmp"
+    with open(path) as src, open(tmp, "w") as dst:
+        header = next(src, "").rstrip("\n").split(",")
+        column = header.index("orin_time") if "orin_time" in header else None
+        dst.write(",".join(header + ["experiment_time", "phasespace_time"]) + "\n")
+        for line in src:
+            parts = line.rstrip("\n").split(",")
+            try:
+                t = float(parts[column]) if column is not None else None
+            except (IndexError, ValueError):
+                t = None
+            dst.write(",".join(parts + [at(fits["experiment"], t),
+                                        at(fits["phasespace"], t)]) + "\n")
+    os.replace(tmp, path)
+
+
+SESSION_README = """SPOT Vision recording: {session}
+Recorded on {host} from {started} to {stopped} (local time), for an experiment
+started from the SPOT Console. session.json has the details.
+
+Each camera has a folder:
+  frames.csv       a row per frame (per event batch for an event camera):
+                     frame            its index in the camera's file
+                     orin_time        when it was taken, on the Orin's monotonic clock [s]
+                                      (from the camera's own time stamp where it is on the
+                                      Orin's clock, else when the frame arrived)
+                     arrival_time     when it reached SPOT Vision [s, same clock]
+                     ...              the camera's own columns (its time stamp, file, ...)
+                     experiment_time  the experiment's clock [s]: 0 when the platforms left
+                                      phase 0, negative before (empty if the experiment
+                                      never started)
+                     phasespace_time  the PhaseSpace stream's packet time [s]
+  ZED              zed.svo2 / zed.svo: both images, every frame (the ZED SDK reads it and
+                   can compute depth from it); camera_time_ns is the SDK's image time stamp
+  RealSense        realsense_<n>.bag: the colour and depth streams (librealsense, ROS bag)
+  DVXplorer        events.aedat4 (dv-processing), or events.bin + events_bin.json (raw
+                   event rows); a frames.csv row per batch of events (first_us, last_us)
+  Thermal          thermal_raw.bin: 240 x 320 little-endian uint16 raw counts per frame
+                   (14-bit; not temperatures); orin_time is the middle of the frame's readout,
+                   on the sensor's clock (its SDK's ici9320.retime); sensor_frame its number
+                   (a gap: not kept, or lost); shutter: ok, flat (shutter closed) or settling
+  Other cameras    video.avi / pattern.avi: MJPEG
+
+clock.csv holds the clock packets the lab console relayed (orin_time, packet_time,
+experiment_clock); experiment_time and phasespace_time are straight-line fits of those
+to orin_time (session.json: clock), so they can be fitted again.
+"""
+
+
 # Kept settings
 
 _settings_lock = threading.Lock()
+
+
+def load_json(path):
+    """Return a JSON object from a file; {} if missing or not one."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_json(path, data):
+    """Write a JSON file atomically."""
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=1)
+    os.replace(tmp, path)
 
 
 def load_settings():
@@ -444,6 +758,114 @@ def save_settings(cid, values):
         os.replace(tmp, SETTINGS_FILE)
 
 
+# Experiments' recordings
+
+
+class RecordError(Exception):
+    """A recording can't start (or there is no such recording)."""
+
+
+def in_parallel(items, fn):
+    """Return {item: fn(item)}, each in a thread of its own."""
+    out = {}
+
+    def one(item):
+        """Run fn on one item."""
+        out[item] = fn(item)
+
+    threads = [threading.Thread(target=one, args=(item,)) for item in items]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return out
+
+
+def session_folder(name):
+    """Return a recording's folder.
+
+    Raises:
+        RecordError: if name isn't a recording's name.
+    """
+    if not SESSION_RE.match(name or ""):
+        raise RecordError("%r isn't a recording's name" % name)
+    return os.path.join(RECORD_ROOT, name)
+
+
+def session_files(name):
+    """Return a recording's files: [{"path", "size"}], paths with "/".
+
+    Raises:
+        RecordError: if there is no such recording.
+    """
+    folder = session_folder(name)
+    if not os.path.isdir(folder):
+        raise RecordError("no recording %s" % name)
+    out = []
+    for dirpath, dirnames, filenames in os.walk(folder):
+        dirnames.sort()
+        for f in sorted(filenames):
+            path = os.path.join(dirpath, f)
+            out.append({"path": os.path.relpath(path, folder).replace(os.sep, "/"),
+                        "size": os.path.getsize(path)})
+    return out
+
+
+class Session:
+    """A recording in progress: its cameras and the clock's samples."""
+
+    def __init__(self, name, cams):
+        """Start one: its folder (made) and clock.csv.
+
+        Args:
+            name: Its name (the folder's).
+            cams: {camera id: Camera}.
+        """
+        self.name, self.cams = name, cams
+        self.folder = session_folder(name)
+        os.makedirs(self.folder)
+        self.started, self.stopped, self.note = time.time(), None, None
+        self.camera_started = {}    # camera id -> when it began recording
+        self.stopping = False
+        self._clock_lock = threading.Lock()
+        self._clock = open(os.path.join(self.folder, CLOCK_FILE), "w")
+        self._clock.write("orin_time,packet_time,experiment_clock\n")
+        self.clock_count, self.clock_last, self.clock_value = 0, None, None
+
+    def add_clock(self, t, packet_time, exp_clock):
+        """Keep a clock packet that arrived at orin_time t."""
+        with self._clock_lock:
+            if self._clock.closed:
+                return
+            self._clock.write("%.6f,%.6f,%s\n" % (t, packet_time, "%.6f" % exp_clock
+                                                   if math.isfinite(exp_clock) else "nan"))
+            self.clock_count += 1
+            self.clock_last, self.clock_value = t, exp_clock
+
+    def close_clock(self):
+        """Close clock.csv."""
+        with self._clock_lock:
+            self._clock.close()
+
+    def status(self):
+        """Return the recording's state for the pages."""
+        now = time.monotonic()
+        cams = {}
+        for cid, cam in self.cams.items():
+            with cam.lock:
+                rec = dict(cam.recording) if cam.recording else None
+            cams[cid] = {"name": cam.info["name"], "kind": cam.info["kind"], "recording": rec}
+        return {"session": self.name, "started": self.started, "note": self.note,
+                "bytes": sum((c["recording"] or {}).get("bytes") or 0 for c in cams.values()),
+                "cameras": cams,
+                "clock": {"samples": self.clock_count,
+                          "age": None if self.clock_last is None
+                          else round(now - self.clock_last, 2),
+                          "experiment_clock": self.clock_value
+                          if self.clock_value is None or math.isfinite(self.clock_value)
+                          else None}}
+
+
 # All cameras
 
 
@@ -459,8 +881,11 @@ class Vision:
         self.pythons = pythons
         self.lock = threading.Lock()
         self.cams = {}
+        self.session = None                    # the recording in progress
+        self.record_lock = threading.Lock()   # one start or stop at a time
         self.refresh()
         threading.Thread(target=self._housekeeping, daemon=True).start()
+        threading.Thread(target=self._clock_listener, daemon=True).start()
 
     def refresh(self):
         """Look for cameras again; return them all.
@@ -489,13 +914,198 @@ class Vision:
             return self.cams.get(cid)
 
     def _housekeeping(self):
-        """Close idle cameras, forever."""
+        """Close idle cameras, and stop a recording on a full disk."""
         while True:
             time.sleep(HOUSEKEEPING_PERIOD)
             with self.lock:
                 cams = list(self.cams.values())
             for cam in cams:
                 cam.reap()
+            session = self.session
+            if session and not session.stopping and disk()["free"] < DISK_STOP:
+                session.stopping = True
+                threading.Thread(target=self.record_stop, kwargs={
+                    "note": "stopped early: the Orin's disk was nearly full "
+                            "(%.1f GB free)" % (disk()["free"] / 1e9)}, daemon=True).start()
+
+    # Recording (the lab console starts and stops it with an experiment)
+
+    def record_start(self, name, cids):
+        """Start recording cameras, all of them or none.
+
+        Args:
+            name: The recording's name (its folder's).
+            cids: The cameras' ids.
+
+        Returns:
+            The recording's status.
+
+        Raises:
+            RecordError: if one is going, the name is taken, the disk is
+                nearly full, a camera is unknown, or one can't record
+                (the others are stopped again).
+        """
+        with self.record_lock:
+            folder = session_folder(name)
+            if self.session:
+                raise RecordError("SPOT Vision is already recording (%s)" % self.session.name)
+            if os.path.exists(folder):
+                raise RecordError("there is already a recording named %s" % name)
+            free = disk()["free"]
+            if free < DISK_REFUSE:
+                raise RecordError("the Orin's disk has only %.1f GB free" % (free / 1e9))
+            cids = list(dict.fromkeys(str(c) for c in cids or []))
+            if not cids:
+                raise RecordError("no cameras to record")
+            cams = {}
+            for cid in cids:
+                cam = self.get(cid)
+                if cam is None:
+                    raise RecordError("there is no camera %s on the Orin now" % cid)
+                cams[cid] = cam
+
+            # The clock samples count from now; each camera starts.
+            session = self.session = Session(name, cams)
+            results = in_parallel(cids, lambda c: cams[c].start_recording(
+                os.path.join(session.folder, c)))
+            for cid in cids:
+                session.camera_started[cid] = time.time()
+            failed = {c: r for c, r in results.items() if r["done"]}
+            if failed:
+                in_parallel(cids, lambda c: cams[c].stop_recording())
+                session.close_clock()
+                self.session = None
+                shutil.rmtree(session.folder, ignore_errors=True)
+                raise RecordError("; ".join("the %s couldn't record: %s"
+                                            % (cams[c].info["name"], r["error"] or "no reason")
+                                            for c, r in failed.items()))
+            return session.status()
+
+    def record_stop(self, name=None, note=None):
+        """Stop the recording; finish its files.
+
+        Adds the clocks to each frame log, writes session.json and
+        README.txt, and keeps each camera's measured rate.
+
+        Args:
+            name: Stop only this recording (None: whichever).
+            note: Why it stopped, if not asked to.
+
+        Returns:
+            Its session.json, or None if nothing was recording.
+        """
+        with self.record_lock:
+            session = self.session
+            if session is None or (name and name != session.name):
+                return None
+            session.stopping = True
+            session.note = note
+            results = in_parallel(list(session.cams), lambda c: session.cams[c].stop_recording())
+            session.close_clock()
+            session.stopped = time.time()
+
+            # The clocks, into each frame log.
+            fits = clock_fits(os.path.join(session.folder, CLOCK_FILE))
+            for cid in session.cams:
+                log = os.path.join(session.folder, cid, FRAME_LOG)
+                if os.path.isfile(log):
+                    try:
+                        add_clock_columns(log, fits)
+                    except (OSError, ValueError) as e:
+                        results[cid] = dict(results[cid] or {}, error="couldn't add the clocks "
+                                            "to frames.csv: %s" % e)
+
+            # Each camera's measured rate, for the next estimate.
+            rates = load_json(RATES_FILE)
+            for cid, result in results.items():
+                seconds = session.stopped - session.camera_started.get(cid, session.started)
+                if result and not result.get("error") and result.get("bytes") and seconds > 5:
+                    rates[cid] = {"bytes_per_s": round(result["bytes"] / seconds),
+                                  "settings": session.cams[cid].saved,
+                                  "measured": time.strftime("%Y-%m-%d %H:%M:%S")}
+            save_json(RATES_FILE, rates)
+
+            # What it holds.
+            manifest = {
+                "session": session.name, "host": os.uname().nodename, "started": session.started,
+                "stopped": session.stopped, "note": note, "clock": fits,
+                "clock_samples": session.clock_count,
+                "cameras": {cid: {"kind": cam.info["kind"], "name": cam.info["name"],
+                                  "model": cam.extra.get("model"),
+                                  "serial": cam.info["serial"] or cam.extra.get("serial"),
+                                  "settings": cam.saved,
+                                  "frames": (results[cid] or {}).get("frames"),
+                                  "error": (results[cid] or {}).get("error"),
+                                  "note": (results[cid] or {}).get("note")}
+                            for cid, cam in session.cams.items()}}
+            save_json(os.path.join(session.folder, "session.json"), manifest)
+            with open(os.path.join(session.folder, "README.txt"), "w") as f:
+                f.write(SESSION_README.format(
+                    session=session.name, host=manifest["host"],
+                    started=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(session.started)),
+                    stopped=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(session.stopped))))
+            self.session = None
+            manifest["files"] = session_files(session.name)
+            manifest["bytes"] = sum(f["size"] for f in manifest["files"])
+            return manifest
+
+    def recordings(self):
+        """Return the recordings kept, newest first, and the disk."""
+        out = []
+        active = self.session.name if self.session else None
+        if os.path.isdir(RECORD_ROOT):
+            for name in sorted(os.listdir(RECORD_ROOT), reverse=True):
+                folder = os.path.join(RECORD_ROOT, name)
+                if not os.path.isdir(folder) or not SESSION_RE.match(name):
+                    continue
+                manifest = load_json(os.path.join(folder, "session.json"))
+                out.append({"session": name, "active": name == active,
+                            "started": manifest.get("started"), "stopped": manifest.get("stopped"),
+                            "cameras": sorted(manifest.get("cameras") or []),
+                            "bytes": sum(f["size"] for f in session_files(name))})
+        return {"active": self.session.status() if self.session else None, "recordings": out,
+                "disk": disk()}
+
+    def record_delete(self, name):
+        """Delete a recording (not one in progress).
+
+        Raises:
+            RecordError: if it is recording, or there is none.
+        """
+        folder = session_folder(name)
+        if self.session and self.session.name == name:
+            raise RecordError("%s is still recording" % name)
+        if not os.path.isdir(folder):
+            raise RecordError("no recording %s" % name)
+        shutil.rmtree(folder)
+        return self.recordings()
+
+    def _clock_listener(self):
+        """Keep the experiment clock's packets during a recording.
+
+        The lab console relays each PhaseSpace packet's clock (UDP
+        CLOCK_PORT, CLOCK_FORMAT); each is kept with when it arrived.
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("", CLOCK_PORT))
+        except OSError as e:
+            print("Not listening for the experiment clock on UDP %d: %s" % (CLOCK_PORT, e))
+            return
+        size = struct.calcsize(CLOCK_FORMAT)
+        while True:
+            try:
+                data = sock.recv(256)
+            except OSError:
+                continue
+            t = time.monotonic()
+            if len(data) < size:
+                continue
+            magic, _, packet_time, exp_clock = struct.unpack(CLOCK_FORMAT, data[:size])
+            session = self.session
+            if magic == CLOCK_MAGIC and session is not None:
+                session.add_clock(t, packet_time, exp_clock)
 
 
 def number(qs, key, default, lo, hi):
@@ -542,8 +1152,30 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # The cameras.
             if url.path == "/api/cameras":
+                session = self.vision.session
                 return self._json({"cameras": [cam.status() for cam in self.vision.refresh()],
-                                   "host": os.uname().nodename, "time": time.time()})
+                                   "host": os.uname().nodename, "time": time.time(),
+                                   "disk": disk(),
+                                   "recording": session.status() if session else None})
+
+            # The recordings, and one's files.
+            if url.path == "/api/record":
+                return self._json(self.vision.recordings())
+            match = re.match(r"^/api/record/([\w.-]+)$", url.path)
+            if match:
+                try:
+                    files = session_files(match.group(1))
+                except RecordError as e:
+                    return self._json({"error": str(e)}, 404)
+                return self._json({"session": match.group(1), "files": files,
+                                   "bytes": sum(f["size"] for f in files),
+                                   "manifest": load_json(os.path.join(
+                                       session_folder(match.group(1)), "session.json"))})
+
+            # A recording's file.
+            match = re.match(r"^/recordings/([\w.-]+)/([\w./-]+)$", url.path)
+            if match:
+                return self._recording_file(match.group(1), match.group(2))
 
             # A camera's settings.
             match = re.match(r"^/api/cameras/([\w.-]+)/params$", url.path)
@@ -591,10 +1223,35 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        """Change a camera's settings."""
+        """Camera settings; starting, stopping, deleting recordings."""
         url = urlparse(self.path)
         try:
-            # The camera.
+            # The body: JSON.
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+            except ValueError:
+                return self._json({"error": "send JSON"}, 400)
+            if not isinstance(body, dict):
+                return self._json({"error": "send a JSON object"}, 400)
+
+            # Recordings: {"session", "cameras"} to start; {"session"}
+            # to stop or delete.
+            if url.path in ("/api/record/start", "/api/record/stop", "/api/record/delete"):
+                name = str(body.get("session") or "")
+                try:
+                    if url.path == "/api/record/start":
+                        cameras = body.get("cameras")
+                        if not isinstance(cameras, list):
+                            return self._json({"error": "cameras must be a list of ids"}, 400)
+                        return self._json(self.vision.record_start(name, cameras))
+                    if url.path == "/api/record/stop":
+                        return self._json({"stopped": self.vision.record_stop(name or None)})
+                    return self._json(self.vision.record_delete(name))
+                except RecordError as e:
+                    return self._json({"error": str(e)}, 409)
+
+            # A camera's settings.
             match = re.match(r"^/api/cameras/([\w.-]+)/params$", url.path)
             if not match:
                 return self._json({"error": "not found"}, 404)
@@ -602,18 +1259,36 @@ class Handler(BaseHTTPRequestHandler):
             if cam is None:
                 return self._json({"error": "no camera %s" % match.group(1)}, 404)
 
-            # The body: {"values": {id: value}} or {"reset": true}.
-            length = int(self.headers.get("Content-Length") or 0)
-            try:
-                body = json.loads(self.rfile.read(length) or b"{}") if length else {}
-            except ValueError:
-                return self._json({"error": "send JSON"}, 400)
+            # {"values": {id: value}} or {"reset": true}.
             values = body.get("values") or {}
             if not isinstance(values, dict) or not all(isinstance(k, str) for k in values):
                 return self._json({"error": "values must be {setting id: value}"}, 400)
             return self._json(cam.set_params(values, reset=bool(body.get("reset"))))
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def _recording_file(self, name, rel):
+        """Send one of a recording's files, a chunk at a time."""
+        try:
+            folder = os.path.realpath(session_folder(name))
+        except RecordError as e:
+            return self._json({"error": str(e)}, 404)
+        path = os.path.realpath(os.path.join(folder, rel))
+        if not path.startswith(folder + os.sep) or not os.path.isfile(path):
+            return self._json({"error": "no file %s in %s" % (rel, name)}, 404)
+        size = os.path.getsize(path)
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(size))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(FILE_CHUNK)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
 
     def _stream(self, cam, view, fps, q, w):
         """Send a view as MJPEG until the viewer or camera goes."""
@@ -668,6 +1343,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     """Start SPOT Vision: find the cameras, serve until Ctrl+C."""
+    global DEMO, RECORD_ROOT
     parser = argparse.ArgumentParser(description="SPOT Vision: stream the Orin's cameras")
     parser.add_argument("--port", type=int, default=8090)
     parser.add_argument("--host", default="0.0.0.0")
@@ -683,11 +1359,13 @@ def main():
     parser.add_argument("--uvc-python", default=sys.executable, help="a Python with OpenCV")
     parser.add_argument("--demo", action="store_true",
                         help="also a test pattern camera (to try the Vision tab without one)")
+    parser.add_argument("--recordings", default=RECORD_ROOT,
+                        help="where experiments' recordings go (a folder per recording)")
     args = parser.parse_args()
 
     # The cameras, each kind with its Python.
-    global DEMO
     DEMO = args.demo
+    RECORD_ROOT = os.path.abspath(os.path.expanduser(args.recordings))
     Handler.vision = Vision({"zed": args.zed_python, "realsense": args.realsense_python,
                              "dvs": args.dvs_python, "thermal": args.thermal_python,
                              "uvc": args.uvc_python,

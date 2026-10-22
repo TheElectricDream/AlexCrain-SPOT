@@ -3,7 +3,9 @@ function out = build(s, root)
     %   out = spot.experiment.build(s, root) puts the settings into the workspace and builds the
     %   diagram with slbuild on the TX2 (connect first with spot.experiment.connect). For the
     %   build only, it:
-    %     - comments out "Simulate Plant Dynamics"
+    %     - comments out "Simulate Plant Dynamics", when the diagram has it (a diagram that
+    %       switches to its hardware itself with simMode, e.g. through a Variant Subsystem, has
+    %       nothing to comment out)
     %     - sets the solver to Fixed-step ode4 and the board to NVIDIA Jetson
     %     - sets the build action to "Build", never "Build and run" (the program must not run on
     %       the TX2)
@@ -49,7 +51,14 @@ function out = build(s, root)
     wasDirty = strcmp(get_param(model, 'Dirty'), 'on');
     cs = getActiveConfigSet(model);
     plant = [model '/Simulate Plant Dynamics'];
-    old = struct('commented', get_param(plant, 'Commented'), ...
+    if getSimulinkBlockHandle(plant) == -1
+        plant = '';     % none: the diagram switches to its hardware itself (simMode)
+    end
+    commented = '';
+    if ~isempty(plant)
+        commented = get_param(plant, 'Commented');
+    end
+    old = struct('commented', commented, ...
                  'solverType', get_param(model, 'SolverType'), ...
                  'solver', get_param(model, 'SolverName'), ...
                  'board', get_param(cs, 'HardwareBoard'), ...
@@ -57,7 +66,9 @@ function out = build(s, root)
     restore = onCleanup(@() undo(model, cs, plant, old, wasDirty));
 
     % No plant, fixed-step solver, Jetson board.
-    set_param(plant, 'Commented', 'on');
+    if ~isempty(plant)
+        set_param(plant, 'Commented', 'on');
+    end
     set_param(model, 'SolverType', 'Fixed-step', 'SolverName', 'ode4');
     set_param(cs, 'HardwareBoard', 'NVIDIA Jetson');
 
@@ -111,7 +122,9 @@ end
 function undo(model, cs, plant, old, wasDirty)
     % Undo the build's changes to the diagram.
     assignin('base', 'simMode', 1);
-    set_param(plant, 'Commented', old.commented);
+    if ~isempty(plant)
+        set_param(plant, 'Commented', old.commented);
+    end
     set_param(model, 'SolverType', old.solverType, 'SolverName', old.solver);
     set_param(cs, 'HardwareBoard', old.board);
     if ~isempty(old.action) && ~isempty(buildAction(cs))

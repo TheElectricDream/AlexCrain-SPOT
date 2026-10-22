@@ -15,6 +15,9 @@ import socket
 import tarfile
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from .common import ApiError
@@ -443,7 +446,7 @@ class LabLink:
     ACTIONS = ("stream/start", "stream/stop", "tracker_positions", "experiment/deploy",
                "experiment/start", "experiment/stop", "experiment/fetch", "hardware/off", "design")
     # GET requests the page may make through the local server.
-    READS = ("experiment/build", "experiment/live", "calibration")
+    READS = ("experiment/build", "experiment/live", "calibration", "vision")
 
     PORT = 8080   # the lab console's web port
 
@@ -686,6 +689,130 @@ def download_run(run):
                     dest.write_bytes(src.read())
                 files.append(str(dest.relative_to(target)))
     return {"folder": str(target / run), "files": files}
+
+
+# Camera recordings: from the Orin (SPOT Vision) straight into the run
+
+
+CAMERA_CHUNK = 1 << 20        # [bytes] read and written at a time
+CAMERA_TIMEOUT = 60           # [s] for each read from the Orin
+CAMERA_PROGRESS = 0.5         # [s] between progress events
+SESSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$")
+FILE_PART_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+class CameraDownload:
+    """Copies an experiment's camera recordings into its run's folder.
+
+    Into <project>/Saved Data/<run>/cameras/, file by file from SPOT
+    Vision on the Orin (never through the lab console), in the
+    background, with progress as camera_download events. Each file's
+    size is checked; once all are here, the Orin's copy is deleted, as
+    Collect frees the platforms' disks.
+    """
+
+    def __init__(self):
+        """Start with nothing copied."""
+        self._lock = threading.Lock()
+        self.state = {"state": "idle"}
+
+    def status(self):
+        """Return the copy's state (what the page shows)."""
+        with self._lock:
+            return dict(self.state)
+
+    def _set(self, **fields):
+        """Update the state and tell the page."""
+        with self._lock:
+            self.state.update(fields)
+            state = dict(self.state)
+        hub.publish("camera_download", state)
+
+    def start(self, run, recording):
+        """Start copying a recording into a run's folder.
+
+        Args:
+            run: The run (its Saved Data folder's name).
+            recording: The lab console's last_run["recording"]:
+                {"session", "url", ...}.
+
+        Raises:
+            ApiError: if one is copying, or the names aren't valid.
+        """
+        recording = recording or {}
+        session, base = str(recording.get("session") or ""), str(recording.get("url") or "")
+        if not NAME_RE.match(run or "") or not SESSION_RE.match(session):
+            raise ApiError("Not a run and recording: %r, %r." % (run, session))
+        if not re.match(r"^http://[0-9.]+:\d+$", base):
+            raise ApiError("Not SPOT Vision's address: %r." % base)
+        with self._lock:
+            if self.state.get("state") == "copying":
+                raise ApiError("The cameras of %s are still being copied." % self.state["run"])
+            self.state = {"state": "copying", "run": run, "session": session, "done": 0,
+                          "total": None, "file": None, "error": None, "started": time.time()}
+        threading.Thread(target=self._copy, args=(run, session, base), daemon=True).start()
+        return self.status()
+
+    def _copy(self, run, session, base):
+        """Copy every file; check them; free the Orin's disk."""
+        folder = Path(LOCAL["root"]) / "Saved Data" / run / "cameras"
+        try:
+            # What there is.
+            with urllib.request.urlopen("%s/api/record/%s" % (base, session),
+                                        timeout=CAMERA_TIMEOUT) as response:
+                listing = json.loads(response.read().decode("utf-8"))
+            files = listing.get("files") or []
+            total = sum(int(f["size"]) for f in files)
+            self._set(total=total, files=len(files))
+
+            # Each file, a chunk at a time.
+            done, last = 0, 0.0
+            for f in files:
+                parts = str(f["path"]).split("/")
+                if not all(FILE_PART_RE.match(part) and part not in (".", "..")
+                           for part in parts):
+                    raise ApiError("Unexpected file name from the Orin: %r" % f["path"])
+                dest = folder.joinpath(*parts)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                url = "%s/recordings/%s/%s" % (base, session, urllib.parse.quote(f["path"]))
+                got = 0
+                response = urllib.request.urlopen(url, timeout=CAMERA_TIMEOUT)
+                try:
+                    with open(str(dest), "wb") as out:
+                        while True:
+                            chunk = response.read(CAMERA_CHUNK)
+                            if not chunk:
+                                break
+                            out.write(chunk)
+                            got += len(chunk)
+                            if time.time() - last >= CAMERA_PROGRESS:
+                                last = time.time()
+                                self._set(done=done + got, file=f["path"])
+                finally:
+                    response.close()
+                if got != int(f["size"]) or dest.stat().st_size != int(f["size"]):
+                    raise ApiError("%s arrived incomplete (%d of %d bytes)"
+                                   % (f["path"], got, int(f["size"])))
+                done += got
+
+            # All here: free the Orin's disk.
+            freed = True
+            req = urllib.request.Request("%s/api/record/delete" % base, method="POST",
+                                         data=json.dumps({"session": session}).encode("utf-8"),
+                                         headers={"Content-Type": "application/json"})
+            try:
+                urllib.request.urlopen(req, timeout=CAMERA_TIMEOUT).read()
+            except (urllib.error.URLError, OSError):
+                freed = False
+            self._set(state="done", done=done, file=None, folder=str(folder), freed=freed,
+                      finished=time.time())
+        except (ApiError, urllib.error.URLError, OSError, ValueError, KeyError) as e:
+            reason = getattr(e, "reason", None) or e
+            self._set(state="failed", error="%s (the recording stays on the Orin)" % reason,
+                      finished=time.time())
+
+
+camera_download = CameraDownload()
 
 
 def write_ready_file(web_port):

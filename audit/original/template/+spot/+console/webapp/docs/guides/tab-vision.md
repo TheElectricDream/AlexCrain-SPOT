@@ -11,7 +11,9 @@ The lab console's **Vision** tab streams the cameras plugged into the **Jetson O
 
 ## Cameras and experiments
 
-A camera is opened only while someone watches it (or takes a snapshot), and closed a few seconds after the last viewer leaves. The rest of the time it is free for an experiment's own vision code. A camera that another program holds shows as **busy**.
+A camera is opened only while someone watches it (or takes a snapshot) or an experiment records it, and closed a few seconds after the last viewer leaves and the recording ends. The rest of the time it is free for an experiment's own vision code. A camera that another program holds shows as **busy**.
+
+An experiment can **record** the cameras: the Experiment tab's Recording card picks them. SPOT Vision records each one on the Orin's own disk (`~/spot_vision_recordings/<run>/`), in its library's format, with every frame timed on the experiment's clock; Collect copies the recording into the run ([Camera Recordings](page:camera-recordings)). A recording follows the camera's settings here. The **Recording** group sets what only recording uses: the ZED's **SVO Compression**, and the thermal and USB cameras' **Recording Rate**. While a camera records, the settings that would reopen it are refused, and the RealSense keeps the streams it records (colour and depth), so its infrared view stays empty until the recording ends.
 
 Each camera runs in a process of its own, with the Python its library needs: the ZED SDK's `pyzed` in the system Python; `pyrealsense2` 2.54 for the L515 (the last librealsense release that supports it; newer ones don't see it), in its own environment; `dv-processing` for the DVXplorer; for the thermal camera, its SDK (`ici9320`, copied with SPOT Vision) with `python-libusb1` and `pyusb`; OpenCV for any other USB camera. `deploy_orin.sh` says which of these it finds.
 
@@ -29,10 +31,10 @@ Its one view, **Thermal**, shows the sensor's **raw counts**, not temperatures: 
 - **Histogram Equalisation**: spreads the colours by how many pixels have each count. It shows more detail, but the colours are no longer proportional to the counts.
 - **Readout** (on by default): written along the bottom of the picture are the range in counts (the automatic one too, so you can copy it into Range From and To), the camera's housing temperature, and **SHUTTER** while it recalibrates.
 
-Every 30 s while it warms up, and every 2 minutes or so once it is stable, the camera closes its shutter for a moment to recalibrate (a flat-field correction). The frames it sends with the shutter closed are skipped, so the picture holds still for a moment. The camera bar also shows the **housing temperature**: the camera's own, not the scene's.
+Every 30 s while it warms up, and every 2 minutes or so once it is stable, the camera closes its shutter for a moment to recalibrate (a flat-field correction). The frames it sends with the shutter closed are skipped, so the picture holds still for a moment. Its SDK times every frame on the sensor's own clock, to a fraction of a millisecond, which an experiment's recording uses ([Camera Recordings](page:camera-recordings)). The camera bar also shows the **housing temperature**: the camera's own, not the scene's.
 
 On the Orin the camera needs SPOT Vision's udev rule, which lets the `plugdev` group open it without root (installing it needs `sudo`; `deploy_orin.sh` says how). Without the rule, the tab says it has no permission. The SDK itself is in `+spot/+console/vision/vendor/ici9320`, copied unchanged from its repository; `vendor/README.md` says how to update it.
 
 ## Settings
 
-The Orin's address is a lab console setting (`vision`: `host` `192.168.1.115`, `port` 8090), kept in `~/.spot_phasespace_console.json` on the TX2. SPOT Vision's own API (`/api/cameras`, `/stream/<camera>/<view>.mjpg`, `/snapshot/...`) is described at the top of [spot_vision.py](file:spot_vision.py), and each camera's worker in [vision_worker.py](file:vision_worker.py); `http://192.168.1.115:8090/` lists the cameras in a plain page for checking by hand.
+The Orin's address is a lab console setting (`vision`: `host` `192.168.1.115`, `port` 8090), kept in `~/.spot_phasespace_console.json` on the TX2. SPOT Vision's own API (`/api/cameras`, `/stream/<camera>/<view>.mjpg`, `/snapshot/...`, and the recordings' `/api/record...`) is described at the top of [spot_vision.py](file:spot_vision.py), and each camera's worker in [vision_worker.py](file:vision_worker.py); `http://192.168.1.115:8090/` lists the cameras in a plain page for checking by hand.
