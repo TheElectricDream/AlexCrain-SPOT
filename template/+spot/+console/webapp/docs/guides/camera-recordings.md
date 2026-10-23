@@ -95,6 +95,21 @@ counts = np.fromfile(f"{run}/cameras/thermal-1-2.3/thermal_raw.bin", "<u2").resh
 
 The ZED's SVO opens with the ZED SDK (`InitParameters.set_from_svo_file`; frame `k` with `set_svo_position(k)`); the RealSense bag with librealsense (`config.enable_device_from_file`); AEDAT4 with dv-processing (`dv.io.MonoCameraRecording`).
 
+## Videos to watch
+
+`spot.camera` turns each camera's files into an `.mkv` video next to them, with each frame's times stamped in its top-left corner: the experiment time `t`, the PhaseSpace time `PS` and the frame number, plus each camera's own details (the thermal camera's sensor frame, housing temperature and shutter; the RealSense's colour frame; the events in each event-camera frame).
+
+```matlab
+spot.camera.recordingToMkv(run)        % every camera of the run, by its kind
+spot.camera.thermalToMkv(fullfile(run, 'cameras', 'thermal-1-2.3'))
+spot.camera.zedToMkv(fullfile(run, 'cameras', 'zed-OV0001'), 'left')   % 'left', 'right', 'both'
+spot.camera.usbToMkv(fullfile(run, 'cameras', 'uvc-video0'))           % video.avi or pattern.avi
+spot.camera.realsenseToMkv(fullfile(run, 'cameras', 'realsense-1'))    % colour; ROS Toolbox
+spot.camera.dvxplorerToMkv(fullfile(run, 'cameras', 'dvs-1'), 30)      % events in 1/30 s frames
+```
+
+Each video plays at the rate its camera recorded at. The thermal video is shown in grey (white hot) on one scale for the whole recording, at twice the sensor's size. The ZED's SVO and the event camera's AEDAT4 are read without their SDKs, though lossless SVOs, the older `zed.svo` and ZSTD-compressed AEDAT4 files still need them. All of these functions need [ffmpeg](https://ffmpeg.org) (with libass and libx264, as in most builds) on the PATH.
+
 ## Size and space
 
 The Recording card estimates the size from each camera's rate × the experiment's length (its phases, plus 30 s for the start and the stop), against the Orin's free space. A camera's rate is a rough estimate from its settings until it has recorded once; then it is the rate it actually recorded at, until its settings change. The Start confirmation repeats the estimate. A recording that would not fit asks again, and SPOT Vision stops a recording itself when 1 GB is left (`session.json` says so).

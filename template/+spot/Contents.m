@@ -3,6 +3,7 @@
 %   only calls them. "help spot.<package>" lists a package.
 %
 %   spot.arm          The simulated arm: its servos, friction and 1 ms plant; its controllers; calibration from lab data
+%   spot.camera       Camera recordings: each camera's files as an .mkv video, stamped with its times
 %   spot.console      Starting, opening and stopping the SPOT Console (the web page and its server)
 %   spot.control      Controller design: platform models, LQR gains, thruster forces
 %   spot.data         Results: loading saved runs and simulations, signals to plot, 3D playback, figures

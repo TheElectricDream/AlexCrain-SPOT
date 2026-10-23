@@ -394,6 +394,9 @@ class SimBus:
         elif name == "goal_pwm":
             s["goal_pwm"] = signed(int(value) & 0xFFFF, 2)
         elif name == "goal_position":
+            if not s["reg"]["min_position"] <= int(value) <= s["reg"]["max_position"]:
+                raise IOError("write goal_position of ID %d: [RxPacketError] The data value "
+                              "exceeds the limit value!" % i)
             s["goal_pos"] = int(value) - CENTER_PULSE
         else:
             s["reg"][name] = int(value)
@@ -423,6 +426,7 @@ class Arm:
         self.ids = bus.ids
         self.window = math.radians(args.window)
         self.saved = {}
+        self.limits = {}
         self.center = {}
         self.t0 = bus.now()
 
@@ -432,7 +436,43 @@ class Arm:
         for i in self.ids:
             info[i] = self.bus.ping(i)
             self.saved[i] = {n: self.bus.read(i, n) for n in SAVED_REGISTERS}
+            self.limits[i] = (self.bus.read(i, "min_position"), self.bus.read(i, "max_position"))
         return info
+
+    def check_limits(self):
+        """Stop before anything moves if a goal would be past a limit.
+
+        In position mode a servo refuses a Goal Position outside its
+        Min/Max Position Limit (Data Limit Error), and every joint is
+        held in position mode; SPOT's PWM control doesn't keep the
+        joints within those limits, so an experiment can leave one
+        past them.
+
+        Raises:
+            Abort: if a joint is past its limits, or a tested joint
+                isn't WINDOW (or the largest position step) inside
+                them.
+        """
+        reach = max([self.args.window] + [abs(d) for d in self.args.step_deg])
+        state = self.bus.state()
+        for i in self.ids:
+            lo, hi = self.limits[i]
+            pulses = state[i][3] * PULSES + CENTER_PULSE
+            deg = math.degrees(state[i][3])
+            lo_deg, hi_deg = [math.degrees((p - CENTER_PULSE) / PULSES) for p in (lo, hi)]
+            name = "ID %d (%s)" % (i, NAMES.get(i, "joint %d" % i))
+            if not lo <= pulses <= hi:
+                raise Abort("%s is at %.1f deg, past its servo's position limits (%.0f to %.0f "
+                            "deg, Min/Max Position %d-%d), where it can't be held: with the "
+                            "torque off, move it back inside the limits"
+                            % (name, deg, lo_deg, hi_deg, lo, hi))
+            room = min(deg - lo_deg, hi_deg - deg)
+            if i in self.args.joints and room < reach:
+                raise Abort("%s is at %.1f deg, %.1f deg from its servo's position limit "
+                            "(%.0f to %.0f deg), but its tests move it up to %.0f deg each way: "
+                            "with the torque off, move it nearer 0 deg, or lower --window and "
+                            "--step-deg below %.0f deg"
+                            % (name, deg, room, lo_deg, hi_deg, reach, math.floor(room)))
 
     def restore(self):
         """Switch every servo's torque off and put its settings back."""
@@ -867,6 +907,23 @@ def fit_sweep(out, i, supply, motor, static_volts, r):
         r["stribeck"] = 0.5 * slowest
         r["stribeck_note"] = ("below the slowest steady speed measured (%.3f rad/s), where the "
                               "joint stick-slips; set to half of it" % slowest)
+
+    # Each direction's own Coulomb friction, the Stribeck speed and the
+    # speed coefficient kept, from its breakaway when measured: a joint
+    # can be harder to turn one way, and the inertia steps are
+    # simulated with their direction's friction.
+    for d, key in ((1, "pos"), (-1, "neg")):
+        static = r.get("static_" + key)
+        vs_d = static / g if isinstance(static, float) else vs
+        side = [(w, v) for (w, v), p in zip(along, pts) if w > 0 and p["direction"] == d]
+        decay = [math.exp(-(w / r["stribeck"]) ** 2) for w, _ in side]
+        sxx = sum((1 - e) ** 2 for e in decay)
+        if len(side) < 2 or sxx <= 0:
+            continue
+        vc_d = sum((1 - e) * (v - vs_d * e - coef * w)
+                   for (w, v), e in zip(side, decay)) / sxx
+        if vc_d > 0:
+            r["coulomb_" + key] = g * vc_d
     if rms > max(vc, 0.02):
         r.setdefault("warnings", []).append(
             "friction against speed: the points scatter by %.3f N m about the fit, more than the "
@@ -993,14 +1050,20 @@ def fit_inertia(out, i, supply, motor, coef, r):
     damping = g * coef                       # [N m s/rad]
     known = all(isinstance(r.get(k), float) for k in ("static", "coulomb", "stribeck"))
 
-    def friction(w):
-        """Return the dry friction at speed w [N m]."""
-        return r["coulomb"] + (r["static"] - r["coulomb"]) * math.exp(-(w / r["stribeck"]) ** 2)
+    def own(name, key):
+        """Return a friction term for a direction (else both ways') [N m]."""
+        value = r.get(name + "_" + key)
+        return value if isinstance(value, float) else r.get(name)
     found = []
     for f in files:
         rows = read_csv(os.path.join(out, f))
         key = "neg" if "_neg" in f else "pos"
         turn = "-" if key == "neg" else "+"
+        static, coulomb = own("static", key), own("coulomb", key)
+
+        def friction(w):
+            """Return the dry friction at speed w [N m], this direction's."""
+            return coulomb + (static - coulomb) * math.exp(-(w / r["stribeck"]) ** 2)
         fit = step_response(rows)
         if fit is None:
             continue
@@ -1008,7 +1071,7 @@ def fit_inertia(out, i, supply, motor, coef, r):
         r["time_constant_" + key] = tc
         inertia = damping * tc
         push = g * volts(abs(rows[0]["goal_pwm"]), supply)
-        if known and push > r["static"]:
+        if known and push > static:
             simulated = fit_step(rows, push, damping, friction)
             if simulated:
                 inertia = simulated[0]
@@ -1018,7 +1081,7 @@ def fit_inertia(out, i, supply, motor, coef, r):
 
         # The speed it settled at should be what the friction and the
         # back-EMF leave of the step's voltage.
-        expected = (g * volts(abs(rows[0]["goal_pwm"]), supply) - r.get("coulomb", 0)) / damping
+        expected = (push - (coulomb if known else 0)) / damping
         if expected > 0 and not 0.6 < w_end / expected < 1.6:
             r.setdefault("warnings", []).append(
                 "inertia: the step turning %s settled at %.3f rad/s, the friction fit expects "
@@ -1067,11 +1130,12 @@ def fit_all(out, joints, supply, motors, extra):
     for i in joints:
         r = fit_joint(out, i, supply, motors[str(i)])
         result["joints"].append(r)
-        print("  joint %d (%s): static %s N m (+%s/-%s), coulomb %s N m, stribeck %s rad/s, "
-              "viscous %s N m s/rad, back-EMF %s V s/rad, inertia %s kg m^2"
+        print("  joint %d (%s): static %s N m (+%s/-%s), coulomb %s N m (+%s/-%s), stribeck %s "
+              "rad/s, viscous %s N m s/rad, back-EMF %s V s/rad, inertia %s kg m^2"
               % (i, r["name"], fmt(r.get("static")), fmt(r.get("static_pos")),
-                 fmt(r.get("static_neg")), fmt(r.get("coulomb")), fmt(r.get("stribeck")),
-                 fmt(r.get("viscous")), fmt(r.get("back_emf")), fmt(r.get("inertia"), "%.4g")))
+                 fmt(r.get("static_neg")), fmt(r.get("coulomb")), fmt(r.get("coulomb_pos")),
+                 fmt(r.get("coulomb_neg")), fmt(r.get("stribeck")), fmt(r.get("viscous")),
+                 fmt(r.get("back_emf")), fmt(r.get("inertia"), "%.4g")))
     path = os.path.join(out, "arm_calibration.json")
     write_json(path, result)
     print("Wrote %s\nCopy it to the SPOT project's folder (next to spot_settings.json); the next "
@@ -1244,6 +1308,7 @@ def main():
         print("Servos: %s; supply %.1f V; data in %s"
               % (", ".join("ID %d %s" % (i, MODELS.get(m, m)) for i, m in models.items()),
                  supply, out))
+        arm.check_limits()
         if a.simulate:
             print("Simulated arm, true values: %s" % json.dumps(bus.truth))
         else:
