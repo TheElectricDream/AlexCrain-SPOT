@@ -10,17 +10,17 @@ function servo = servoFromDiagram(model, servo)
     %
     %   Outputs
     %     servo  with the blocks' values:
-    %              spot.arm.PositionControl   Min/Max Position (checked by checkCommands)
-    %              spot.arm.VelocityControl   Velocity Limit (checked by checkCommands)
+    %              spot.control.ArmPositionControl   Min/Max Position (checked by checkCommands)
+    %              spot.control.ArmVelocityControl   Velocity Limit (checked by checkCommands)
     %              spot.hardware.ArmPWM       PWM Limit, Min/Max Position (what the real
     %                                         servos get and the plant holds commands within)
     %
     %   See also spot.arm.checkCommands, spot.sim.run.
 
     % Block class, then {block parameter, servo field} pairs. Later blocks override earlier.
-    maps = {'spot.arm.PositionControl', {'MinPosition', 'minPosition'; ...
+    maps = {'spot.control.ArmPositionControl', {'MinPosition', 'minPosition'; ...
                                          'MaxPosition', 'maxPosition'};
-            'spot.arm.VelocityControl', {'VelocityLimit', 'velocityLimit'};
+            'spot.control.ArmVelocityControl', {'VelocityLimit', 'velocityLimit'};
             'spot.hardware.ArmPWM',     {'PWMLimit', 'pwmLimit'; ...
                                          'MinPosition', 'minPosition'; ...
                                          'MaxPosition', 'maxPosition'}};

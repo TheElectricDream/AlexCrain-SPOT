@@ -123,7 +123,7 @@ function played(sec) {
   const m = Math.floor((s % 3600) / 60);
   return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
 }
-const shortPath = rel => rel.replace(/^template\/\+spot\//, '').replace(/^template\//, '');
+const shortPath = rel => rel.replace(/^template\/\+(spot|interface)\//, '').replace(/^template\//, '');
 
 // Boot
 

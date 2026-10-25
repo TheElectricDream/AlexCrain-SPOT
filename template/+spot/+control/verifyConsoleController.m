@@ -367,7 +367,7 @@ end
 
 function out = runPython(root, inputs)
     % Run control.py on the cases (JSON in, JSON out).
-    script = fullfile(root, '+spot', '+console', 'webapp', 'spot_console', 'control.py');
+    script = fullfile(root, '+interface', '+console', 'webapp', 'spot_console', 'control.py');
 
     % Temporary files, deleted on return.
     inFile = [tempname '.json'];
@@ -380,7 +380,7 @@ function out = runPython(root, inputs)
     fclose(fid);
 
     % Run and read the answers.
-    py = spot.console.findPython();
+    py = interface.console.findPython();
     [status, msg] = system(sprintf('%s "%s" < "%s" > "%s"', py, script, inFile, outFile));
     if status ~= 0
         error('spot:control:verifyConsoleController', 'control.py failed: %s', msg);

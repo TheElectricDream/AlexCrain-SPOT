@@ -28,8 +28,8 @@ function msgs = checkCommands(dataClass, armModel)
     %        (spot.arm.withinLimits).
     %     4. PWM beyond the PWM Limit: the servo gets the limit.
     %
-    %   See also spot.sim.run, spot.arm.withinLimits, spot.arm.PositionControl,
-    %   spot.arm.VelocityControl, spot.arm.Plant, spot.hardware.ArmPWM.
+    %   See also spot.sim.run, spot.arm.withinLimits, spot.control.ArmPositionControl,
+    %   spot.control.ArmVelocityControl, spot.arm.Plant, spot.hardware.ArmPWM.
 
     %% Constants
     % Dynamixel MX unit conversions, as used by the controllers and blocks being checked.
@@ -110,7 +110,7 @@ function msgs = checkCommands(dataClass, armModel)
     for j = 1:3
 
         % Check 1: position goal beyond Min/Max Position (position control).
-        % Pulses as spot.arm.PositionControl computes them.
+        % Pulses as spot.control.ArmPositionControl computes them.
         goalPulses = round(CMD_PULSES_PER_RAD * goal(:, j) + CENTER_PULSE);
         goalOutOfRange = ctrlMode == MODE_POSITION ...
                        & (goalPulses < servo.minPosition | goalPulses > servo.maxPosition);
@@ -128,7 +128,7 @@ function msgs = checkCommands(dataClass, armModel)
         end
 
         % Check 2: velocity goal beyond the Velocity Limit (velocity control).
-        % Velocity units as spot.arm.VelocityControl computes them.
+        % Velocity units as spot.control.ArmVelocityControl computes them.
         goalUnits = round(goal(:, j) * RADPS_TO_RPM * RPM_TO_VEL_UNITS);
         goalTooFast = ctrlMode == MODE_VELOCITY & abs(goalUnits) > servo.velocityLimit;
         if any(goalTooFast)

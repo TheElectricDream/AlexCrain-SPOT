@@ -32,15 +32,21 @@ EXCLUDED_PARTS = {"slprj", "node_modules", "__pycache__", ".spot_cache", "output
 EXCLUDED_FILES = {"spot_calibration.json", "LICENSE.txt"}
 EXCLUDED_SUFFIXES = (".bak", ".slxc", ".slx", ".pyc")
 
-WEBAPP = "template/+spot/+console/webapp"
-MATLAB_PACKAGES = ["params", "massprops", "control", "sim", "experiment", "data", "plotting",
-                   "workspace", "worker", "console", "hardware", "arm"]
+WEBAPP = "template/+interface/+console/webapp"
+# The MATLAB packages, in reading order: spot (what the diagrams and scripts call), then
+# interface (the SPOT Console's own code).
+MATLAB_PACKAGES = {
+    "spot": ["params", "massprops", "guidance", "control", "dynamics", "arm", "buses", "hardware",
+             "sim", "experiment", "data", "plotting", "camera"],
+    "interface": ["console", "worker", "workspace", "results"],
+}
 
 CHAPTERS = [
     {"id": "docs", "title": "Documentation", "icon": "book",
      "blurb": "The guides, the notes on the code, the project's READMEs and the release notes."},
     {"id": "matlab", "title": "MATLAB", "icon": "matlab",
-     "blurb": "The +spot packages, the launcher, the user parameters and New_SPOT_Project."},
+     "blurb": "The +spot and +interface packages, the launcher, the user parameters and "
+              "New_SPOT_Project."},
     {"id": "python", "title": "Python", "icon": "python",
      "blurb": "The console server, SPOT Vision, the arm calibration and the CAD tools."},
     {"id": "javascript", "title": "JavaScript and the Page", "icon": "js",
@@ -54,10 +60,13 @@ CHAPTERS = [
 ]
 SECTION_ORDER = {
     "docs": ["Guides · Start Here", "Guides · The Lab", "Guides · The Local Console",
-             "Guides · The Lab Console", "Guides · Working in MATLAB", "Guides · The Diagram",
-             "Guides · The Maths", "Guides · For Developers", "Guides · Other",
+             "Guides · The Lab Console", "Guides · Working in MATLAB",
+             "Guides · The Simulink Diagram", "Guides · The Maths", "Guides · For Developers",
+             "Guides · Other",
              "Notes on the Code", "Project Notes and READMEs", "Release Notes"],
-    "matlab": ["Project Root", "+spot"] + ["+" + p for p in MATLAB_PACKAGES],
+    "matlab": ["Project Root"] + [section for top, packages in MATLAB_PACKAGES.items()
+                                  for section in ["+" + top] + ["+%s/+%s" % (top, p)
+                                                                 for p in packages]],
     "python": ["Console Server (spot_console)", "SPOT Vision", "Arm Calibration", "CAD Tools"],
     "javascript": ["Console Page Scripts", "Page Markup and Styles", "Editor Bundle"],
     "shell": ["Deployment", "Platforms", "Builds", "Services"],
@@ -137,11 +146,12 @@ def place(rel, toc_sections):
     if low.endswith(".tex"):
         return "docs", "Release Notes", (0, name)
     if low.endswith(".m"):
-        if "/+spot/+" in rel:
-            pkg = rel.split("/+spot/+", 1)[1].split("/", 1)[0]
-            return "matlab", "+" + pkg, (0 if name == "Contents.m" else 1, rel)
-        if rel.endswith("/+spot/Contents.m"):
-            return "matlab", "+spot", (0, name)
+        for top in MATLAB_PACKAGES:
+            if "/+%s/+" % top in rel:
+                pkg = rel.split("/+%s/+" % top, 1)[1].split("/", 1)[0]
+                return "matlab", "+%s/+%s" % (top, pkg), (0 if name == "Contents.m" else 1, rel)
+            if rel.endswith("/+%s/Contents.m" % top):
+                return "matlab", "+" + top, (0, name)
         return "matlab", "Project Root", (0 if name == "SPOT.m" else 1, name)
     if low.endswith(".py"):
         if rel.startswith("designs/"):

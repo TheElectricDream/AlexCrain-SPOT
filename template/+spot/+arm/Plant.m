@@ -2,8 +2,8 @@ classdef Plant < matlab.System
     %PLANT The Chaser (RED) with its arm and Dynamixel servos, simulated at the plant's own step.
     %   The diagram's "RED + ARM Plant" block. The servos are driven by PWM only (PWM control,
     %   as on the hardware: a share of the supply voltage across each motor); position and
-    %   velocity control are controllers in the diagram (spot.arm.PositionControl,
-    %   spot.arm.VelocityControl) whose output is PWM.
+    %   velocity control are controllers in the diagram (spot.control.ArmPositionControl,
+    %   spot.control.ArmVelocityControl) whose output is PWM.
     %
     %   Each diagram step (baseRate), the commands are taken as spot.hardware.ArmPWM sends them
     %   (whole PWM units within the PWM Limit, none pushing a joint past Min/Max Position), and
@@ -209,7 +209,7 @@ classdef Plant < matlab.System
 
                 % Table's pull on the whole platform (M(1,1): base and arm links).
                 Fs = obj.floating * M(1, 1) ...
-                   * spot.sim.tableSlope(q(1:2), v(1:2), m.tableSlope, m.tableDamping);
+                   * spot.dynamics.tableSlope(q(1:2), v(1:2), m.tableSlope, m.tableDamping);
                 rhs = M * v + h * ([F + [Fs; 0]; tau0] - Cv);
                 [vNew, impulse] = obj.dryFriction(A, rhs, [4 5 6], h * dryLimit);
             end

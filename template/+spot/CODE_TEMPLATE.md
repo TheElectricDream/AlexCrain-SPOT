@@ -1,6 +1,6 @@
 # SPOT code template
 
-How every MATLAB file in `+spot` is laid out, formatted and commented (§1-§7, §9), and how the
+How every MATLAB file in `+spot` and `+interface` is laid out, formatted and commented (§1-§7, §9), and how the
 same principles apply to the console's Python and JavaScript (§8).
 Reference implementation: `spot.arm.checkCommands` (`+arm/checkCommands.m`).
 
@@ -123,7 +123,7 @@ under `%% Constants` (or in `properties (Constant)` in a class), with units:
 
 ```matlab
 CENTER_PULSE = 2048;            % [pulses] joint straight out
-CMD_PULSES_PER_RAD = 651.74;    % [pulses/rad] goal conversion (spot.arm.PositionControl)
+CMD_PULSES_PER_RAD = 651.74;    % [pulses/rad] goal conversion (spot.control.ArmPositionControl)
 ```
 
 `0`, `1`, `2*pi`, `180/pi` and indices need no names. Mode codes do: `ctrlMode == MODE_POSITION`,

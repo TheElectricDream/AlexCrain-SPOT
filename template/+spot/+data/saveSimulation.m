@@ -11,7 +11,7 @@ function folder = saveSimulation(s, root)
     %   Outputs
     %     folder  the new folder
     %
-    %   See also spot.data.listSaved, spot.data.load.
+    %   See also interface.results.listSaved, spot.data.load.
 
     % The last simulation's log.
     try

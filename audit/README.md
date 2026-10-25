@@ -50,8 +50,8 @@ Not covered: third-party code (`static/vendor`, `libowl-src-410`), the calibrati
 
 1. Documentation: the guides in the Documentation tab's order, the notes on the code, the project's
    README-type files, the release notes (`changes/patch-notes.tex`).
-2. MATLAB: the project root (`SPOT.m`, `SPOT_User_Parameters.m`, `New_SPOT_Project.m`) and every
-   `+spot` package.
+2. MATLAB: the project root (`SPOT.m`, `SPOT_User_Parameters.m`, `New_SPOT_Project.m`), every
+   `+spot` package, then every `+interface` package.
 3. Python: the console server, SPOT Vision, the arm calibration, the CAD tools.
 4. JavaScript and the page: the console's scripts, `index.html`, the stylesheets, the editor bundle.
 5. Shell scripts: deployment, the platforms' agent and serial links, builds, services.

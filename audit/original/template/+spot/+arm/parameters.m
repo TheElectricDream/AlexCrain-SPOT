@@ -44,7 +44,8 @@ function a = parameters(v, root)
     % Initial state: base, then joints.
     a.x0 = [v.init_states_RED(:); v.init_states_ARM(:)];
 
-    % Table slope and air-bearing drag under the Chaser (spot.sim.tableSlope); level by default.
+    % Table slope and air-bearing drag under the Chaser (spot.dynamics.tableSlope); level by
+    % default.
     a.tableSlope = [0 0 0 0 0 1.755775 1.209675];
     a.tableDamping = 0;
     if isfield(v, 'tableSlope')

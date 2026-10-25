@@ -1,7 +1,7 @@
 function r = compareSteps(folder, armModel, show)
     %COMPARESTEPS The simulated servos against the real ones, on the calibration's position steps.
     %   r = spot.arm.compareSteps(folder, armModel) replays each steps_j<N>.csv in folder
-    %   through the servo's position control law (spot.arm.PositionControl at the servo's
+    %   through the servo's position control law (spot.control.ArmPositionControl at the servo's
     %   period) driving spot.arm.Plant with the base fixed, and compares the joint's motion with
     %   the measured one. The real servo's position mode sets PWM as the replica does, so a
     %   match checks the plant (motor, back-EMF, friction, inertia) and the controller replica
@@ -19,7 +19,7 @@ function r = compareSteps(folder, armModel, show)
     %     r         struct array, one per file: joint, t [s], goal, measured, simulated [rad],
     %               rms, maxError [rad]
     %
-    %   See also spot.arm.loadCalibration, spot.arm.PositionControl, spot.arm.Plant.
+    %   See also spot.arm.loadCalibration, spot.control.ArmPositionControl, spot.arm.Plant.
 
     %% Defaults
     if nargin < 3
@@ -59,7 +59,7 @@ function r = compareSteps(folder, armModel, show)
         p = spot.arm.Plant('Model', a, 'FixedBase', true);
 
         % The servo's own position control, with the servo's gains.
-        c = spot.arm.PositionControl( ...
+        c = spot.control.ArmPositionControl( ...
             'StepTime', sv.period, 'ServoPeriod', sv.period, ...
             'PositionP', sv.positionP, 'PositionI', sv.positionI, 'PositionD', sv.positionD, ...
             'Feedforward1', sv.feedforward1, 'Feedforward2', sv.feedforward2, ...

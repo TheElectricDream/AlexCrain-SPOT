@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "diagram": "Template_v5_0_0_2026a_Jetson_PSClock.slx",
+  "diagram": "Template_v5_0_0_2026a_Original.slx",
   "platforms": {
     "RED": true,
-    "BLACK": true,
-    "BLUE": true,
+    "BLACK": false,
+    "BLUE": false,
     "ARM": true
   },
   "sampleRate": 20,
@@ -72,8 +72,8 @@
     },
     "BLUE": {
       "initial": [
-        0.599,
-        0.821,
+        1.611,
+        0.924,
         -120
       ],
       "home": [
@@ -104,7 +104,7 @@
         "D": 0.28
       },
       "mass": 13.75,
-      "inertia": 0.23543476058293455
+      "inertia": 0.23535436237213403
     },
     "BLACK": {
       "scales": [
@@ -118,7 +118,7 @@
         "D": 0.28
       },
       "mass": 13.22,
-      "inertia": 0.24326386911004549
+      "inertia": 0.24318079735046158
     },
     "BLUE": {
       "scales": [
@@ -132,7 +132,7 @@
         "D": 0.28
       },
       "mass": 12.77,
-      "inertia": 0.22157979686198798
+      "inertia": 0.22150412995888016
     },
     "arm": {
       "Phi": 1.2337865258868412,

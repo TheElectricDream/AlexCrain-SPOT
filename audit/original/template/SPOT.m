@@ -16,11 +16,11 @@ end
 root = fileparts(mfilename('fullpath'));
 switch lower(action)
     case 'start'
-        spot.console.start(root);
+        interface.console.start(root);
     case 'open'
-        spot.console.open(root);
+        interface.console.open(root);
     case 'stop'
-        spot.console.stop(root);
+        interface.console.stop(root);
     otherwise
         error('Use SPOT, SPOT open or SPOT stop.');
 end

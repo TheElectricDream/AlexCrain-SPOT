@@ -126,7 +126,7 @@ function d = apply(s, root)
 
     %% The lab's calibration: table slope
     % The table's slope pulls the floating platforms and their air bearings drag them
-    % (spot.sim.tableSlope). Without the project folder, or with the setting off, it is level.
+    % (spot.dynamics.tableSlope). Without the project folder, or with the setting off, it is level.
     ws.tableSlope = LEVEL_TABLE;
     for name = {'RED', 'BLACK', 'BLUE'}
         ws.(['tableDamping_' name{1}]) = 0;

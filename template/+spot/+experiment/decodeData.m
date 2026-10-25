@@ -6,8 +6,8 @@ function files = decodeData(folder, s, root)
     %   dataClass_rt (a struct of timeseries) next to it. The diagram is compiled (model update,
     %   no code generation) to learn the signals. They are the inputs of the diagram's
     %   "Data Logger Subsystem/Data Logging Bus" (the v5 template), or, in a diagram without
-    %   that block, the fields of the LogPacket bus type (diagram.buses.define), in the order
-    %   diagram.hardware.logVector writes them.
+    %   that block, the fields of the LogPacket bus type (spot.buses.define), in the order
+    %   spot.hardware.logVector writes them.
     %
     %   Inputs
     %     folder  the run's folder
@@ -17,7 +17,7 @@ function files = decodeData(folder, s, root)
     %   Outputs
     %     files   cell array of the .mat files written
     %
-    %   See also spot.data.listSaved, spot.data.load.
+    %   See also interface.results.listSaved, spot.data.load.
 
     %% Signal names and widths
     % Compile the diagram (terminated on return).
@@ -84,7 +84,7 @@ end
 
 function [names, widths] = logPacketFields(model)
     % Name and width of each field of the LogPacket bus type, which compiling the diagram put
-    % in the base workspace (its InitFcn runs diagram.buses.define).
+    % in the base workspace (its InitFcn runs spot.buses.define).
     if ~evalin('base', 'exist(''LogPacket'', ''var'')')
         error('spot:experiment:decodeData', ...
             ['%s has neither a "Data Logger Subsystem/Data Logging Bus" block nor a LogPacket ' ...

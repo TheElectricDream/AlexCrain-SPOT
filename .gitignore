@@ -13,7 +13,7 @@ template/STATUS.md
 # SPOT Console: session token, ports and simulation results (per computer)
 .spot_cache/
 # StreamData built by the lab console (Compile) or build_linux.sh
-template/+spot/+console/output/
+template/+interface/+console/output/
 __pycache__/
 # npm's downloads when the Documentation tab's bundles are rebuilt (webapp/tools/editor-bundle)
 node_modules/

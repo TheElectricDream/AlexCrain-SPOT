@@ -11,7 +11,7 @@ function [name, color] = platformStyle(key)
     %            'Obstacle' (blue), 'Arm' (the Chaser's colour), or the key (black)
     %     color  1x3 RGB
     %
-    %   See also spot.data.toFigure.
+    %   See also interface.results.toFigure.
 
     switch upper(key)
         case 'RED'

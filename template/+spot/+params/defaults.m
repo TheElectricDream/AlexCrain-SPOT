@@ -108,9 +108,9 @@ function s = defaults()
     % the old PD gains still load; the gains are dropped.)
     lqr = struct('Q', [1 1 0.05 10 10 1], 'R', [6 6 6]);
 
-    % The arm's controllers (spot.arm.PositionControl, spot.arm.VelocityControl): gains in the
-    % servos' units [shoulder elbow wrist], retuned for 20 Hz; profile velocity [0.229 rev/min],
-    % profile acceleration [214.577 rev/min^2] (0 = none), PWM limit (0-885).
+    % The arm's controllers (spot.control.ArmPositionControl, spot.control.ArmVelocityControl):
+    % gains in the servos' units [shoulder elbow wrist], retuned for 20 Hz; profile velocity
+    % [0.229 rev/min], profile acceleration [214.577 rev/min^2] (0 = none), PWM limit (0-885).
     armPosition = struct('P', [25 56 21], 'I', [10 10 10], 'D', [1545 230 236], ...
         'profileVelocity', 20, 'profileAcceleration', 0, 'pwmLimit', 80);
     armVelocity = struct('P', [160 70 30], 'I', [220 1500 300], 'profileAcceleration', 0, ...

@@ -9,7 +9,7 @@ function [t, y] = samples(ts)
     %     t   N x 1 time stamps [s], each once, increasing
     %     y   N x m double data
     %
-    %   See also spot.data.series, spot.data.flatten.
+    %   See also interface.results.series, spot.data.flatten.
 
     t = double(ts.Time(:));
     y = double(ts.Data);

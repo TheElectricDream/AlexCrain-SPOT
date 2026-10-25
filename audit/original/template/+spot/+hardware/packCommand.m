@@ -10,7 +10,9 @@ function packet = packCommand(duty, pucks)
     %   Outputs
     %     packet  37-byte uint8 column: 0xAA, then the 9 values as little-endian single
     %
-    %   See also spot.hardware.udpSend.
+    %   See also spot.hardware.thrusterCommand, spot.hardware.udpSend.
+
+    %#codegen
 
     %% Constants
     HEADER = 170;   % 0xAA, start of packet

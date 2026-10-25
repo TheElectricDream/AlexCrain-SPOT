@@ -10,7 +10,7 @@ function L = signalLabel(name)
     %     L     platform, quantity, unit (TeX) and label. Names that don't follow the pattern
     %           get their underscores turned to spaces.
     %
-    %   See also spot.data.summary, spot.data.toFigure.
+    %   See also interface.results.summary, interface.results.toFigure.
 
     L = struct('platform', '', 'quantity', '', 'unit', '', 'label', '');
     rest = name;

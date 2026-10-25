@@ -28,7 +28,7 @@ function datasets = load(spec, root, settings)
     %   (Time_s, Float_State, ...) are kept from each file as <PLATFORM>_<signal>. Samples whose
     %   time doesn't move forward (the zeros before an experiment's clock starts) are dropped.
     %
-    %   See also spot.data.listSaved, spot.data.flatten, spot.data.summary.
+    %   See also interface.results.listSaved, spot.data.flatten, interface.results.summary.
 
     %% Defaults
     if nargin < 3

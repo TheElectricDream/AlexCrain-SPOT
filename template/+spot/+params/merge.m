@@ -11,7 +11,7 @@ function s = merge(base, changes)
     %   Outputs
     %     s        the merged struct
     %
-    %   See also spot.params.load, spot.params.update.
+    %   See also spot.params.load, interface.worker.updateSettings.
 
     s = base;
     if ~isstruct(changes)

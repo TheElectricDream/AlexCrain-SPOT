@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "diagram": "Template_v5_0_0_2026a_Jetson_PSClock.slx",
+  "diagram": "Template_v5_0_0_2026a_Original.slx",
   "platforms": {
     "RED": true,
-    "BLACK": false,
-    "BLUE": false,
-    "ARM": true
+    "BLACK": true,
+    "BLUE": true,
+    "ARM": false
   },
   "sampleRate": 20,
   "dataRate": 10,

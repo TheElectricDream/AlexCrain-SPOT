@@ -3,7 +3,8 @@ function target = New_SPOT_Project(name, location, diagram)
     %   New_SPOT_Project asks for the project's name and creates projects/<name>.
     %   New_SPOT_Project('MyProject') creates projects/MyProject.
     %   New_SPOT_Project('MyProject', folder) creates folder/MyProject instead.
-    %   New_SPOT_Project('MyProject', [], 'Template_LinearFlow.slx') starts it from that diagram.
+    %   New_SPOT_Project('MyProject', [], 'Template_v5_0_0_2026a_Linear.slx') starts it from that
+    %   diagram.
     %   target = New_SPOT_Project(...) also returns the new project's folder ('' if cancelled).
     %
     %   A project is a copy of the template folder (next to this file) with one Simulink diagram,
@@ -17,7 +18,7 @@ function target = New_SPOT_Project(name, location, diagram)
     %     name      the project's name (optional: asked for in a dialog, or in the Command
     %               Window without a desktop)
     %     location  the folder to create it in (optional: projects/, next to this file)
-    %     diagram   the template's diagram to start from, e.g. 'Template_LinearFlow.slx'
+    %     diagram   the template's diagram to start from, e.g. 'Template_v5_0_0_2026a_Linear.slx'
     %               (optional: the template's only diagram, or asked for in a list, or in the
     %               Command Window without a desktop, when it has several)
     %
@@ -108,14 +109,14 @@ function target = New_SPOT_Project(name, location, diagram)
             copyfile(fullfile(template, items(k).name), fullfile(target, items(k).name));
         end
 
-        % Python caches and the lab console's local builds inside +spot.
+        % Python caches and the lab console's local builds inside +interface.
         inside = dir(fullfile(target, '**'));
         caches = inside([inside.isdir] & strcmp({inside.name}, '__pycache__'));
         for k = 1:numel(caches)
             rmdir(fullfile(caches(k).folder, caches(k).name), 's');
         end
-        if isfolder(fullfile(target, '+spot', '+console', 'output'))
-            rmdir(fullfile(target, '+spot', '+console', 'output'), 's');
+        if isfolder(fullfile(target, '+interface', '+console', 'output'))
+            rmdir(fullfile(target, '+interface', '+console', 'output'), 's');
         end
 
         % The user guide, if the template has it.
@@ -244,7 +245,7 @@ function problem = nameProblem(name)
             ['''%s'' can''t be a diagram name: use letters, digits and _ only, starting ' ...
              'with a letter, at most 63 characters, and not a MATLAB keyword.'], ...
             name);
-    elseif any(strcmpi(name, {'spot', 'SPOT_User_Parameters'}))
+    elseif any(strcmpi(name, {'spot', 'interface', 'SPOT_User_Parameters'}))
         problem = sprintf('''%s'' is one of SPOT''s own names; choose another.', name);
     elseif ~isempty(which(name)) && ~strcmp(which(name), 'variable')
         problem = sprintf('''%s'' is already a MATLAB function (%s); choose another name.', ...

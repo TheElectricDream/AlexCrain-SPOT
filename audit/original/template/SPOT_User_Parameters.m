@@ -29,3 +29,11 @@ Kv = [0.05 0    0
 %% Set in the SPOT Console now (don't define them here: this script runs after the settings)
 % PWMFreq:      the thrusters' PWM frequency, Simulation tab > Scenario > Thruster PWM
 % labConsoleIP: the lab console's (TX2's) address, Experiment tab > Lab
+
+customControllerParamsRED = struct('unused', 0);
+customControllerParamsBLACK = struct('unused', 0);
+customControllerParamsBLUE = struct('unused', 0);
+
+customPlannerParamsRED = struct('unused', 0);
+customPlannerParamsBLACK = struct('unused', 0);
+customPlannerParamsBLUE = struct('unused', 0);

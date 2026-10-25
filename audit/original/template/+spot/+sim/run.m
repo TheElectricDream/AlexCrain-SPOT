@@ -5,13 +5,13 @@ function out = run(s, root, resultFile)
     %   the base workspace as the old GUI did. The diagram file is not modified: the simulation
     %   mode, hardware board and solver are passed as temporary overrides.
     %   out = spot.sim.run(s, root, resultFile) also writes the trajectory for the console's 3D
-    %   view to resultFile (JSON, spot.sim.results), with the captured messages, the debug
-    %   messages (debug: RED/BLACK/BLUE with t and text) and the Live Stream signals.
+    %   view to resultFile (JSON, interface.results.simulation), with the captured messages, the
+    %   debug messages (debug: RED/BLACK/BLUE with t and text) and the Live Stream signals.
     %
     %   What Simulink prints while simulating is captured instead of filling the Command Window.
     %   When Simulink stops with an error, run throws a spot.sim.SimulationFailed: its message
-    %   is the root cause (and its block), and spot.sim.errorDetails(err) gives the whole chain
-    %   of causes, the blocks, and what Simulink printed before failing.
+    %   is the root cause (and its block), and interface.worker.errorDetails(err) gives the whole
+    %   chain of causes, the blocks, and what Simulink printed before failing.
     %
     %   With s.realTime the simulation runs at the clock's pace, e.g. to watch the Live Plot.
     %
@@ -25,7 +25,7 @@ function out = run(s, root, resultFile)
     %                 debugMessages (count, spot.sim.debugLog), streams (Live Stream names,
     %                 spot.sim.liveData) and, with resultFile, file
     %
-    %   See also spot.params.apply, spot.sim.results, spot.sim.errorDetails.
+    %   See also spot.params.apply, interface.results.simulation, interface.worker.errorDetails.
 
     %% Constants
     LIVE_PLOT_SAMPLES = 4000;   % per stream in the result file
@@ -120,7 +120,7 @@ function out = run(s, root, resultFile)
     end
 
     %% Results for the console
-    result = spot.sim.results(dataClass, s, applied);
+    result = interface.results.simulation(dataClass, s, applied);
     result.messages = messages;
     result.debug = selectedDebug(spot.sim.debugLog('get'), s.platforms);
     out.debugMessages = sum(structfun(@(p) numel(p.t), result.debug));

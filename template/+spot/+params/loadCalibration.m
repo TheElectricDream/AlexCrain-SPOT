@@ -20,7 +20,7 @@ function c = loadCalibration(root)
     %             updated    when its newest part was measured (ISO 8601, UTC; '' if none)
     %             table      table slope calibration, or [] if none:
     %                          slope    [a1 a2 a3 a4 a5 xc yc], the table top's height surface
-    %                                   (spot.sim.tableSlope)
+    %                                   (spot.dynamics.tableSlope)
     %                          damping  RED, BLACK, BLUE: air-bearing drag [1/s] (0 if not
     %                                   measured)
     %                          model, updated, tilt_centre_mrad, tilt_max_mrad, downhill_deg
@@ -46,7 +46,7 @@ function c = loadCalibration(root)
     %                                           back_emf [V s/rad] (1x3, per joint)
     %             error      why the file couldn't be used ('' if it could)
     %
-    %   See also spot.params.apply, spot.sim.tableSlope, spot.arm.loadCalibration,
+    %   See also spot.params.apply, spot.dynamics.tableSlope, spot.arm.loadCalibration,
     %   spot.massprops.markerLayout.
 
     %% Constants

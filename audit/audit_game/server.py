@@ -22,7 +22,7 @@ from .chunker import compare_code
 from .progress import Progress, SAVES_DIR
 
 STATIC_DIR = AUDIT_DIR / "static"
-SPOT_STATIC = REPO / "template" / "+spot" / "+console" / "webapp" / "static"
+SPOT_STATIC = REPO / "template" / "+interface" / "+console" / "webapp" / "static"
 
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                  ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",

@@ -5,9 +5,9 @@ classdef ArmPWM < matlab.System & coder.ExternalDependency
     %   on /dev/ttyUSB0, 1 Mbps) stay in PWM control (operating mode 16, voltage control) for
     %   the whole run: each command is the share of the supply voltage put across the motor
     %   [885 = 100 %], which at rest acts as a torque (spot.arm.defaults). Position and velocity
-    %   control are controllers in the diagram (spot.arm.PositionControl,
-    %   spot.arm.VelocityControl) whose output is PWM. The servos' current reading is not used:
-    %   it is too coarse and noisy at the arm's small torques.
+    %   control are controllers in the diagram (spot.control.ArmPositionControl,
+    %   spot.control.ArmVelocityControl) whose output is PWM. The servos' current reading is not
+    %   used: it is too coarse and noisy at the arm's small torques.
     %
     %   Each step:
     %     1. Outputs (before the controllers): one sync read of each servo's Present PWM,
