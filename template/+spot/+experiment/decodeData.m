@@ -3,8 +3,10 @@ function files = decodeData(folder, s, root)
     %   files = spot.experiment.decodeData(folder, s, root) reads every ExpLog* file in
     %   folder/<PLATFORM>/ (as the console downloads them into "Saved Data"), splits the columns
     %   into the logged signals (column 1 is time), and saves each as <PLATFORM>_<n>.mat holding
-    %   dataClass_rt (a struct of timeseries) next to it. The diagram is compiled (model update,
-    %   no code generation) to learn the signals. They are the inputs of the diagram's
+    %   dataClass_rt (a struct of timeseries) next to it. An empty file (a start that stopped
+    %   before logging anything) is skipped, and n counts the files with data. The diagram is
+    %   compiled (model update, no code generation) to learn the signals. They are the inputs
+    %   of the diagram's
     %   "Data Logger Subsystem/Data Logging Bus" (the v5 template), or, in a diagram without
     %   that block, the fields of the LogPacket bus type (spot.buses.define), in the order
     %   spot.hardware.logVector writes them.
@@ -37,10 +39,14 @@ function files = decodeData(folder, s, root)
     files = {};
     for p = {'RED', 'BLACK', 'BLUE'}
         logs = dir(fullfile(folder, p{1}, 'ExpLog*'));
+        n = 0;
         for k = 1:numel(logs)
 
-            % Columns: time, then each signal's width; NaN as 0.
+            % Columns: time, then each signal's width; NaN as 0. An empty file gives no rows.
             data = importdata(fullfile(logs(k).folder, logs(k).name));
+            if ~isnumeric(data) || isempty(data)
+                continue
+            end
             data(isnan(data)) = 0;
             t = data(:, 1);
 
@@ -55,7 +61,8 @@ function files = decodeData(folder, s, root)
             end
 
             % Saved next to the log.
-            matFile = fullfile(logs(k).folder, sprintf('%s_%d.mat', p{1}, k));
+            n = n + 1;
+            matFile = fullfile(logs(k).folder, sprintf('%s_%d.mat', p{1}, n));
             save(matFile, 'dataClass_rt', '-mat');
             files{end + 1} = matFile; %#ok<AGROW>
         end

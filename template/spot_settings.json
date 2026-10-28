@@ -3,8 +3,8 @@
   "diagram": "Template_v5_0_0_2026a_Original.slx",
   "platforms": {
     "RED": true,
-    "BLACK": true,
-    "BLUE": true,
+    "BLACK": false,
+    "BLUE": false,
     "ARM": false
   },
   "sampleRate": 20,

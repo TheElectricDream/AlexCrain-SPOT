@@ -1,0 +1,1 @@
+When running code, be aware of the limitations of the computer you are using. For example, a laptop may be limited to 16 GB of RAM while a desktop may have much more. Always check the memory available before running any parallel programs. If there is not enough memory to run the programs, prompt the user to close some open programs and suggest programs to close.

@@ -159,6 +159,7 @@ In the last pre-release we said we would be moving towards a more version-contro
     \item \textbf{Bug 18:} Fixed the Chaser's ZED2 model being added again on every change to the design, which left a stray copy in the 3D view once Use CAD was switched off.
     \item \textbf{Bug 19:} Fixed the Vision tab showing a camera's old settings after a change, for the DVXplorer and USB cameras (and the ZED's saved settings as it opened): SPOT Vision listed the settings before applying the change.
     \item \textbf{Bug 20:} Fixed the arm calibration stopping with ``The data value exceeds the limit value!'' when an experiment had left a joint past its servo's $\pm$90$^\circ$ limits, which the servos don't keep to in PWM control. It now checks every joint before anything moves, and says which one to move back.
+    \item \textbf{Bug 21:} Fixed importing an experiment's data stopping with ``Index in position 2 exceeds array bounds'' when a platform had an empty data file, which a start that stops before logging anything leaves behind. Empty files are now skipped.
 \end{itemize}
 
 \section*{\textcolor{primaryColor}{Ongoing Issues}}
