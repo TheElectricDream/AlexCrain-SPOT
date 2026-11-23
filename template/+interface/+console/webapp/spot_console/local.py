@@ -187,10 +187,11 @@ class MatlabBridge:
     def _long_running(self):
         """Return whether MATLAB is busy with a long command."""
         busy = self.busy
-        return bool(busy) and busy.get("cmd") in ("sim.run", "experiment.build",
-                                                  "experiment.decode", "workspace.eval")
+        return bool(busy) and (busy.get("cmd") in ("sim.run", "experiment.build",
+                                                   "experiment.decode", "workspace.eval")
+                               or bool(busy.get("long")))
 
-    def request(self, cmd, args=None, timeout=60, quiet=False):
+    def request(self, cmd, args=None, timeout=60, quiet=False, label=None):
         """Run a command in MATLAB and return its result.
 
         Args:
@@ -199,6 +200,8 @@ class MatlabBridge:
             timeout: Seconds to wait for the answer; None for no limit.
             quiet: Don't tell the pages MATLAB is busy (a quick command
                 the user didn't ask for, such as checking code).
+            label: What the pages say MATLAB is doing, for a command
+                BUSY_LABELS doesn't know (a project tab's).
 
         Raises:
             ApiError: if MATLAB is busy, not connected, doesn't answer,
@@ -222,8 +225,10 @@ class MatlabBridge:
                 self._next_id += 1
                 waiter = [threading.Event(), None]
                 self._pending[rid] = waiter
-                self.busy = {"cmd": cmd, "since": time.time(),
-                             "label": BUSY_LABELS.get(cmd, cmd)}
+                # (A command without a time limit, e.g. a project tab's build, is a
+                # long one too.)
+                self.busy = {"cmd": cmd, "since": time.time(), "long": timeout is None,
+                             "label": BUSY_LABELS.get(cmd, label or cmd)}
             if not quiet:
                 self._publish()
             try:

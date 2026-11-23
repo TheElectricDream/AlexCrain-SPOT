@@ -185,6 +185,7 @@ class CadLibrary {
         continue;
       }
       const panel = this._group(key, name, ghost);
+      panel.name = `Side Panel ${face.toUpperCase()}`;
       panel.userData.attachment = 'panel';
       group.add(panel);
     }
@@ -200,6 +201,8 @@ class CadLibrary {
       const p = mountPose(this.info, dock);
       g.position.set(p.x, p.y, p.z);
       g.rotation.z = p.rot;
+      g.name = { male: 'Male Docking Cone', female: 'Female Docking Cone', arm: 'Arm Coupler' }[
+        dock.type] || 'Docking Cone';
       g.userData.attachment = 'dock';
       group.add(g);
     }
@@ -208,6 +211,7 @@ class CadLibrary {
     if (solar && solar.on && this.models.SOLAR) {
       const g = this._group('SOLAR', name, ghost);
       g.rotation.z = solar.axis === 'y' ? Math.PI / 2 : 0;
+      g.name = 'Solar Panels';
       g.userData.attachment = 'solar';
       group.add(g);
     }

@@ -1104,7 +1104,7 @@ a.btn { text-decoration: none; }
 .dz-slot.chosen-none { border-style: dashed; border-color: #fff; }
 .dz-slot.blocked { border-color: #ff6b6b; border-style: dashed; }
 .dz-slot.blocked.chosen { background: #e5484d; }
-.dz-lab { display: flex; gap: 8px; flex-wrap: wrap; }
+.dz-lab, .dz-export { display: flex; gap: 8px; flex-wrap: wrap; }
 .dz-armask { margin: 10px 0 6px; }
 .dz-file { margin-top: auto; }
 .dz-face.off { opacity: .55; }

@@ -22,6 +22,7 @@ One Python module per area. `server.py` serves the page and the JSON API, routes
 | [vision.py](file:vision.py) | where SPOT Vision is, for the Vision tab |
 | [deploy.py](file:deploy.py) | Lab Setup: the deployment scripts, run from the page |
 | [files.py](file:files.py) | the folder browser |
+| [tabs.py](file:tabs.py) | the project's own tabs (`tabs/*/tab.json`): their server modules, routes and files |
 | [docs.py](file:docs.py), [docparse.py](file:docparse.py), [doclint.py](file:doclint.py) | this documentation: the index of the code, the source parser, the linters |
 
 **The API.** The page reads with GET and acts with POST (JSON bodies, which other web sites can't send through the browser). [API Routes and MATLAB Commands](page:routes) lists every route with the code that handles it and the code that requests it. On the local console, POST requests need the session token, and `/api/matlab` passes a command to MATLAB.
@@ -39,7 +40,7 @@ One Python module per area. `server.py` serves the page and the JSON API, routes
 | [app.js](file:app.js) | the shell: state, the API call, events, the PhaseSpace tab's cards, switching tabs |
 | [sim.js](file:sim.js), [layout.js](file:layout.js), [data.js](file:data.js) | the Simulation tab, its Thruster and LED Layout window; loaded results |
 | [experiment.js](file:experiment.js), [results.js](file:results.js) | the Experiment and Results tabs |
-| [viewer.js](file:viewer.js), [cad.js](file:cad.js) | the 3D view (three.js) and the CAD models |
+| [viewer.js](file:viewer.js), [cad.js](file:cad.js), [export3d.js](file:export3d.js) | the 3D view (three.js), the CAD models, and saving a model as .glb or .stl |
 | [designer.js](file:designer.js), [hardware.js](file:hardware.js), [interactive.js](file:interactive.js) | the Designer, Hardware and Interactive Mode |
 | [calibration.js](file:calibration.js), [calviz.js](file:calviz.js) | the calibrations and their figures |
 | [vision.js](file:vision.js), [labsetup.js](file:labsetup.js) | the Vision tab, Lab Setup |
@@ -55,4 +56,5 @@ Third-party code is in `static/vendor/`: three.js for the 3D view, and CodeMirro
 - **A new API route:** handle it in `server.py`'s `do_GET` or `do_POST` (or `_local_post` for the local console), in the module of its area, raising `ApiError` for anything the user should be told; call it from the page with `api('/api/...', body)`.
 - **A new MATLAB command:** a `case` in `Worker.dispatch`, its name and time limit in `local.py`'s `MATLAB_COMMANDS`, and from the page `api('/api/matlab', { cmd, args })`.
 - **A new tab:** its markup in `index.html` (a `data-page` button and a `page` element), a module with `init...` returning `show`/`hide`, and an entry in `app.js`'s `PAGES`, `showPage` and `server.py`'s `features()`.
+- **A project's own tab** (local console), without changing the console: a folder `tabs/<name>/` in the project with a `tab.json` (`id`, `title`, `tooltip`, `server`, `script`, `style`). [tabs.py](file:tabs.py) imports its server module and routes `/api/tab/<id>/...` to its `get`/`post`; `app.js` adds its button and page and calls its script's `init({api, act, toast, storage, root, showPage})`, which returns `show`/`hide`. Its MATLAB commands are `"<package>.<name>"`: `Worker.dispatch` passes them to that package's `consoleCommand(name, args, root)`. A command sent without a time limit counts as a long one (`local.py`). A tab sends MATLAB commands only when the person asks for something, never on its own (when MATLAB connects, say): the console has one link to MATLAB, and while a tab's command holds it the page's own requests give up after 6 s, so the page doesn't finish loading. The MATLAB path is the tab's to set inside its own commands (a diagram opened without its System objects on the path loads those blocks without their settings).
 - Follow [The Coding Standard](page:dev-code-standard); the lab console runs Python 3.6. Deploy a change to the lab console with Lab Setup.

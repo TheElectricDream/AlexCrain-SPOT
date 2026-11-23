@@ -480,6 +480,7 @@ async function loadState() {
     designer.onState(st);
     calibration.onState(st);
     labSetup.onState(st);
+    loadProjectTabs();
     return;
   }
   S.clientIp = st.client_ip;
@@ -493,6 +494,13 @@ async function loadState() {
   S.monitor = st.monitor;
   S.ledOwner = st.led_owner || {};
   viewer?.setLedOwner(S.ledOwner);
+
+  // The live platforms drawn around the CG this console takes for each (its controller's, as
+  // the Calibration tab assumes it) [mm -> m].
+  const assumed = st.calibration_assumed || {};
+  viewer?.setCentres(Object.fromEntries(Object.entries(assumed)
+    .filter(([, a]) => a && Array.isArray(a.cg_mm))
+    .map(([n, a]) => [n, a.cg_mm.map(v => v / 1000)])));
   resetLogs(st.logs);
   renderHost();
   renderSettings();
@@ -857,6 +865,66 @@ const PAGES = {
   calibration: $('#pageCalibration'), vision: $('#pageVision'), docs: $('#pageDocs'),
 };
 
+// The project's own tabs (tabs/*/tab.json, local console; spot_console/tabs.py): id -> {show,
+// hide} from the tab's module. The page asked for first is kept, since a project tab only exists
+// once its module has loaded.
+const projectTabs = {};
+const firstPage = location.hash.slice(1).split('/')[0] || storage.get('spot.page', '');
+let projectTabsLoaded = false;
+
+// Adds each project tab: its button (before Documentation), its page, its style and module.
+async function loadProjectTabs() {
+  if (projectTabsLoaded) {
+    return;
+  }
+  projectTabsLoaded = true;
+  let list = [];
+  try {
+    list = await api('/api/tabs');
+  } catch {
+    return;
+  }
+  const nav = $('.page-tabs');
+  for (const t of list) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.page = t.id;
+    b.textContent = t.title;
+    b.title = t.tooltip || '';
+    b.hidden = !(S.features && S.features[t.id]);
+    b.onclick = () => showPage(t.id);
+    nav.insertBefore(b, $('[data-page="docs"]', nav));
+    const el = document.createElement('div');
+    el.id = `pageTab-${t.id}`;
+    el.className = 'page project-tab';
+    el.hidden = true;
+    $('#pageDocs').after(el);
+    PAGES[t.id] = el;
+    if (t.style) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = t.style;
+      document.head.append(link);
+    }
+    try {
+      if (t.error) {
+        throw new Error(t.error);
+      }
+      const mod = await import(t.script);
+      projectTabs[t.id] = mod.init({ api, act, toast, storage, root: el, showPage }) || {};
+    } catch (e) {
+      el.innerHTML = '<div class="viewer-empty"><strong></strong><span></span></div>';
+      $('strong', el).textContent = `The ${t.title} tab could not start`;
+      $('span', el).textContent = e.message;
+      projectTabs[t.id] = {};
+    }
+  }
+  $('.page-tabs').hidden = $$('[data-page]').filter(b => !b.hidden).length < 2;
+  if (projectTabs[firstPage]) {
+    showPage(firstPage);
+  }
+}
+
 function pageAvailable(page) {
   return Boolean(PAGES[page]) && (!S.features || S.features[page]);
 }
@@ -926,7 +994,14 @@ function showPage(page) {
   if (page !== 'docs') {
     docs.hide();
   }
-  if (page === 'simulation') {
+  for (const [id, tab] of Object.entries(projectTabs)) {
+    if (page !== id) {
+      tab.hide?.();
+    }
+  }
+  if (projectTabs[page]) {
+    projectTabs[page].show?.();
+  } else if (page === 'simulation') {
     simulation.show();
   } else if (page === 'experiment') {
     experiment.show();

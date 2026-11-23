@@ -493,6 +493,13 @@ async function loadState() {
   S.monitor = st.monitor;
   S.ledOwner = st.led_owner || {};
   viewer?.setLedOwner(S.ledOwner);
+
+  // The live platforms drawn around the CG this console takes for each (its controller's, as
+  // the Calibration tab assumes it) [mm -> m].
+  const assumed = st.calibration_assumed || {};
+  viewer?.setCentres(Object.fromEntries(Object.entries(assumed)
+    .filter(([, a]) => a && Array.isArray(a.cg_mm))
+    .map(([n, a]) => [n, a.cg_mm.map(v => v / 1000)])));
   resetLogs(st.logs);
   renderHost();
   renderSettings();

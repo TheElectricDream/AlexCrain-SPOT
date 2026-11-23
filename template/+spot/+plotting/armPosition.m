@@ -4,11 +4,12 @@ function P = armPosition(base, q, arm)
     %   angles as rows; P is then 4x2xN.
     %
     %   Inputs
-    %     base  RED's [x y theta] [m, m, rad], or N x 3
+    %     base  RED's [x y theta] [m, m, rad], or N x 3: the pose of the point Phi and b0 are
+    %           measured from, its CG for PhaseSpace's and the simulation's poses
     %     q     shoulder, elbow and wrist angles [rad], or N x 3
-    %     arm   arm geometry (s.mass.arm: Phi, b0, a1, b1, a2, b2, a3, b3). For an arm mounted
-    %           elsewhere, the geometry from spot.arm.mountGeometry (its q1Offset turns the arm
-    %           with its mount face).
+    %     arm   arm geometry (Phi, b0, a1, b1, a2, b2, a3, b3): spot.arm.mountGeometry(s.mass.arm,
+    %           cg) for the shoulder on its mount, from RED's CG (its q1Offset turns the arm with
+    %           its mount face)
     %
     %   Outputs
     %     P     4x2 [x y] of the shoulder, elbow, wrist and end effector [m]

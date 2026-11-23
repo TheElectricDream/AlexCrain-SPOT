@@ -28,7 +28,11 @@ import { heightCanvas, tickMarks, TABLE as TABLE_TOP } from './calviz.js';
 // The granite: the top's sides (measured) and its thickness (0.33 m, its CAD).
 export const TABLE = { x: TABLE_TOP.x, y: TABLE_TOP.y, thickness: 0.33 };
 export const CRAFT_SIZE = 0.3;
-const BODY_AXIS = 0.34;   // length of each body axis from the cube's centre [m]
+const BODY_AXIS = 0.34;   // length of each body axis from the CG [m]
+
+// A platform's pose (PhaseSpace's, the simulation's) is its centre of gravity: each is drawn with
+// its body frame there, and its body (cube, CAD, ZED2, thruster plumes) around the body's centre,
+// which is -cg from it (cg from spot.massprops.compute, from the body centre).
 
 // Paths trail the platforms' centre of mass, at mid-height of the body.
 const PATH_Z = CRAFT_SIZE / 2;
@@ -220,6 +224,10 @@ export class Viewer {
       active: false, group: null, slots: [], platform: null, onSlot: null, selected: null,
       savedCam: null, hover: null,
     };
+
+    // Each platform's CG from its body centre [m] (setCentres): the live platforms', the
+    // markers' and those of results that don't carry their own.
+    this.centres = { RED: [0, 0], BLACK: [0, 0], BLUE: [0, 0] };
 
     // The live platforms, the LEDs, the live paths and the other layers.
     this.crafts = {};
@@ -455,7 +463,7 @@ export class Viewer {
     }
     edges.position.z = CRAFT_SIZE / 2;
 
-    // Body axes from the centre of the cube (x red, y green, z blue), so the attitude is visible.
+    // Body axes from the CG (x red, y green, z blue), so the pose and attitude are visible.
     const axes = this._bodyAxes(ghost === 'overlay' ? 0.7 : 1);
     axes.position.z = CRAFT_SIZE / 2;
 
@@ -471,14 +479,19 @@ export class Viewer {
     tag.position.z = CRAFT_SIZE / 2 + BODY_AXIS + (ghost === 'overlay' ? 0.2 : 0.12);
     tag.center.set(0.5, 1);
 
-    // The axes, the tag and the ZED2 housing are hidden while the ZED2 Viewpoint looks out from
-    // this platform (they would sit in front of the lens).
-    group.add(box, edges, axes, tag);
+    // The body in its own frame, from the body's centre (_placeBody puts it around the CG): the
+    // cube, its outline, the camera housing, the CAD model and the thruster plumes. The axes, the
+    // tag and the ZED2 housing are hidden while the ZED2 Viewpoint looks out from this platform
+    // (they would sit in front of the lens).
+    const frame = new THREE.Group();
+    frame.add(box, edges);
+    group.add(frame, axes, tag);
     Object.assign(group.userData,
-      { craft: name, ghost, box, edges, cad: null, ownParts: [axes, tag] });
+      { craft: name, ghost, box, edges, frame, cad: null, ownParts: [axes, tag] });
+    this._placeBody(group, this.centres[name]);
     if (name === 'RED') {
       const cam = this._buildRedCameraModel(opacity);
-      group.add(cam);
+      frame.add(cam);
       group.userData.ownParts.push(cam);
       group.userData.housing = cam;
     }
@@ -487,6 +500,12 @@ export class Viewer {
     group.visible = false;
     this.scene.add(group);
     return group;
+  }
+
+  // Puts a platform's body around its centre, CG [x, y] [m] from it (the group's origin is the
+  // CG, the pose).
+  _placeBody(group, cg) {
+    group.userData.frame.position.set(-cg[0], -cg[1], 0);
   }
 
   // The ZED2 on RED's front face as a box of its size (the cube view; the CAD has the real one),
@@ -854,7 +873,8 @@ export class Viewer {
   }
 
   // Where a result's arm was mounted: the place whose shoulder is nearest the run's, in the
-  // Chaser's body frame at the first sample with both; null if unknown (or no CAD loaded).
+  // Chaser's body frame (from its centre, as armPoints) at the first sample with both; null if
+  // unknown (or no CAD loaded).
   _armMount(r) {
     const info = this.cad.lib && this.cad.lib.info;
     const c = r && r.arm && r.crafts.RED;
@@ -871,8 +891,9 @@ export class Viewer {
     const dy = sy[k] - c.y[k];
     const ca = Math.cos(c.att[k]);
     const sa = Math.sin(c.att[k]);
-    const bx = ca * dx + sa * dy;
-    const by = -sa * dx + ca * dy;
+    const cg = this._centreOf(r, 'RED');
+    const bx = ca * dx + sa * dy + cg[0];
+    const by = -sa * dx + ca * dy + cg[1];
     let best = null;
     let bestD = Infinity;
     for (const face of info.mount.faces || ['+x', '+y', '-y']) {
@@ -975,7 +996,7 @@ export class Viewer {
     for (const g of this.cad.crafts) {
       const u = g.userData;
       if (u.cad) {
-        g.remove(u.cad);
+        u.frame.remove(u.cad);
         u.cad = null;
       }
       this._applyCadCraft(g);
@@ -1063,33 +1084,17 @@ export class Viewer {
     this._dropDesigner();
     const group = new THREE.Group();
     group.position.set(TABLE.x / 2, TABLE.y / 2, 0);
-    const design = this._designOf(d.platform);
-    group.add(lib.platform(d.platform, false, design));
-    if (d.platform === 'RED') {
-      group.add(lib.zed(false));
-    }
+    const cg = this.centres[d.platform] || [0, 0];
+    const frame = new THREE.Group();
+    frame.position.set(-cg[0], -cg[1], 0);
+    frame.add(this._designerModel());
+    group.add(frame);
 
-    // The platform's body frame from the centre of its body, as on the other pages (the Axes
-    // switch shows or hides it).
+    // The platform's body frame from its CG, as on the other pages (the Axes switch shows or
+    // hides it); the model and the places around the body's centre.
     const axes = this._bodyAxes();
     axes.position.z = CRAFT_SIZE / 2;
     group.add(axes);
-
-    // The arm on its mount, at its initial pose: links and the cone end effector, joint to joint.
-    if (d.platform === 'RED' && design && design.dock && design.dock.type === 'arm' &&
-        lib.models.ARM_LINK) {
-      const q = (d.arm && d.arm.q) || [Math.PI / 2, Math.PI / 2, 0];
-      const pts = armPoints(lib.info, design.dock, q, d.arm && d.arm.geometry);
-      [lib.armLink(false), lib.armLink(false), lib.endEffector(false)].forEach((link, k) => {
-        const [x0, y0] = pts[k];
-        const dx = pts[k + 1][0] - x0;
-        const dy = pts[k + 1][1] - y0;
-        link.position.set(x0, y0, 0);
-        link.rotation.z = Math.atan2(dy, dx);
-        link.scale.x = Math.hypot(dx, dy) / link.userData.length;
-        group.add(link);
-      });
-    }
 
     // The 6 places: a disc on the face at each (blocked red) with a white ring, just off the
     // face (clear of the panel and the coupler's plate); the chosen one hidden under its cone.
@@ -1119,12 +1124,56 @@ export class Viewer {
         ring.position.x = 0.0121;
         ring.visible = !chosen;
         holder.add(disc, ring);
-        group.add(holder);
+        frame.add(holder);
         d.slots.push(disc);
       }
     }
     d.group = group;
     this.scene.add(group);
+  }
+
+  // The close-up's platform in its body frame, as designed: its attachments, the Chaser's ZED2
+  // and its arm at the initial pose (links and the cone end effector, joint to joint). Each part
+  // is a named group (the names an export keeps).
+  _designerModel() {
+    const d = this.designer;
+    const lib = this.cad.lib;
+    const design = this._designOf(d.platform);
+    const model = new THREE.Group();
+    model.name = platformName(d.platform);
+    const body = lib.platform(d.platform, false, design);
+    body.name = model.name;
+    model.add(body);
+    if (d.platform === 'RED') {
+      const zed = lib.zed(false);
+      zed.name = 'ZED2';
+      model.add(zed);
+    }
+    if (d.platform === 'RED' && design && design.dock && design.dock.type === 'arm' &&
+        lib.models.ARM_LINK) {
+      const q = (d.arm && d.arm.q) || [Math.PI / 2, Math.PI / 2, 0];
+      const pts = armPoints(lib.info, design.dock, q, d.arm && d.arm.geometry);
+      [lib.armLink(false), lib.armLink(false), lib.endEffector(false)].forEach((link, k) => {
+        const [x0, y0] = pts[k];
+        const dx = pts[k + 1][0] - x0;
+        const dy = pts[k + 1][1] - y0;
+        link.name = k < 2 ? `Arm Link ${k + 1}` : 'End Effector';
+        link.position.set(x0, y0, 0);
+        link.rotation.z = Math.atan2(dy, dx);
+        link.scale.x = Math.hypot(dx, dy) / link.userData.length;
+        model.add(link);
+      });
+    }
+    return model;
+  }
+
+  /**
+   * The Spacecraft Designer's platform as shown, without the places to click or its body
+   * frame: a new group in the body frame (metres, z up), for an export.
+   * @return {?THREE.Group} Null while the close-up isn't shown or the CAD isn't loaded.
+   */
+  designerModel() {
+    return this.designer.active && this.cad.lib ? this._designerModel() : null;
   }
 
   // Takes the close-up out of the scene, with its body frame's labels (CSS2D elements stay in the
@@ -1160,16 +1209,16 @@ export class Viewer {
     const design = this._craftDesign(u);
     const key = JSON.stringify(design);
     if (u.cad && u.cadDesign !== key) {
-      group.remove(u.cad);
+      u.frame.remove(u.cad);
       u.cad = null;
     }
     if (on && !u.cad) {
       u.cad = this.cad.lib.platform(u.craft, ghost, design);
       u.cadDesign = key;
-      group.add(u.cad);
+      u.frame.add(u.cad);
       if (u.housing && !u.zed) {
         u.zed = this.cad.lib.zed(ghost);
-        group.add(u.zed);
+        u.frame.add(u.zed);
         u.ownParts.push(u.zed);
       }
       if (u.zed && u.cadGhost !== ghost) {
@@ -1227,8 +1276,15 @@ export class Viewer {
     }
   }
 
-  // A track's motion. result: t, crafts.{NAME}.{x, y, att} (null where unknown), arm [4][2][N];
-  // or null.
+  // A platform's CG from its body centre [m]: a result's own (its run's weighing), else the
+  // view's (setCentres).
+  _centreOf(result, name) {
+    const cg = result && result.cg && result.cg[name];
+    return Array.isArray(cg) && cg.length === 2 ? cg : this.centres[name];
+  }
+
+  // A track's motion. result: t, crafts.{NAME}.{x, y, att} (null where unknown), arm [4][2][N],
+  // cg.{NAME} [x, y] (optional); or null.
   _setTrackResult(track, result) {
     track.result = result;
     for (const p of Object.values(track.paths)) {
@@ -1239,6 +1295,7 @@ export class Viewer {
     track.paths = {};
     for (const [name, g] of Object.entries(track.crafts)) {
       g.visible = Boolean(result && result.crafts[name]);
+      this._placeBody(g, this._centreOf(result, name));
     }
     track.arm.group.visible = this._armShown(track);
     this._applyCadCraft(track.crafts.RED);
@@ -1421,9 +1478,10 @@ export class Viewer {
   // Setup layer (initial conditions)
 
   // A pose on the table: a filled square with its outline and body axes (x red, y green, z blue,
-  // as on the platforms), and a level name tag. The name stays level just off the marker's -y
-  // side (below it seen from the top, in front of it in 3D), clear of the axes: the outer group
-  // moves, only the body inside rotates.
+  // as on the platforms: the axes at the pose, the CG, and the square around the body's centre),
+  // and a level name tag. The name stays level just off the marker's -y side (below it seen from
+  // the top, in front of it in 3D), clear of the axes: the outer group moves, only the body
+  // inside rotates.
   _makeMarker(name, text, opacity = 0.22) {
     const h = CRAFT_SIZE / 2;
     const color = LINE_COLORS[name];
@@ -1440,11 +1498,52 @@ export class Viewer {
     const tag = label(text, 'craft-label setup', CRAFT_COLORS[name], TEXT_COLORS[name]);
     tag.position.set(0, -h - 0.04, 0.01);
     tag.center.set(0.5, 0);
+    const frame = new THREE.Group();
+    frame.add(fill, outline);
     const body = new THREE.Group();
-    body.add(fill, outline, axes);
+    body.add(frame, axes);
     group.add(body, tag);
     group.visible = false;
-    return { group, body, fill, tag, att: 0 };
+    group.userData.frame = frame;
+    this._placeBody(group, this.centres[name]);
+    return { group, body, frame, fill, tag, att: 0 };
+  }
+
+  /**
+   * Each platform's centre of gravity, the point its pose is: the live platforms, the markers and
+   * the results without their own are drawn around it (and the Designer's close-up).
+   * @param {!Object<string, !Array<number>>} cgs { NAME: [x, y] } [m] from the body's centre
+   *     (spot.massprops.compute); platforms left out keep theirs.
+   */
+  setCentres(cgs) {
+    let changed = false;
+    for (const name of Object.keys(this.centres)) {
+      const cg = cgs && cgs[name];
+      if (!Array.isArray(cg) || cg.length !== 2 || !cg.every(Number.isFinite)) {
+        continue;
+      }
+      changed ||= cg[0] !== this.centres[name][0] || cg[1] !== this.centres[name][1];
+      this.centres[name] = [cg[0], cg[1]];
+    }
+    if (!changed) {
+      return;
+    }
+    for (const [name, g] of Object.entries(this.crafts)) {
+      this._placeBody(g, this.centres[name]);
+    }
+    for (const layer of [this.setup, this.goal]) {
+      for (const [name, m] of Object.entries(layer.markers)) {
+        this._placeBody(m.group, this.centres[name]);
+      }
+    }
+    for (const track of this._tracks()) {
+      for (const [name, g] of Object.entries(track.crafts)) {
+        this._placeBody(g, this._centreOf(track.result, name));
+      }
+    }
+    if (this.designer.active) {
+      this._buildDesigner();
+    }
   }
 
   // A marker per platform, and the arm.
@@ -1595,7 +1694,7 @@ export class Viewer {
         cone.visible = false;
         plumes.add(cone);
       }
-      g.add(plumes);
+      g.userData.frame.add(plumes);
       g.userData.plumes = plumes;
     }
     if (!plumes) {
@@ -1946,8 +2045,8 @@ export class Viewer {
   }
 
   // The RED that is shown, in order: live (PhaseSpace), the last simulation, a laid-over result,
-  // then the initial-condition marker. Returns the object whose frame is RED's body frame, and
-  // where it comes from.
+  // then the initial-condition marker. Returns the object whose frame is RED's body frame from
+  // its centre (where the lenses are given), the parts to hide, and where it comes from.
   _redCameraCarrier() {
     const shown = o => {
       for (; o; o = o.parent) {
@@ -1960,12 +2059,12 @@ export class Viewer {
     const candidates = [
       [this.crafts.RED, 'Live'], [this.sim.primary.crafts.RED, 'Simulation'],
       ...[...this.sim.overlays.values()].map(t => [t.crafts.RED, t.label || 'Results']),
-      [this.setup.markers.RED.body,
+      [this.setup.markers.RED.group,
         this.setup.markers.RED.tag.element.textContent.split(' · ')[1] || 'Initial Conditions'],
     ];
-    for (const [obj, source] of candidates) {
-      if (shown(obj)) {
-        return { obj, source };
+    for (const [g, source] of candidates) {
+      if (shown(g)) {
+        return { obj: g.userData.frame, parts: g.userData.ownParts || [], source };
       }
     }
     return null;
@@ -2010,7 +2109,7 @@ export class Viewer {
     }
 
     // Draw one lens, or both side by side.
-    const hide = (obj.userData.ownParts || []).filter(o => o.visible);
+    const hide = carrier.parts.filter(o => o.visible);
     for (const o of hide) {
       o.visible = false;
     }

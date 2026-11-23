@@ -198,6 +198,11 @@ export function initSimulation({
     }
     S.derived = r.derived;
     S.error = r.error || '';
+
+    // The 3D view draws each platform around its CG (the point its pose is), from the scales.
+    const mass = (S.derived || {}).mass || {};
+    viewer?.setCentres(
+      Object.fromEntries(PLATFORMS.filter(n => mass[n] && mass[n].cg).map(n => [n, mass[n].cg])));
     S.diagrams = r.diagrams || [];
     S.file = r.file || S.file;
     if (!S.panesBuilt) {

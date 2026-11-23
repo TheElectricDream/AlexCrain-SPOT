@@ -1,6 +1,7 @@
 % RESULTS  What the console's Results page and 3D view show of a dataset
 %
 %   bodies     - Which platforms (and the arm) a dataset can show on the table.
+%   centres    - Each platform's centre of gravity, the point its logged pose is.
 %   listSaved  - What is in the project's "Saved Data" folder, for the console's Results page.
 %   series     - One signal of a dataset, ready to plot in the console.
 %   simulation - Trajectory of a simulation for the SPOT Console's 3D view.

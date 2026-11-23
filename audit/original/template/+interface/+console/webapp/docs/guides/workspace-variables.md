@@ -16,7 +16,7 @@ The Simulink diagram reads its parameters from MATLAB's **base workspace**. `spo
 | `mRED`, `mBLACK`, `mBLUE` | `mass` | each platform's mass [kg] |
 | `IRED`, `IBLACK`, `IBLUE` | `mass` | each platform's inertia about z [kg m²] |
 | `thruster_dist2CG_RED/BLACK/BLUE` | `mass` | 8×1 distances of each thruster's line of action from the CG [mm] |
-| `Phi`, `b0`, `a1`, `b1`, `a2`, `b2`, `a3`, `b3` | `mass.arm` (moved by `mount`) | the arm's geometry [rad, m] (`spot.arm.mountGeometry`) |
+| `Phi`, `b0`, `a1`, `b1`, `a2`, `b2`, `a3`, `b3` | `mass.arm` (moved by `mount`) | the arm's geometry [rad, m] (`spot.arm.mountGeometry`); `Phi` and `b0` place the shoulder from RED's CG, the point its pose is (the settings give them from the body centre) |
 | `mPROX`, `mDIST`, `mEE`, `IPROX`, `IDIST`, `IEE` | `mass.arm` | the links' masses [kg] and inertias [kg m²] |
 | `armShoulderOffset` | `mass.arm.mount` | the angle the shoulder's zero is turned by for its mounting face [rad] |
 | `tableSlope` | `calibration.tableSlope` + `spot_calibration.json` | 1×7 `[a1 a2 a3 a4 a5 xc yc]`: the table top's height surface, for the table's pull on the floating platforms (`spot.dynamics.tableSlope`); `[0 0 0 0 0 1.75 1.2]` (level) with the setting off or no table calibration |

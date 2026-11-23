@@ -1023,7 +1023,11 @@ export function initCalibration({ api, act, toast, storage, viewer, getStream = 
     fitMap(canvas.parentElement);
     drawTable(canvas, {
       cal: S.cal && S.cal.table, paths: r.records || [],
-      live: { pose: r.pose, path: r.path, goal: r.goal }, color: COLORS[r.platform],
+      live: {
+        pose: r.pose, path: r.path, goal: r.goal,
+        cg: (((S.assumed || {})[r.platform] || {}).cg_mm || [0, 0]).map(v => v / 1000),
+      },
+      color: COLORS[r.platform],
     });
   }
 

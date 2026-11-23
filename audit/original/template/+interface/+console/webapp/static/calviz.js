@@ -168,8 +168,8 @@ function contours(ctx, g, map, color, width) {
  *     color: string}=} opts
  *     cal: the table calibration ({height, centre, ...}) for the height map, or null;
  *     paths: [{points: [[x, y], ...], cut}] finished drifts;
- *     live: {pose: [x, y, thetaDeg], path: [[x, y]...], goal: [x, y, thetaDeg]} while a run
- *     goes on;
+ *     live: {pose: [x, y, thetaDeg], path: [[x, y]...], goal: [x, y, thetaDeg], cg: [x, y]}
+ *     while a run goes on (cg: the platform's CG, its pose, from its body centre [m]; optional);
  *     points: [[x, y], ...] a grid of start points; current: the index of the one under way;
  *     color: the platform's colour.
  * @return {?{X: function(number): number, Y: function(number): number, s: number}} The table to
@@ -378,27 +378,28 @@ export function drawTable(canvas, {
     }
     if (live.pose) {
       platform(ctx, X(live.pose[0]), Y(live.pose[1]), live.pose[2] * Math.PI / 180, 0.3 * s,
-        color);
+        color, (live.cg || [0, 0]).map(v => v * s));
     }
   }
   return { X, Y, s };
 }
 
-// A platform seen from above: a square with a tick to its front (+x).
-function platform(ctx, cx, cy, theta, size, color) {
+// A platform seen from above, its pose (cx, cy) its CG: a square around its body centre, cg [px]
+// from it (body x, y; the canvas's y points down), with a tick from the CG to its front (+x).
+function platform(ctx, cx, cy, theta, size, color, cg = [0, 0]) {
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(-theta);
   ctx.fillStyle = color + 'cc';
   ctx.strokeStyle = '#0b0d11';
   ctx.lineWidth = 2;
-  ctx.fillRect(-size / 2, -size / 2, size, size);
-  ctx.strokeRect(-size / 2, -size / 2, size, size);
+  ctx.fillRect(-cg[0] - size / 2, cg[1] - size / 2, size, size);
+  ctx.strokeRect(-cg[0] - size / 2, cg[1] - size / 2, size, size);
   ctx.strokeStyle = '#0b0d11';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.lineTo(size / 2, 0);
+  ctx.lineTo(size / 2 - cg[0], 0);
   ctx.stroke();
   ctx.restore();
 }

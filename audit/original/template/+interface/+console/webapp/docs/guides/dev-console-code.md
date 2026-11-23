@@ -39,7 +39,7 @@ One Python module per area. `server.py` serves the page and the JSON API, routes
 | [app.js](file:app.js) | the shell: state, the API call, events, the PhaseSpace tab's cards, switching tabs |
 | [sim.js](file:sim.js), [layout.js](file:layout.js), [data.js](file:data.js) | the Simulation tab, its Thruster and LED Layout window; loaded results |
 | [experiment.js](file:experiment.js), [results.js](file:results.js) | the Experiment and Results tabs |
-| [viewer.js](file:viewer.js), [cad.js](file:cad.js) | the 3D view (three.js) and the CAD models |
+| [viewer.js](file:viewer.js), [cad.js](file:cad.js), [export3d.js](file:export3d.js) | the 3D view (three.js), the CAD models, and saving a model as .glb or .stl |
 | [designer.js](file:designer.js), [hardware.js](file:hardware.js), [interactive.js](file:interactive.js) | the Designer, Hardware and Interactive Mode |
 | [calibration.js](file:calibration.js), [calviz.js](file:calviz.js) | the calibrations and their figures |
 | [vision.js](file:vision.js), [labsetup.js](file:labsetup.js) | the Vision tab, Lab Setup |

@@ -6,7 +6,7 @@ The model inside `spot.arm.Plant`, the servos in PWM control, and the servo cont
 
 ## Geometry
 
-The shoulder sits on the Chaser's body at distance $b_0$ and angle $\Phi$ from the body centre (for the default mount on the +y face, left; `spot.arm.mountGeometry` moves them with the mount). Link $i$ has its joint-to-centre-of-mass length $a_i$ and centre-of-mass-to-next-joint length $b_i$, mass $m_i$ (`mPROX`, `mDIST`, `mEE`) and inertia $I_i$ about its centre of mass (`IPROX`, `IDIST`, `IEE`). The joint angles $q_1, q_2, q_3$ are 0 with the link straight out (the shoulder: straight out from its face), positive counter-clockwise. The forward kinematics is on `spot.plotting.armPosition`.
+The shoulder sits on the Chaser's body at distance $b_0$ and angle $\Phi$ from its centre of gravity, the point its pose $(x, y, \theta)$ is, in PhaseSpace and in the simulation. The settings (`mass.arm`) give them from the body centre, for the default mount on the +y face, left; `spot.arm.mountGeometry(arm, cg)` moves them with the mount and measures them from the CG (`spot.massprops.compute`, from the scale readings, which are taken without the arm), and those are the workspace's `Phi`, `b0` and `armModel`'s. Link $i$ has its joint-to-centre-of-mass length $a_i$ and centre-of-mass-to-next-joint length $b_i$, mass $m_i$ (`mPROX`, `mDIST`, `mEE`) and inertia $I_i$ about its centre of mass (`IPROX`, `IDIST`, `IEE`). The joint angles $q_1, q_2, q_3$ are 0 with the link straight out (the shoulder: straight out from its face), positive counter-clockwise. The forward kinematics is on `spot.plotting.armPosition`.
 
 ## Equations of motion
 

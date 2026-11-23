@@ -903,20 +903,28 @@ def run_dvs(name, cmd):
 
     Events drawn over the last time window ("events": positive in one
     colour, negative in another), or summed with a decay
-    ("accumulated"). Its settings are dv-processing's CameraCapture
-    setters, used when this version has them (they only set: the
-    values shown are what was last set).
+    ("accumulated"). The camera is opened with dv-processing 2.x's
+    dv.io.camera.open, or 1.x's dv.io.CameraCapture. Its sensor
+    settings are the setters it has: in 2.x the ON and OFF contrast
+    thresholds, global hold and reset, and the readout rate, starting
+    at the camera's own values; in 1.x the bias sensitivity, global
+    hold and reset, and the event frame rate (1.x has no getters, so
+    the values shown are what was last set).
 
     Args:
-        name: The camera's name, or None for the first.
+        name: The camera's serial number, or None for the first.
         cmd: The Commands.
     """
     import dv_processing as dv
-    CC = dv.io.CameraCapture
+    camera = getattr(dv.io, "camera", None)      # dv-processing 2.x (None: 1.x)
+    capture_1x = getattr(dv.io, "CameraCapture", None)
 
     # Open it (busy, or none plugged in: say so).
     try:
-        cap = CC(name or "")
+        if camera is not None:
+            cap = camera.open(name) if name else camera.open()
+        else:
+            cap = capture_1x(name or "")
     except Exception as e:
         text = str(e)
         say("busy" if "busy" in text.lower() or "claim" in text.lower() else "error",
@@ -929,17 +937,48 @@ def run_dvs(name, cmd):
     W, H = (int(res[0]), int(res[1])) if res is not None else (640, 480)
     say("open", model=getattr(cap, "getCameraName", lambda: "DVXplorer")(), serial=name)
 
-    def members(enum):
-        """Return an enum's value names (capitalised, not callable)."""
-        return [m for m in dir(enum) if not m.startswith("_") and m[0].isupper()
-                and not callable(getattr(enum, m, None))] if enum else []
+    def method(*names):
+        """Return the first of these methods the camera has, or None."""
+        return next((getattr(cap, n) for n in names if hasattr(cap, n)), None)
 
-    # The settings this version has, and their values.
-    sens = getattr(CC, "BiasSensitivity", None)
-    efps = getattr(CC, "DVXeFPS", None)
+    def current(getter, default):
+        """Return the camera's value from this getter, or default."""
+        try:
+            get = method(getter)
+            return get() if get else default
+        except Exception:
+            return default
+
+    def members(enum):
+        """Return an enum's value names, in its own order where it has one."""
+        if enum is None:
+            return []
+        return list(getattr(enum, "__members__", {})) or [
+            m for m in dir(enum) if not m.startswith("_") and m[0].isupper()
+            and not callable(getattr(enum, m, None))]
+
+    # The sensor's setters this version has (2.x's name first, then 1.x's).
+    set_on = method("setContrastThresholdOn")                  # 2.x
+    set_off = method("setContrastThresholdOff")                # 2.x
+    set_hold = method("setGlobalHold", "setDVSGlobalHold")
+    set_reset = method("setGlobalReset", "setDVXplorerGlobalReset")
+    sens = getattr(capture_1x, "BiasSensitivity", None)
+    set_sens = method("setDVSBiasSensitivity") if sens else None   # 1.x
+    set_fps = method("setReadoutFPS", "setDVXplorerEFPS")
+    readout = current("getReadoutFPS", None)                   # 2.x: its enum is this one's type
+    fps_enum = type(readout) if readout is not None else getattr(capture_1x, "DVXeFPS", None)
+    fps_names = members(fps_enum) if set_fps else []
+
+    # The values: the camera's own where it says them. Each setting's
+    # default is its value when the camera was opened.
     cfg = {"window_ms": 33, "decay_ms": 200, "contrast": 1.0,
+           "threshold_on": int(current("getContrastThresholdOn", 9)),
+           "threshold_off": int(current("getContrastThresholdOff", 9)),
            "sensitivity": "Default" if sens and hasattr(sens, "Default") else None,
-           "global_hold": True, "global_reset": False, "efps": None}
+           "global_hold": bool(current("getGlobalHold", True)),
+           "global_reset": bool(current("getGlobalReset", False)),
+           "efps": getattr(readout, "name", None) or (fps_names[0] if fps_names else None)}
+    start = dict(cfg)
 
     def params():
         """Return the camera's settings list."""
@@ -955,26 +994,30 @@ def run_dvs(name, cmd):
                        help="Accumulated view: the brightness change each event makes")]
 
         # The sensor's, where this version has the setter.
-        if sens and hasattr(cap, "setDVSBiasSensitivity"):
+        for k, setter, label, polarity in (("threshold_on", set_on, "ON Threshold", "brighter"),
+                                           ("threshold_off", set_off, "OFF Threshold", "darker")):
+            if setter:
+                out.append(setting(k, label, "Sensor", "range", cfg[k], start[k], min=1, max=50,
+                                   step=1, help="How much %s a pixel must get to make an event "
+                                   "(lower: more events, more noise)" % polarity))
+        if set_sens:
             out.append(setting("sensitivity", "Bias Sensitivity", "Sensor", "enum",
                                cfg["sensitivity"], "Default",
                                options=[[m, re.sub(r"(?<!^)(?=[A-Z])", " ", m)]
                                         for m in members(sens)],
                                help="How large a brightness change makes an event (higher: "
                                     "more events, more noise)"))
-        if hasattr(cap, "setDVSGlobalHold"):
+        if set_hold:
             out.append(setting("global_hold", "Global Hold", "Sensor", "bool", cfg["global_hold"],
-                               True))
-        if hasattr(cap, "setDVXplorerGlobalReset"):
+                               start["global_hold"]))
+        if set_reset:
             out.append(setting("global_reset", "Global Reset", "Sensor", "bool",
-                               cfg["global_reset"], False))
-        if efps and hasattr(cap, "setDVXplorerEFPS"):
-            names = members(efps)
-            out.append(setting("efps", "Event Frame Rate", "Sensor", "enum",
-                               cfg["efps"] or (names[0] if names else ""),
-                               names[0] if names else "",
+                               cfg["global_reset"], start["global_reset"]))
+        if fps_names:
+            out.append(setting("efps", "Event Frame Rate", "Sensor", "enum", cfg["efps"],
+                               start["efps"],
                                options=[[m, m.replace("EFPS_", "").replace("_", " ").title()]
-                                        for m in names],
+                                        for m in fps_names],
                                help="The sensor's readout: constant, or variable with the scene"))
         return out
 
@@ -985,17 +1028,22 @@ def run_dvs(name, cmd):
             try:
                 if k in ("window_ms", "decay_ms", "contrast"):
                     cfg[k] = as_number(v, cfg[k])
-                elif k == "sensitivity" and sens:
-                    cap.setDVSBiasSensitivity(getattr(sens, str(v)))
+                elif k in ("threshold_on", "threshold_off") and (set_on if k == "threshold_on"
+                                                                 else set_off):
+                    n = int(round(as_number(v, cfg[k])))
+                    (set_on if k == "threshold_on" else set_off)(n)
+                    cfg[k] = n
+                elif k == "sensitivity" and set_sens:
+                    set_sens(getattr(sens, str(v)))
                     cfg[k] = v
-                elif k == "global_hold":
-                    cap.setDVSGlobalHold(bool(v))
+                elif k == "global_hold" and set_hold:
+                    set_hold(bool(v))
                     cfg[k] = bool(v)
-                elif k == "global_reset":
-                    cap.setDVXplorerGlobalReset(bool(v))
+                elif k == "global_reset" and set_reset:
+                    set_reset(bool(v))
                     cfg[k] = bool(v)
-                elif k == "efps" and efps:
-                    cap.setDVXplorerEFPS(getattr(efps, str(v)))
+                elif k == "efps" and fps_names:
+                    set_fps(getattr(fps_enum, str(v)))
                     cfg[k] = v
             except Exception as e:
                 errors[k] = str(e)

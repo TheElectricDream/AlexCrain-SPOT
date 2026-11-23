@@ -4,11 +4,21 @@ What is mounted on each platform: the docking cone, the arm, the solar panels, a
 
 ## The sidebar
 
-- **Platform**: Chaser, Target or Obstacle. The 3D view shows that platform's CAD model close up, from the side with the attachment.
+- **Platform**: Chaser, Target or Obstacle. The 3D view shows that platform's CAD model close up, from the side with the attachment, with its body axes at its centre of gravity (the point its pose is, as on the other pages).
 - **Docking Cone** (on the Chaser: **Docking Cone or Arm**): none, the **male** cone, the **female** cone, or (Chaser only) the **arm**. Then its **place**: the four faces drawn as seen from outside, two slots each (left / right); the back face is the control panel and has no slots. The slots a part would collide with are marked, and so is the arm's usual place (+Y face, left), which is where the arm's geometry in the settings assumes it (`spot.arm.mountGeometry` moves it with the mount).
 - **Solar Panels**: include them, along X or along Y; a warning if the bracket would cross the ZED2's view.
+- **Export**: saves the platform as shown, as one file another program can open (see [Exporting a platform](#exporting-a-platform)).
 - **Lab Console**: whether the lab console's design is the same as this one, with **Send to Lab Console** and **Use Lab Console's Design**, so the lab's 3D view shows the same hardware.
 - Where the design is saved.
+
+## Exporting a platform
+
+**Export GLB** and **Export STL** save the platform on show, with what is mounted on it (its docking cone or arm, its solar panels and, on the Chaser, the ZED2), as a single file in your browser's downloads. The file is named after the design, e.g. `SPOT_Target_Female-+Y-Left_Solar-Y.glb`. Both are in the platform's body frame from its centre, not its CG: the origin is at the centre of its footprint on the table, with z up and x out of the front (+X) face. An arm is drawn at the simulation's initial pose, as on the page.
+
+- **GLB** (binary glTF 2.0, in metres): each part is a separate, named object (the platform, each side panel, the docking cone, the solar panels, the ZED2, the arm's links and end effector), with its colours. It opens in Blender, Windows' 3D Viewer, online glTF viewers and game engines. glTF is y-up, so the file turns the model to suit, and importers turn it back.
+- **STL** (binary, in millimetres, z up): the surface only, as one body without colours. It opens in CAD programs (SolidWorks, Fusion, FreeCAD, Onshape) and slicers.
+
+Both are meshes made from the models the page draws, not solid CAD bodies, so a CAD program imports them as a mesh or graphics body. For editable solids, use the SolidWorks/STEP assemblies the models were built from. Textures are left out: the solar cells keep their dark colour, and the MLI foil is plain gold or silver. The code is [export3d.js](file:export3d.js); [viewer.js](file:viewer.js)'s `designerModel` gives it the platform without the places to click or the body axes.
 
 ## The arm and the simulation
 

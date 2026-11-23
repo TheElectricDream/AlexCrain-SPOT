@@ -114,9 +114,9 @@ function d = apply(s, root)
         ws.(['thruster_dist2CG_' key]) = massProps.(key).thrusters;
     end
 
-    % The arm where it is mounted: Phi and b0 for that place, and the angle it is turned by
-    % (armShoulderOffset: the shoulder's 0 is straight out from its face).
-    arm = spot.arm.mountGeometry(s.mass.arm);
+    % The arm where it is mounted: Phi and b0 for that place, from RED's CG (its pose), and the
+    % angle it is turned by (armShoulderOffset: the shoulder's 0 is straight out from its face).
+    arm = spot.arm.mountGeometry(s.mass.arm, massProps.RED.cg);
     for f = {'Phi', 'b0', 'a1', 'b1', 'a2', 'b2', 'a3', 'b3', ...
              'mPROX', 'mDIST', 'mEE', 'IPROX', 'IDIST', 'IEE'}
         ws.(f{1}) = arm.(f{1});

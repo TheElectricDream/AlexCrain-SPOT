@@ -1,7 +1,10 @@
-function pts = drawSpacecraft(x, y, theta, id)
+function pts = drawSpacecraft(x, y, theta, id, cg)
     %DRAWSPACECRAFT Outline of a SPOT platform on the table, for publication figures.
     %   pts = spot.plotting.drawSpacecraft(x, y, theta, id). The line from the centre to the +x
     %   face marks the body +x axis.
+    %   pts = spot.plotting.drawSpacecraft(x, y, theta, id, cg) for a pose that is the platform's
+    %   centre of gravity (PhaseSpace's and the simulation's): the body is drawn around its
+    %   centre, cg from the pose, and the +x line runs from the CG.
     %
     %   Inputs
     %     x, y   position [m]
@@ -11,6 +14,8 @@ function pts = drawSpacecraft(x, y, theta, id)
     %              2  target (docking cone, +y)             6  chaser (docking grapple, +x)
     %              3  generic platform                      7  generic platform with solar panels
     %              4  target (docking cone and solar panels)
+    %     cg     [x y] of the CG from the body centre [m] (spot.massprops.compute); optional,
+    %            default [0 0]
     %
     %   Outputs
     %     pts    N x 2 outline, for patch(pts(:,1), pts(:,2), ...)
@@ -19,8 +24,13 @@ function pts = drawSpacecraft(x, y, theta, id)
     %
     %   See also spot.plotting.drawArm.
 
-    % The shape, rotated by theta and moved to (x, y).
+    % The shape around the CG, rotated by theta and moved to (x, y).
     sc = shape(id);
+    if nargin > 4
+        sc = sc - cg(:).';
+        sc(1, :) = [0 0];      % the +x line: from the CG to the +x face, along body +x
+        sc([2 end], 2) = 0;
+    end
     R = [cos(theta), -sin(theta); sin(theta), cos(theta)];
     pts = (R * sc.').' + [x, y];
 end

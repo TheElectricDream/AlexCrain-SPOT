@@ -52,7 +52,7 @@ The solver the simulation uses (the diagram's own settings are copied here when 
 
 ## `mass`: mass properties
 
-For each platform: `scales` (the three scale readings A, B, C in kg, see [Mass Properties](page:math-mass-properties)), `bifilar` (`T` period, `L` string length, `D` string spacing of the pendulum test), and `mass`/`inertia` which are used instead of the measured ones when `override` is `true`. `arm` holds the arm's geometry and link masses/inertias (`Phi`, `b0`, `a1…b3`, `mPROX…IEE`) and `mount` (which face and side of the Chaser it sits on; the Designer sets it).
+For each platform: `scales` (the three scale readings A, B, C in kg, see [Mass Properties](page:math-mass-properties)), `bifilar` (`T` period, `L` string length, `D` string spacing of the pendulum test), and `mass`/`inertia` which are used instead of the measured ones when `override` is `true`. `arm` holds the arm's geometry and link masses/inertias (`Phi`, `b0`, `a1…b3`, `mPROX…IEE`; `Phi` and `b0` place the shoulder from the body centre, and the simulation measures it from the CG) and `mount` (which face and side of the Chaser it sits on; the Designer sets it).
 
 ## `calibration`
 

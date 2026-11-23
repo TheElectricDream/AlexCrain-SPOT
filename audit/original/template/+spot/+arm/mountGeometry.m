@@ -1,19 +1,25 @@
-function arm = mountGeometry(arm)
+function arm = mountGeometry(arm, cg)
     %MOUNTGEOMETRY The arm's geometry for where it is mounted on the Chaser.
     %   arm = spot.arm.mountGeometry(arm) moves the shoulder from the usual mount (+y face, left
     %   side) to arm.mount, the same way the 3D view moves attachments, so the drawing and the
     %   simulation agree.
+    %   arm = spot.arm.mountGeometry(arm, cg) also measures the shoulder from the Chaser's centre
+    %   of gravity, the point its pose is (PhaseSpace's and the simulated base's), rather than
+    %   from its body centre.
     %
     %   Inputs
     %     arm   the settings' arm (s.mass.arm): Phi and b0 place the shoulder on the usual
-    %           mount. Optional arm.mount: face '+x', '+y' or '-y', side 'left' or 'right'.
+    %           mount, from the body centre. Optional arm.mount: face '+x', '+y' or '-y', side
+    %           'left' or 'right'.
+    %     cg    [x y] of RED's centre of gravity from its body centre [m]
+    %           (spot.massprops.compute's RED.cg); optional, default [0 0]
     %
     %   Outputs
-    %     arm   with Phi and b0 for the shoulder on arm.mount, and q1Offset [rad], the angle
-    %           the whole arm is turned by. Without arm.mount, or on the usual mount, Phi and
-    %           b0 are unchanged and q1Offset is 0.
+    %     arm   with Phi and b0 for the shoulder on arm.mount, from the CG, and q1Offset [rad],
+    %           the angle the whole arm is turned by. Without arm.mount, or on the usual mount,
+    %           and without cg, Phi and b0 are unchanged and q1Offset is 0.
     %
-    %   See also spot.arm.parameters.
+    %   See also spot.arm.parameters, spot.massprops.compute.
 
     %% Constants
     FACE = 0.15;          % [m] face distance from the centre (CAD: info.mount.face)
@@ -52,6 +58,11 @@ function arm = mountGeometry(arm)
     % The same point in the requested mount's frame, back on the platform.
     a = angles.(key(char(place.face)));
     s = origin(a, char(place.side)).' + rot(a) * inMount;
+
+    % From the CG.
+    if nargin > 1
+        s = s - cg(:);
+    end
     arm.Phi = atan2(s(2), s(1));
     arm.b0 = hypot(s(1), s(2));
     arm.q1Offset = a - a0;

@@ -187,8 +187,10 @@ function [handles, labels] = tablePlot(ax, panel, traces, lookup)
             continue
         end
 
-        % Outline shape (spot.plotting.drawSpacecraft); the Chaser with its arm if shown.
+        % Outline shape (spot.plotting.drawSpacecraft), around the body centre from the CG the
+        % pose is; the Chaser with its arm if shown.
         found = interface.results.bodies(ds);
+        cg = interface.results.centres(ds.settings);
         shapes = struct('RED', 1, 'BLACK', 4, 'BLUE', 3);
         shapeId = shapes.(platform);
         arm = strcmp(platform, 'RED') && found.arm;
@@ -201,7 +203,8 @@ function [handles, labels] = tablePlot(ax, panel, traces, lookup)
         alphas = [START_ALPHA, END_ALPHA];
         for snap = 1:2
             sample = snaps(snap);
-            pts = spot.plotting.drawSpacecraft(x(sample), y(sample), th(sample), shapeId);
+            pts = spot.plotting.drawSpacecraft(x(sample), y(sample), th(sample), shapeId, ...
+                cg.(platform));
             patch(ax, pts(:, 1), pts(:, 2), 'w', 'FaceAlpha', 0.5, 'EdgeColor', colors{j}, ...
                 'EdgeAlpha', alphas(snap), 'LineWidth', 0.5);
             if arm
@@ -222,7 +225,7 @@ function [handles, labels] = tablePlot(ax, panel, traces, lookup)
 
                 % Its links.
                 position = spot.plotting.armPosition([x(sample) y(sample) th(sample)], q, ...
-                    spot.arm.mountGeometry(geometry));
+                    spot.arm.mountGeometry(geometry, cg.RED));
                 for link = spot.plotting.drawArm(position)
                     patch(ax, link{1}(:, 1), link{1}(:, 2), 'w', 'FaceAlpha', alphas(snap), ...
                         'EdgeColor', colors{j}, 'EdgeAlpha', alphas(snap), 'LineWidth', 0.5);

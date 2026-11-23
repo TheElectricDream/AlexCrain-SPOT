@@ -15,9 +15,11 @@ function r = trajectory(ds, maxRate)
     %                               its log starts, or all zeros in an experiment: PhaseSpace
     %                               didn't see it yet)
     %                arm            4 x 2 x N joint positions [m], when the arm is in it
+    %                cg.<NAME>      [x y] of each platform's CG (its pose) from its body centre
+    %                               [m] (interface.results.centres)
     %                phases         phase names and end times, when the settings are known
     %
-    %   See also interface.results.bodies, spot.plotting.armPosition.
+    %   See also interface.results.bodies, interface.results.centres, spot.plotting.armPosition.
 
     %% Defaults
     if nargin < 2
@@ -27,6 +29,7 @@ function r = trajectory(ds, maxRate)
     sig = ds.signals;
     found = interface.results.bodies(ds);
     r = struct('t', [], 'crafts', struct());
+    r.cg = interface.results.centres(ds.settings);
     if isempty(found.crafts)
         error('spot:data:trajectory', ...
             '%s has no platform positions (<NAME>_Px_m, _Py_m, _Rz_rad) to show.', ds.name);
@@ -111,9 +114,9 @@ function r = trajectory(ds, maxRate)
             arm = ds.settings.mass.arm;
         end
 
-        % Joint positions from RED's pose.
+        % Joint positions from RED's pose, its CG.
         base = [r.crafts.RED.x.', r.crafts.RED.y.', r.crafts.RED.att.'];
-        r.arm = spot.plotting.armPosition(base, q, spot.arm.mountGeometry(arm));
+        r.arm = spot.plotting.armPosition(base, q, spot.arm.mountGeometry(arm, r.cg.RED));
     end
 
     %% Phases, when the settings are known

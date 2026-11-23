@@ -4,7 +4,7 @@
     "RED": {
       "dock": {
         "type": "male",
-        "face": "+y",
+        "face": "+x",
         "side": "left"
       },
       "solar": {
@@ -15,11 +15,11 @@
     "BLACK": {
       "dock": {
         "type": "female",
-        "face": "-y",
+        "face": "+y",
         "side": "left"
       },
       "solar": {
-        "on": true,
+        "on": false,
         "axis": "x"
       }
     },

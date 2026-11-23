@@ -17,6 +17,8 @@ function r = simulation(dataClass, s, d, maxRate)
     %                                 platform
     %                  arm            4 x 2 x N joint positions [m] (shoulder, elbow, wrist,
     %                                 end effector)
+    %                  cg.<NAME>      [x y] of each platform's CG (its pose) from its body
+    %                                 centre [m]
     %                  phases         end time of each phase and sub-phase [s]
     %                  signals        name and size of every logged signal
     %
@@ -56,8 +58,11 @@ function r = simulation(dataClass, s, d, maxRate)
              resample1(dataClass.ARM_Rz_Elbow_rad, tGrid), ...
              resample1(dataClass.ARM_Rz_Wrist_rad, tGrid)];
         base = [r.crafts.RED.x.', r.crafts.RED.y.', r.crafts.RED.att.'];
-        r.arm = spot.plotting.armPosition(base, q, spot.arm.mountGeometry(s.mass.arm));
+        r.arm = spot.plotting.armPosition(base, q, d.armGeometry);
     end
+
+    %% Each platform's CG from its body centre, which the view draws the body around
+    r.cg = struct('RED', d.mass.RED.cg, 'BLACK', d.mass.BLACK.cg, 'BLUE', d.mass.BLUE.cg);
 
     %% Phases and signals
     r.phases = d.timing.phases;   % the segments that ran (skipped ones left out)

@@ -346,7 +346,17 @@ classdef Worker < handle
                     result = true;
 
                 otherwise
-                    error('spot:worker:unknown', 'Unknown command %s.', cmd);
+                    % A project tab's command, "<package>.<name>" (tabs/*/tab.json): its
+                    % package's consoleCommand(name, args, root) runs it. (which, not exist:
+                    % exist doesn't see package functions.)
+                    pkg = extractBefore(string(cmd), '.');
+                    if ~ismissing(pkg) && strlength(pkg) > 0 && ...
+                            ~isempty(which(char(pkg + ".consoleCommand")))
+                        result = feval(char(pkg + ".consoleCommand"), ...
+                            char(extractAfter(string(cmd), '.')), args, obj.Root);
+                    else
+                        error('spot:worker:unknown', 'Unknown command %s.', cmd);
+                    end
             end
         end
     end

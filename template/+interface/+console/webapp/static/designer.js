@@ -12,8 +12,11 @@
 // its mount, s.mass.arm.mount), and the Simulation tab's Arm switch picks or drops the arm here.
 // A run flown with the arm is replayed without it while the Chaser here has none; the page asks
 // whether to show it anyway (Show the Arm, Not Now, or Never Ask Again on this browser).
+// Export saves the platform as shown, with its attachments (and arm), as one .glb or .stl file
+// (export3d.js).
 
 import { platformName, COLORS } from './platforms.js';
+import { toGlb, toStl } from './export3d.js';
 
 const NAMES = ['RED', 'BLACK', 'BLUE'];
 
@@ -29,6 +32,10 @@ const ARM_MOUNT = { face: '+y', side: 'left' };   // the Chaser's arm coupler (i
 const ARM_NEVER_ASK = 'spot.designer.armNeverAsk';   // never ask to show a run's arm (storage)
 const DOCK_NAMES = {
   none: 'no docking cone', male: 'the male docking cone', female: 'the female cup',
+};
+// Each export format: the file's extension and type.
+const EXPORTS = {
+  glb: { ext: 'glb', type: 'model/gltf-binary' }, stl: { ext: 'stl', type: 'model/stl' },
 };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -145,6 +152,13 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
         </div>
         ${solarOnZed ? '<p class="hint warn-text">Along X, a leg crosses the ZED2\'s face.</p>' : ''}
       </section>
+      <section class="card">
+        <div class="card-head"><h2 class="tip" title="Saves this platform as shown here (with its docking cone or arm, its solar panels and, on the Chaser, the ZED2) as one file, in its body frame: the origin at the centre of its footprint on the table, z up.">Export</h2></div>
+        <div class="dz-export">
+          <button type="button" class="btn btn-sm" data-dzexport="glb" ${viewer ? '' : 'disabled'} title="Binary glTF (.glb), in metres: each part by name, with its colours. Opens in Blender, Windows' 3D Viewer, web viewers and game engines.">Export GLB</button>
+          <button type="button" class="btn btn-sm" data-dzexport="stl" ${viewer ? '' : 'disabled'} title="Binary STL (.stl), in millimetres: the surface only, as one body. Opens in CAD programs (SolidWorks, Fusion, FreeCAD, Onshape) and slicers.">Export STL</button>
+        </div>
+      </section>
       ${labCard}
       <p class="hint dz-file" title="${esc(S.path || '')}: every page of this console follows it, and the 3D views draw it with Use CAD on.">${S.saved ? 'Saved' : 'Defaults (saved at the first change)'}${S.path ? ` · ${esc(S.path.split(/[\\/]/).pop())}` : ''}</p>`;
   }
@@ -174,6 +188,42 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
           <button type="button" class="btn btn-sm" data-dzlab="take" ${canTake ? '' : 'disabled'} title="Replace this project's design with the lab console's">Use Lab Console's Design</button>
         </div>
       </section>`;
+  }
+
+  // Export
+
+  // Saves the platform as shown to a file named after its design (e.g.
+  // SPOT_Target_Female-+Y-Left_Solar-Y.glb), which the browser puts in its downloads.
+  function exportModel(format) {
+    const model = viewer.designerModel();
+    if (!model) {
+      toast('The CAD models are still loading; try again in a moment.', 'info', 3500);
+      return;
+    }
+    const n = S.platform;
+    const { dock, solar } = S.design.platforms[n];
+    const parts = ['SPOT', platformName(n)];
+    const words = [];
+    if (dock.type !== 'none') {
+      const type = { male: 'Male', female: 'Female', arm: 'Arm' }[dock.type];
+      const sd = dock.side === 'left' ? 'Left' : 'Right';
+      parts.push(`${type}-${dock.face.toUpperCase()}-${sd}`);
+      const what = dock.type === 'arm' ? 'arm' : `${dock.type} cone`;
+      words.push(`${what} on ${dock.face.toUpperCase()} ${sd.toLowerCase()}`);
+    }
+    if (solar.on) {
+      parts.push(`Solar-${solar.axis.toUpperCase()}`);
+      words.push(`solar panels along ${solar.axis.toUpperCase()}`);
+    }
+    const title = `SPOT ${platformName(n)}${words.length ? ` (${words.join(', ')})` : ''}`;
+    const { ext, type } = EXPORTS[format];
+    const data = format === 'glb' ? toGlb(model, title) : toStl(model, title);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type }));
+    a.download = `${parts.join('_')}.${ext}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(`Saved ${a.download} (${(data.byteLength / 1e6).toFixed(1)} MB).`, 'success', 4000);
   }
 
   // The parts that stand out at a place ('' if none).
@@ -229,6 +279,8 @@ export function initDesigner({ api, act, toast, storage, viewer, getSim = null, 
       storage.set(ARM_NEVER_ASK, false);
       render();
       viewer?.askArmsAgain();
+    } else if (b.dataset.dzexport) {
+      exportModel(b.dataset.dzexport);
     } else if (b.dataset.dzlab === 'send') {
       await api('/api/lab', { path: 'design', body: { design: S.design } });
       toast('The lab console now draws this design.', 'success', 3500);
