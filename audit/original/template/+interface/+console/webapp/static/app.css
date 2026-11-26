@@ -511,6 +511,24 @@ h1, h2 { margin: 0; font-weight: 600; }
 #viewer:not([data-showing="simulation"]) .sim-only,
 #viewer:not([data-showing="experiment"]) .exp-only { display: none !important; }
 
+/* ---------- Theme: the menu of looks, under the logo in the top bar (theme.js) ---------- */
+.theme-pick { position: relative; flex: none; }
+.brand-logo-btn {
+  display: block; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
+}
+.brand-logo-btn .brand-logo { display: block; }
+.brand-logo-btn:hover, .brand-logo-btn[aria-expanded="true"] { box-shadow: 0 0 0 3px rgba(76,141,255,.3); }
+.theme-menu { z-index: 30; min-width: 170px; gap: 2px; }
+.theme-menu .view-opts-head { padding: 0 0 4px; }
+.theme-menu button {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; border: 0;
+  border-radius: var(--radius-sm); background: transparent; color: var(--text); font: inherit;
+  text-align: left; white-space: nowrap; cursor: pointer;
+}
+.theme-menu button:hover { background: var(--panel-2); }
+.theme-tick { width: 14px; visibility: hidden; color: var(--accent); }
+.theme-menu button[aria-checked="true"] .theme-tick { visibility: visible; }
+
 /* ---------- shared 3D view: moved into the visible page's slot ---------- */
 .viewer-slot { position: relative; flex: 1; min-height: 280px; display: flex; }
 .viewer-slot > .viewer { flex: 1; min-height: 0; }

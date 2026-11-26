@@ -7,13 +7,29 @@
   <link rel="icon" type="image/png" href="/static/srl_logo.png">
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/docs.css">
+  <script>
+    // The colour theme, before the page is drawn: ?theme=<theme> for this visit, or else the one
+    // chosen in the top bar's Theme menu (theme.js keeps it in a cookie). The page's own look
+    // needs nothing more; a theme adds its stylesheet over the page's.
+    (function () {
+      var pick = /[?&]theme=([a-z0-9-]+)/.exec(location.search) ||
+        /(?:^|; )spot_theme=([a-z0-9-]+)/.exec(document.cookie);
+      if (pick && pick[1] !== 'default') {
+        document.documentElement.dataset.theme = pick[1];
+        document.write('<link rel="stylesheet" href="/theme/' + pick[1] + '.css">');
+      }
+    })();
+  </script>
   <script type="importmap">{ "imports": { "three": "/static/vendor/three.module.min.js" } }</script>
   <script type="module" src="/static/app.js"></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <img src="/static/srl_logo.png" alt="SRL" class="brand-logo">
+      <div class="theme-pick">
+        <button type="button" id="themeBtn" class="brand-logo-btn" aria-haspopup="true" aria-expanded="false" aria-label="Theme" title="Theme: click to choose how the console looks. The choice is kept for this computer."><img src="/static/srl_logo.png" alt="SRL" class="brand-logo"></button>
+        <div id="themeMenu" class="view-opts-menu theme-menu" role="menu" hidden></div>
+      </div>
       <div>
         <h1>SPOT Console</h1>
         <p id="hostLine">Connecting…</p>

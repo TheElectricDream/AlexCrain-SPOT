@@ -14,6 +14,7 @@ import { initCalibration } from './calibration.js';
 import { initVision } from './vision.js';
 import { initLabSetup } from './labsetup.js';
 import { initDocs } from './docs.js';
+import { initThemeMenu } from './theme.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -1086,6 +1087,9 @@ for (const b of $$('[data-view]')) {
     viewer?.setView(b.dataset.view);
   };
 }
+
+// The Theme menu in the top bar (theme.js).
+initThemeMenu();
 
 // Viewing Options: the menu of the view's switches (closes on a click elsewhere, or Esc).
 const viewOptsBtn = $('#viewOptsBtn');

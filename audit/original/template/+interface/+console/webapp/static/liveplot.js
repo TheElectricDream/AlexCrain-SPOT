@@ -7,6 +7,7 @@
 // tick one to plot it, and pick its elements with the [1] [2] ... chips.
 
 import { platformName } from './platforms.js';
+import { themeColor } from './theme.js';
 
 const PALETTE = [
   '#4dabf7', '#ff8787', '#69db7c', '#ffd43b', '#da77f2', '#ffa94d', '#3bc9db', '#f783ac',
@@ -468,7 +469,7 @@ export function initLivePlot({ api, storage }) {
     // Grid and ticks: values on the left, times below.
     ctx.font = '11px ui-monospace, monospace';
     ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-    ctx.fillStyle = '#8d96a6';
+    ctx.fillStyle = themeColor('plot-muted', '#8d96a6');
     ctx.lineWidth = 1;
     const ys = nice(y1 - y0, Math.max(2, Math.floor(ph / 40)));
     ctx.textAlign = 'right';

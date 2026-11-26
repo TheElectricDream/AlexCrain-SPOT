@@ -14,6 +14,7 @@ import { initCalibration } from './calibration.js';
 import { initVision } from './vision.js';
 import { initLabSetup } from './labsetup.js';
 import { initDocs } from './docs.js';
+import { initThemeMenu } from './theme.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -480,6 +481,7 @@ async function loadState() {
     designer.onState(st);
     calibration.onState(st);
     labSetup.onState(st);
+    loadProjectTabs();
     return;
   }
   S.clientIp = st.client_ip;
@@ -864,6 +866,66 @@ const PAGES = {
   calibration: $('#pageCalibration'), vision: $('#pageVision'), docs: $('#pageDocs'),
 };
 
+// The project's own tabs (tabs/*/tab.json, local console; spot_console/tabs.py): id -> {show,
+// hide} from the tab's module. The page asked for first is kept, since a project tab only exists
+// once its module has loaded.
+const projectTabs = {};
+const firstPage = location.hash.slice(1).split('/')[0] || storage.get('spot.page', '');
+let projectTabsLoaded = false;
+
+// Adds each project tab: its button (before Documentation), its page, its style and module.
+async function loadProjectTabs() {
+  if (projectTabsLoaded) {
+    return;
+  }
+  projectTabsLoaded = true;
+  let list = [];
+  try {
+    list = await api('/api/tabs');
+  } catch {
+    return;
+  }
+  const nav = $('.page-tabs');
+  for (const t of list) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.page = t.id;
+    b.textContent = t.title;
+    b.title = t.tooltip || '';
+    b.hidden = !(S.features && S.features[t.id]);
+    b.onclick = () => showPage(t.id);
+    nav.insertBefore(b, $('[data-page="docs"]', nav));
+    const el = document.createElement('div');
+    el.id = `pageTab-${t.id}`;
+    el.className = 'page project-tab';
+    el.hidden = true;
+    $('#pageDocs').after(el);
+    PAGES[t.id] = el;
+    if (t.style) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = t.style;
+      document.head.append(link);
+    }
+    try {
+      if (t.error) {
+        throw new Error(t.error);
+      }
+      const mod = await import(t.script);
+      projectTabs[t.id] = mod.init({ api, act, toast, storage, root: el, showPage }) || {};
+    } catch (e) {
+      el.innerHTML = '<div class="viewer-empty"><strong></strong><span></span></div>';
+      $('strong', el).textContent = `The ${t.title} tab could not start`;
+      $('span', el).textContent = e.message;
+      projectTabs[t.id] = {};
+    }
+  }
+  $('.page-tabs').hidden = $$('[data-page]').filter(b => !b.hidden).length < 2;
+  if (projectTabs[firstPage]) {
+    showPage(firstPage);
+  }
+}
+
 function pageAvailable(page) {
   return Boolean(PAGES[page]) && (!S.features || S.features[page]);
 }
@@ -933,7 +995,14 @@ function showPage(page) {
   if (page !== 'docs') {
     docs.hide();
   }
-  if (page === 'simulation') {
+  for (const [id, tab] of Object.entries(projectTabs)) {
+    if (page !== id) {
+      tab.hide?.();
+    }
+  }
+  if (projectTabs[page]) {
+    projectTabs[page].show?.();
+  } else if (page === 'simulation') {
     simulation.show();
   } else if (page === 'experiment') {
     experiment.show();
@@ -1018,6 +1087,9 @@ for (const b of $$('[data-view]')) {
     viewer?.setView(b.dataset.view);
   };
 }
+
+// The Theme menu in the top bar (theme.js).
+initThemeMenu();
 
 // Viewing Options: the menu of the view's switches (closes on a click elsewhere, or Esc).
 const viewOptsBtn = $('#viewOptsBtn');

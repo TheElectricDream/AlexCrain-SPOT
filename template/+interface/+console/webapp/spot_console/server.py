@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from .common import ApiError, PROJECT_DIR, STATIC_DIR, parse_bool, parse_number
 from . import tabs   # the project's own tabs (tabs/*/tab.json)
+from . import themes   # the page's colour themes (static/themes)
 from .events import hub, settings
 from .phasespace import (PLATFORM_DIR, RESERVED_PORTS, WSL_INFO, broadcast_loop, builder,
                          monitor, parse_frequency, read_base_destinations, read_led_owner,
@@ -292,6 +293,13 @@ class Handler(BaseHTTPRequestHandler):
                 if DOCS_DIR.resolve() not in target.parents:
                     return self._send(404, b"Not found", "text/plain")
                 return self._file(target)
+
+            # A colour theme: the page's stylesheets, re-coloured.
+            if url.path.startswith("/theme/") and url.path.endswith(".css"):
+                sheet = themes.stylesheet(url.path[len("/theme/"):-len(".css")])
+                if sheet is None:
+                    return self._send(404, b"Not found", "text/plain")
+                return self._send(200, sheet, CONTENT_TYPES[".css"])
 
             # The Documentation tab: the index (compressed, and not
             # sent again while it hasn't changed) and a file to edit.

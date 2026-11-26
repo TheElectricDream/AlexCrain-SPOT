@@ -6,6 +6,7 @@
 
 import { list, esc, kindTag } from './data.js';
 import { COLORS, platformName } from './platforms.js';
+import { themeColor } from './theme.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -14,8 +15,11 @@ const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 const PALETTE = [
   '#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767',
 ];
+// The plots' ink: the theme's, or else the page's own.
 const INK = {
-  text: '#e6e9ef', muted: '#8b93a3', grid: '#232833', axis: '#3a4150', surface: '#0f1217',
+  text: themeColor('plot-text', '#e6e9ef'), muted: themeColor('plot-muted', '#8b93a3'),
+  grid: themeColor('plot-grid', '#232833'), axis: themeColor('plot-axis', '#3a4150'),
+  surface: themeColor('plot-surface', '#0f1217'), select: themeColor('plot-select', '#4c8dff'),
 };
 const SWATCH = { RED: COLORS.RED, BLACK: COLORS.BLACK, BLUE: COLORS.BLUE };
 const GROUPS = ['RED', 'BLACK', 'BLUE', 'ARM'];
@@ -712,8 +716,8 @@ export function initResults({ act, toast, storage, store, showPage }) {
     // Hover layer, and the zoom selection.
     svg.append(svgEl('g', { class: 'res-hover' }));
     svg.append(svgEl('rect', {
-      class: 'res-sel', x: 0, y: 0, width: 0, height: 0, fill: '#4c8dff', 'fill-opacity': 0.12,
-      stroke: '#4c8dff', 'stroke-opacity': 0.5,
+      class: 'res-sel', x: 0, y: 0, width: 0, height: 0, fill: INK.select, 'fill-opacity': 0.12,
+      stroke: INK.select, 'stroke-opacity': 0.5,
     }));
     if (R.hoverT != null && !xy) {
       crosshair(plot, el, R.hoverT, false);

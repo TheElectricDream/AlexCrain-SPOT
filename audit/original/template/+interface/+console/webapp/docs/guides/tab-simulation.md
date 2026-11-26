@@ -4,11 +4,12 @@ The local console's main tab: the scenario and its settings on the left, the 3D 
 
 ## The top bar
 
-From left to right: the console's name (**SPOT Local Simulations** here, **SPOT Hardware Interfaces** on the lab console) with this computer's name; the tabs; the **Settings** group with the settings file's name and **Load…**, **Save As…** and **Reset…**; **Lab Setup** ([Lab Setup](page:lab-setup)); **Lab Console ↗**, which opens the lab console's page; and the connection badge. On the local console the badge says whether the **lab console** can be reached, since that decides whether experiments can be run.
+From left to right: the lab's logo, which opens the **Theme** menu (below); the console's name (**SPOT Local Simulations** here, **SPOT Hardware Interfaces** on the lab console) with this computer's name; the tabs; the **Settings** group with the settings file's name and **Load…**, **Save As…** and **Reset…**; **Lab Setup** ([Lab Setup](page:lab-setup)); **Lab Console ↗**, which opens the lab console's page; and the connection badge. On the local console the badge says whether the **lab console** can be reached, since that decides whether experiments can be run.
 
 - **Load…** reads settings from another file through MATLAB's file dialog: a `.json` saved with Save As…, or a state saved by the old SPOT GUI (`.mat`, converted by `spot.params.fromLegacyState`).
 - **Save As…** writes a copy of the current settings to a file you choose.
 - **Reset…** offers three separate resets: the **Simulation Settings** go back to the defaults (the old file is backed up first, and its path is shown), the **Loaded Results** are unloaded, and the **Page and View** (this browser's remembered tabs, switches and zooms) are forgotten.
+- **Theme** (click the logo): how the console looks. **Default** is the console's own look; **Flight Deck** draws it by cockpit-display conventions, where colour means one thing each: cyan is a value you can set, green is engaged, healthy or read-only, white is a label and the box around whatever is active, amber is a caution, red a warning, and magenta the replay's position. The choice is kept for this computer's browser (a cookie, so it survives the local console's change of port each time MATLAB starts it), and changing it loads the page again; nothing in the project changes. Adding `?theme=flightdeck` to the address shows a theme for one visit. Both consoles have the menu.
 
 ## The Scenario pane
 

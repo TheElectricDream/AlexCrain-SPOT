@@ -1,0 +1,10 @@
+{
+  "flightdeck": {
+    "name": "Flight Deck",
+    "about": "Cockpit-display conventions: black glass, outlines, cyan for what you can set, green for what is engaged or read-only.",
+    "ramp": [[0.0, "#000000"], [0.055, "#04060a"], [0.09, "#080c11"], [0.125, "#10161b"],
+             [0.18, "#2a3a43"], [0.24, "#4a606b"], [0.41, "#5d7480"], [0.59, "#8fa3ad"],
+             [0.80, "#c8d3d9"], [0.92, "#eef3f5"], [1.0, "#ffffff"]],
+    "accent": "#2fd9f4"
+  }
+}

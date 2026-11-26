@@ -24,6 +24,7 @@ import { LineMaterial } from './vendor/lines/LineMaterial.js';
 import { armPoints, loadCad, mountPose, TABLE_URL } from './cad.js';
 import { COLORS, LINE_COLORS, LED_COLORS, TEXT_COLORS, platformName } from './platforms.js';
 import { heightCanvas, tickMarks, TABLE as TABLE_TOP } from './calviz.js';
+import { themeColor } from './theme.js';
 
 // The granite: the top's sides (measured) and its thickness (0.33 m, its CAD).
 export const TABLE = { x: TABLE_TOP.x, y: TABLE_TOP.y, thickness: 0.33 };
@@ -181,10 +182,12 @@ export class Viewer {
       { position: 'absolute', top: '0', left: '0', pointerEvents: 'none', zIndex: '1' });
     container.prepend(this.labels.domElement);
 
-    // The scene (the floor fades out instead of showing its edge), the camera and its controls.
+    // The scene (the floor fades out instead of showing its edge; its colours are the theme's),
+    // the camera and its controls.
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0e1014);
-    this.scene.fog = new THREE.Fog(0x0e1014, 9, 24);
+    const sceneBg = themeColor('scene-bg', '#0e1014');
+    this.scene.background = new THREE.Color(sceneBg);
+    this.scene.fog = new THREE.Fog(sceneBg, 9, 24);
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.01, 200);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -375,11 +378,13 @@ export class Viewer {
 
     // The floor, with a faint grid.
     const floor = new THREE.Mesh(new THREE.CircleGeometry(40, 64),
-      new THREE.MeshStandardMaterial({ color: 0x111317, roughness: 0.95 }));
+      new THREE.MeshStandardMaterial(
+        { color: themeColor('scene-floor', '#111317'), roughness: 0.95 }));
     floor.position.set(TABLE.x / 2, TABLE.y / 2, floorZ);
     floor.receiveShadow = true;
     this.scene.add(floor);
-    const floorGrid = new THREE.GridHelper(40, 80, 0x20242c, 0x1a1d23);
+    const floorGrid = new THREE.GridHelper(40, 80,
+      themeColor('scene-grid', '#20242c'), themeColor('scene-grid-2', '#1a1d23'));
     floorGrid.rotation.x = Math.PI / 2;
     floorGrid.position.set(TABLE.x / 2, TABLE.y / 2, floorZ + 0.001);
     this.scene.add(floorGrid);

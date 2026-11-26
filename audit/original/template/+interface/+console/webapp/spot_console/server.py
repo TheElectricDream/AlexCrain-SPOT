@@ -24,6 +24,8 @@ from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .common import ApiError, PROJECT_DIR, STATIC_DIR, parse_bool, parse_number
+from . import tabs   # the project's own tabs (tabs/*/tab.json)
+from . import themes   # the page's colour themes (static/themes)
 from .events import hub, settings
 from .phasespace import (PLATFORM_DIR, RESERVED_PORTS, WSL_INFO, broadcast_loop, builder,
                          monitor, parse_frequency, read_base_destinations, read_led_owner,
@@ -90,9 +92,11 @@ def features():
     """
     # (The local console's calibration is on the Simulation tab.)
     if LOCAL["enabled"]:
-        return {"mode": "local", "phasespace": False, "hardware": False, "simulation": True,
-                "experiment": True, "results": True, "designer": True, "calibration": False,
-                "vision": False, "docs": True}
+        out = {"mode": "local", "phasespace": False, "hardware": False, "simulation": True,
+               "experiment": True, "results": True, "designer": True, "calibration": False,
+               "vision": False, "docs": True}
+        out.update(tabs.features())   # the project's own tabs
+        return out
     return {"mode": "lab", "phasespace": True, "hardware": True, "simulation": False,
             "experiment": False, "results": False, "designer": True, "calibration": True,
             "vision": True, "docs": True}
@@ -290,6 +294,13 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(404, b"Not found", "text/plain")
                 return self._file(target)
 
+            # A colour theme: the page's stylesheets, re-coloured.
+            if url.path.startswith("/theme/") and url.path.endswith(".css"):
+                sheet = themes.stylesheet(url.path[len("/theme/"):-len(".css")])
+                if sheet is None:
+                    return self._send(404, b"Not found", "text/plain")
+                return self._send(200, sheet, CONTENT_TYPES[".css"])
+
             # The Documentation tab: the index (compressed, and not
             # sent again while it hasn't changed) and a file to edit.
             if url.path == "/api/docs/index":
@@ -366,6 +377,24 @@ class Handler(BaseHTTPRequestHandler):
                 except ApiError as e:
                     return self._json({"error": str(e)}, 404)
                 return self._send(200, data, "application/gzip")
+
+            # The project's own tabs (tabs.py): their list, their files, their reads.
+            if LOCAL["enabled"] and url.path == "/api/tabs":
+                return self._json(tabs.listing())
+            if LOCAL["enabled"] and url.path.startswith("/tabs/"):
+                target = tabs.static_file(unquote(url.path[len("/tabs/"):]))
+                return self._file(target) if target else self._send(404, b"Not found",
+                                                                     "text/plain")
+            if LOCAL["enabled"] and url.path.startswith("/api/tab/"):
+                if not self._authorized():
+                    return self._json({"error": "Not allowed."}, 403)
+                try:
+                    out = tabs.get(url.path[len("/api/tab/"):], qs)
+                except ApiError as e:
+                    return self._json({"error": str(e)}, 400)
+                if isinstance(out, tuple):
+                    return self._send(200, out[0], out[1])
+                return self._json(out)
 
             # The folder browser and the event stream.
             if url.path == "/api/browse":
@@ -723,6 +752,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/lab/download_cameras":
             return local.camera_download.start(str(body.get("run", "")),
                                                body.get("recording")), 200
+        # The project's own tabs (tabs.py).
+        if path.startswith("/api/tab/"):
+            return tabs.post(path[len("/api/tab/"):], body, requester), 200
+
         if path == "/api/shutdown":
             threading.Thread(target=LOCAL["server"].shutdown, daemon=True).start()
             return {"ok": True}, 200
@@ -927,6 +960,7 @@ def main_local(args):
     matlab.listen(args.worker_port)
     local.lab = LabLink(args.lab_url or lab_url_from_settings(Path(LOCAL["root"])))
     local.lab.start()
+    tabs.open_tabs(LOCAL["root"], matlab, lambda: local.lab)   # the project's own tabs
 
     # Tell SPOT.m, and open the page with the token.
     web_port = server.server_address[1]
